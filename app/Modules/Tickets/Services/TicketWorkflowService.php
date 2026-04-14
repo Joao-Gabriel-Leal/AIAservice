@@ -10,6 +10,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAttachment;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldValue;
+use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketStatus;
@@ -31,6 +32,8 @@ class TicketWorkflowService
 
     public function createTicket(User $actor, array $attributes, array $dynamicValues = [], array $attachments = [], array $context = []): Ticket
     {
+        $attributes = $this->normalizeLifecycleAttributes($attributes);
+
         /** @var Ticket $ticket */
         $ticket = Ticket::query()->create([
             ...$attributes,
@@ -47,7 +50,7 @@ class TicketWorkflowService
         ]);
         $this->notifyUsers($ticket, 'Novo chamado criado', "O chamado #{$ticket->id} foi criado.");
 
-        $ticket = $ticket->fresh(['fieldValues', 'attachments', 'status', 'requester', 'assignee']);
+        $ticket = $ticket->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee']);
 
         $this->ticketAutomationEngine->handleEvent($ticket, TicketAutomationTrigger::TICKET_CREATED, [
             ...$context,
@@ -56,7 +59,7 @@ class TicketWorkflowService
             ],
         ]);
 
-        return $ticket->fresh(['fieldValues', 'attachments', 'status', 'requester', 'assignee']);
+        return $ticket->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee']);
     }
 
     public function updateTicket(User $actor, Ticket $ticket, array $attributes, array $context = []): Ticket
@@ -65,9 +68,19 @@ class TicketWorkflowService
 
         $ticket->fill($attributes);
 
-        if (array_key_exists('ticket_status_id', $attributes)) {
+        if (array_key_exists('ticket_group_id', $attributes)) {
+            $group = isset($attributes['ticket_group_id'])
+                ? TicketGroup::query()->find($attributes['ticket_group_id'])
+                : null;
+
+            $legacyStatus = $group ? $this->legacyStatusForGroup($ticket->ticket_board_id, $group) : null;
+            $ticket->ticket_status_id = $legacyStatus?->id ?? $ticket->ticket_status_id;
+            $ticket->resolved_at = $group?->is_closed ? now() : null;
+        } elseif (array_key_exists('ticket_status_id', $attributes)) {
             $status = TicketStatus::query()->find($attributes['ticket_status_id']);
-            $ticket->resolved_at = $status?->is_closed ? now() : null;
+            $group = $status ? $this->groupForLegacyStatus($ticket->ticket_board_id, $status) : null;
+            $ticket->ticket_group_id = $group?->id ?? $ticket->ticket_group_id;
+            $ticket->resolved_at = ($group?->is_closed || $status?->is_closed) ? now() : null;
         }
 
         $ticket->last_activity_at = now();
@@ -90,7 +103,7 @@ class TicketWorkflowService
             $this->notifyRequesterToRate($ticket);
         }
 
-        $ticket = $ticket->fresh(['status', 'requester', 'assignee']);
+        $ticket = $ticket->fresh(['group', 'status', 'requester', 'assignee']);
 
         $this->ticketAutomationEngine->handleEvent($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
             ...$context,
@@ -99,7 +112,7 @@ class TicketWorkflowService
             ],
         ]);
 
-        return $ticket->fresh(['status', 'requester', 'assignee']);
+        return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
     }
 
     public function updateField(User $actor, Ticket $ticket, TicketField $field, mixed $value, array $context = []): TicketFieldValue
@@ -120,7 +133,7 @@ class TicketWorkflowService
             'sector_id' => $ticket->sector_id,
         ]);
 
-        $this->ticketAutomationEngine->handleEvent($ticket->fresh(['status', 'requester', 'assignee']), TicketAutomationTrigger::TICKET_UPDATED, [
+        $this->ticketAutomationEngine->handleEvent($ticket->fresh(['group', 'status', 'requester', 'assignee']), TicketAutomationTrigger::TICKET_UPDATED, [
             ...$context,
             'event' => [
                 'dynamic_field_id' => $field->id,
@@ -151,14 +164,16 @@ class TicketWorkflowService
 
         $ticketMessage->load('user');
 
-        $broadcast = broadcast(new TicketMessageCreated($ticketMessage));
+        $event = new TicketMessageCreated($ticketMessage);
         $socketId = request()->header('X-Socket-ID');
 
         if (is_string($socketId) && $socketId !== '' && $socketId !== 'undefined') {
-            $broadcast->toOthers();
+            broadcast($event)->toOthers();
+        } else {
+            event($event);
         }
 
-        $this->ticketAutomationEngine->handleEvent($ticket->fresh(['status', 'requester', 'assignee']), TicketAutomationTrigger::TICKET_MESSAGE_CREATED, [
+        $this->ticketAutomationEngine->handleEvent($ticket->fresh(['group', 'status', 'requester', 'assignee']), TicketAutomationTrigger::TICKET_MESSAGE_CREATED, [
             ...$context,
             'event' => [
                 'message_id' => $ticketMessage->id,
@@ -281,5 +296,64 @@ class TicketWorkflowService
             'Chamado encerrado',
             "O chamado #{$ticket->id} foi encerrado. Avalie o atendimento quando puder.",
         ));
+    }
+
+    private function normalizeLifecycleAttributes(array $attributes): array
+    {
+        if (! array_key_exists('ticket_group_id', $attributes)) {
+            return $attributes;
+        }
+
+        $group = isset($attributes['ticket_group_id'])
+            ? TicketGroup::query()->find($attributes['ticket_group_id'])
+            : null;
+
+        if (! $group) {
+            return [
+                ...$attributes,
+                'resolved_at' => $attributes['resolved_at'] ?? null,
+            ];
+        }
+
+        return [
+            ...$attributes,
+            'ticket_status_id' => $attributes['ticket_status_id'] ?? $this->legacyStatusForGroup((int) $attributes['ticket_board_id'], $group)?->id,
+            'resolved_at' => $group->is_closed
+                ? ($attributes['resolved_at'] ?? now())
+                : null,
+        ];
+    }
+
+    private function groupForLegacyStatus(int $boardId, TicketStatus $status): ?TicketGroup
+    {
+        $directMatch = TicketGroup::query()
+            ->where('ticket_board_id', $boardId)
+            ->where('sort_order', $status->sort_order)
+            ->first();
+
+        if ($directMatch) {
+            return $directMatch;
+        }
+
+        $fallbackQuery = TicketGroup::query()
+            ->where('ticket_board_id', $boardId)
+            ->where('is_closed', $status->is_closed);
+
+        return $status->is_closed
+            ? $fallbackQuery->orderByDesc('sort_order')->first()
+            : $fallbackQuery->orderBy('sort_order')->first();
+    }
+
+    private function legacyStatusForGroup(int $boardId, TicketGroup $group): ?TicketStatus
+    {
+        return TicketStatus::query()
+            ->where('ticket_board_id', $boardId)
+            ->where('sort_order', $group->sort_order)
+            ->first()
+            ?? TicketStatus::query()
+                ->where('ticket_board_id', $boardId)
+                ->where('is_closed', $group->is_closed)
+                ->when($group->is_closed, fn ($query) => $query->orderByDesc('sort_order'), fn ($query) => $query->orderBy('sort_order'))
+                ->first();
     }
 }

@@ -35,31 +35,28 @@ class SettingsPage extends Component
     use AuthorizesRequests;
 
     public ?int $selectedSectorId = null;
-
+    public string $openSection = 'groups';
     public string $boardName = '';
-
     public string $boardDescription = '';
-
     public bool $slaIsActive = true;
-
     public array $slaTargets = [];
-
     public array $groupForm = [
         'name' => '',
         'color' => '#2563eb',
         'is_collapsed_by_default' => false,
+        'is_default' => false,
+        'is_closed' => false,
         'is_active' => true,
     ];
-
     public array $editGroupForm = [
         'name' => '',
         'color' => '#2563eb',
         'is_collapsed_by_default' => false,
+        'is_default' => false,
+        'is_closed' => false,
         'is_active' => true,
     ];
-
     public ?int $editingGroupId = null;
-
     public array $statusForm = [
         'name' => '',
         'color' => '#2563eb',
@@ -67,7 +64,6 @@ class SettingsPage extends Component
         'is_closed' => false,
         'is_active' => true,
     ];
-
     public array $editStatusForm = [
         'name' => '',
         'color' => '#2563eb',
@@ -75,19 +71,17 @@ class SettingsPage extends Component
         'is_closed' => false,
         'is_active' => true,
     ];
-
     public ?int $editingStatusId = null;
-
     public array $fieldForm = [
         'name' => '',
         'type' => 'text',
         'placeholder' => '',
         'help_text' => '',
         'is_required' => false,
+        'show_on_board' => true,
         'is_active' => true,
         'options_text' => '',
     ];
-
     public array $formForm = [
         'name' => '',
         'description' => '',
@@ -96,7 +90,7 @@ class SettingsPage extends Component
         'is_default' => false,
         'is_active' => true,
     ];
-
+    public ?int $editingFormId = null;
     public array $catalogForm = [
         'name' => '',
         'description' => '',
@@ -105,21 +99,15 @@ class SettingsPage extends Component
         'default_priority' => 'medium',
         'is_active' => true,
     ];
-
     public ?string $pendingDeletionType = null;
-
     public ?int $pendingDeletionId = null;
-
     public array $deletionContext = [];
-
     public array $replacementSelection = [
         'group_ticket_group_id' => '',
         'group_catalog_group_id' => '',
         'status_replacement_id' => '',
     ];
-
     public ?int $editingAutomationRuleId = null;
-
     public array $automationForm = [
         'name' => '',
         'description' => '',
@@ -129,18 +117,13 @@ class SettingsPage extends Component
         'inactive_for_minutes' => null,
         'is_active' => true,
     ];
-
     public array $automationConditions = [];
-
     public array $automationActions = [];
 
     public function mount(?Sector $sector = null): void
     {
-        $this->selectedSectorId = $sector?->id
-            ?? $this->availableSectors()->first()?->id;
-
+        $this->selectedSectorId = $sector?->id ?? $this->availableSectors()->first()?->id;
         abort_if(! $this->selectedSectorId, 403);
-
         $this->loadBoardMeta();
         $this->resetForms();
     }
@@ -150,13 +133,19 @@ class SettingsPage extends Component
         abort_unless($this->availableSectors()->pluck('id')->contains($this->selectedSectorId), 403);
         $this->loadBoardMeta();
         $this->resetForms();
-        $this->cancelBoardMaintenanceState();
     }
 
     public function updatedAutomationFormTrigger(string $trigger): void
     {
         if ($trigger !== TicketAutomationTrigger::TICKET_INACTIVE->value) {
             $this->automationForm['inactive_for_minutes'] = null;
+        }
+    }
+
+    public function setOpenSection(string $section): void
+    {
+        if (in_array($section, ['board', 'groups', 'statuses', 'sla', 'automations', 'fields', 'forms'], true)) {
+            $this->openSection = $section;
         }
     }
 
@@ -169,12 +158,12 @@ class SettingsPage extends Component
 
         $board = $this->board();
         $this->authorize('update', $board);
-
         $board->update([
             'name' => $validated['boardName'],
             'description' => $validated['boardDescription'] ?: null,
         ]);
 
+        $this->setOpenSection('board');
         session()->flash('status', 'Quadro atualizado com sucesso.');
     }
 
@@ -188,46 +177,55 @@ class SettingsPage extends Component
         }
 
         $validated = $this->validate($rules);
-
         $board = $this->board();
         $this->authorize('update', $board);
 
         $ticketSlaService->syncPolicy($board, $validated['slaTargets'] ?? [], (bool) $validated['slaIsActive']);
         $this->loadBoardMeta();
+        $this->setOpenSection('sla');
 
         session()->flash('status', 'Politica de SLA atualizada com sucesso.');
     }
 
     public function addGroup(): void
     {
-        $validated = $this->validate([
-            'groupForm.name' => ['required', 'string', 'max:80'],
-            'groupForm.color' => ['required', 'string', 'max:20'],
-            'groupForm.is_collapsed_by_default' => ['boolean'],
-            'groupForm.is_active' => ['boolean'],
-        ]);
-
+        $validated = $this->validate($this->groupRules('groupForm'));
         $board = $this->board();
         $this->authorize('update', $board);
 
-        TicketGroup::query()->create([
-            'ticket_board_id' => $board->id,
-            'name' => $validated['groupForm']['name'],
-            'slug' => $this->uniqueSlug(TicketGroup::class, $board->id, $validated['groupForm']['name']),
-            'color' => $validated['groupForm']['color'],
-            'sort_order' => ((int) $board->groups()->max('sort_order')) + 1,
-            'is_collapsed_by_default' => (bool) $validated['groupForm']['is_collapsed_by_default'],
-            'is_active' => (bool) $validated['groupForm']['is_active'],
-        ]);
+        DB::transaction(function () use ($validated, $board): void {
+            $hasActiveDefault = $board->groups()->where('is_active', true)->where('is_default', true)->exists();
+            $hasActiveClosed = $board->groups()->where('is_active', true)->where('is_closed', true)->exists();
+            $shouldBeDefault = (bool) $validated['groupForm']['is_default'] || ! $hasActiveDefault;
+            $shouldBeClosed = (bool) $validated['groupForm']['is_closed'] || ! $hasActiveClosed;
+            $isActive = $shouldBeDefault || $shouldBeClosed ? true : (bool) $validated['groupForm']['is_active'];
 
-        $this->groupForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_collapsed_by_default' => false,
-            'is_active' => true,
-        ];
+            if ($shouldBeDefault) {
+                $board->groups()->update(['is_default' => false]);
+            }
 
-        session()->flash('status', 'Grupo criado com sucesso.');
+            if ($shouldBeClosed) {
+                $board->groups()->update(['is_closed' => false]);
+            }
+
+            TicketGroup::query()->create([
+                'ticket_board_id' => $board->id,
+                'name' => $validated['groupForm']['name'],
+                'slug' => $this->uniqueSlug(TicketGroup::class, $board->id, $validated['groupForm']['name']),
+                'color' => $validated['groupForm']['color'],
+                'sort_order' => ((int) $board->groups()->max('sort_order')) + 1,
+                'is_collapsed_by_default' => (bool) $validated['groupForm']['is_collapsed_by_default'],
+                'is_default' => $shouldBeDefault,
+                'is_closed' => $shouldBeClosed,
+                'is_active' => $isActive,
+            ]);
+        });
+
+        $this->groupForm = $this->emptyGroupForm();
+        $this->loadBoardMeta();
+        $this->setOpenSection('groups');
+
+        session()->flash('status', 'Etapa criada com sucesso.');
     }
 
     public function startEditingGroup(int $groupId): void
@@ -239,96 +237,121 @@ class SettingsPage extends Component
             'name' => $group->name,
             'color' => $group->color,
             'is_collapsed_by_default' => $group->is_collapsed_by_default,
+            'is_default' => $group->is_default,
+            'is_closed' => $group->is_closed,
             'is_active' => $group->is_active,
         ];
 
         $this->cancelDeletion();
         $this->resetValidation();
+        $this->setOpenSection('groups');
     }
 
     public function cancelEditingGroup(): void
     {
         $this->editingGroupId = null;
-        $this->editGroupForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_collapsed_by_default' => false,
-            'is_active' => true,
-        ];
+        $this->editGroupForm = $this->emptyGroupForm();
         $this->resetValidation();
     }
 
     public function updateGroup(): void
     {
-        $validated = $this->validate([
-            'editGroupForm.name' => ['required', 'string', 'max:80'],
-            'editGroupForm.color' => ['required', 'string', 'max:20'],
-            'editGroupForm.is_collapsed_by_default' => ['boolean'],
-            'editGroupForm.is_active' => ['boolean'],
-        ]);
-
+        $validated = $this->validate($this->groupRules('editGroupForm'));
         $group = $this->groupForBoard($this->editingGroupId);
+        $requestedDefault = (bool) $validated['editGroupForm']['is_default'];
+        $requestedClosed = (bool) $validated['editGroupForm']['is_closed'];
+        $requestedActive = ($requestedDefault || $requestedClosed) ? true : (bool) $validated['editGroupForm']['is_active'];
 
-        $group->update([
-            'name' => $validated['editGroupForm']['name'],
-            'color' => $validated['editGroupForm']['color'],
-            'is_collapsed_by_default' => (bool) $validated['editGroupForm']['is_collapsed_by_default'],
-            'is_active' => (bool) $validated['editGroupForm']['is_active'],
-        ]);
+        if ($group->is_default && ! $requestedDefault) {
+            session()->flash('error', 'O quadro precisa manter uma etapa inicial ativa.');
+            return;
+        }
+
+        if ($group->is_default && ! $requestedActive) {
+            session()->flash('error', 'A etapa inicial nao pode ser inativada sem definir outra etapa inicial.');
+            return;
+        }
+
+        if ($group->is_closed && ! $requestedClosed) {
+            session()->flash('error', 'O quadro precisa manter uma etapa final ativa.');
+            return;
+        }
+
+        if ($group->is_closed && ! $requestedActive) {
+            session()->flash('error', 'A etapa final nao pode ser inativada sem definir outra etapa final.');
+            return;
+        }
+
+        DB::transaction(function () use ($validated, $group, $requestedDefault, $requestedClosed, $requestedActive): void {
+            if ($requestedDefault) {
+                $group->board->groups()->whereKeyNot($group->id)->update(['is_default' => false]);
+            }
+
+            if ($requestedClosed) {
+                $group->board->groups()->whereKeyNot($group->id)->update(['is_closed' => false]);
+            }
+
+            $group->update([
+                'name' => $validated['editGroupForm']['name'],
+                'color' => $validated['editGroupForm']['color'],
+                'is_collapsed_by_default' => (bool) $validated['editGroupForm']['is_collapsed_by_default'],
+                'is_default' => $requestedDefault,
+                'is_closed' => $requestedClosed,
+                'is_active' => $requestedActive,
+            ]);
+
+            $this->ensureSingleActiveGroupFlag($group->ticket_board_id, 'is_default', $requestedDefault ? $group->id : null);
+            $this->ensureSingleActiveGroupFlag($group->ticket_board_id, 'is_closed', $requestedClosed ? $group->id : null);
+        });
 
         $this->cancelEditingGroup();
         $this->loadBoardMeta();
+        $this->setOpenSection('groups');
 
-        session()->flash('status', 'Grupo atualizado com sucesso.');
+        session()->flash('status', 'Etapa atualizada com sucesso.');
     }
 
     public function moveGroupUp(int $groupId): void
     {
         $this->moveOrderedItem($this->groupForBoard($groupId), 'up');
         $this->loadBoardMeta();
-
-        session()->flash('status', 'Ordem dos grupos atualizada.');
+        $this->setOpenSection('groups');
+        session()->flash('status', 'Ordem das etapas atualizada.');
     }
 
     public function moveGroupDown(int $groupId): void
     {
         $this->moveOrderedItem($this->groupForBoard($groupId), 'down');
         $this->loadBoardMeta();
-
-        session()->flash('status', 'Ordem dos grupos atualizada.');
+        $this->setOpenSection('groups');
+        session()->flash('status', 'Ordem das etapas atualizada.');
     }
 
     public function confirmDeleteGroup(int $groupId): void
     {
         $group = $this->groupForBoard($groupId);
-
         $this->pendingDeletionType = 'group';
         $this->pendingDeletionId = $group->id;
         $this->deletionContext = array_merge($this->groupImpact($group), [
-            'replacement_groups' => $group->board->groups()
-                ->whereKeyNot($group->id)
-                ->get(['id', 'name'])
-                ->map(fn (TicketGroup $replacement) => [
-                    'id' => $replacement->id,
-                    'name' => $replacement->name,
-                ])
-                ->all(),
+            'replacement_groups' => $group->board->groups()->whereKeyNot($group->id)->get(['id', 'name'])->map(
+                fn (TicketGroup $replacement) => ['id' => $replacement->id, 'name' => $replacement->name]
+            )->all(),
         ]);
-        $this->replacementSelection = [
-            'group_ticket_group_id' => '',
-            'group_catalog_group_id' => '',
-            'status_replacement_id' => '',
-        ];
-
+        $this->replacementSelection = ['group_ticket_group_id' => '', 'group_catalog_group_id' => ''];
         $this->cancelEditingGroup();
-        $this->cancelEditingStatus();
+        $this->setOpenSection('groups');
     }
 
     public function deleteGroup(): void
     {
         abort_unless($this->pendingDeletionType === 'group', 404);
-
         $group = $this->groupForBoard($this->pendingDeletionId);
+
+        if (($this->deletionContext['remaining_groups_count'] ?? 0) < 1) {
+            session()->flash('error', 'O quadro precisa manter ao menos uma etapa.');
+            return;
+        }
+
         $ticketReplacement = $this->nullableReplacementId($this->replacementSelection['group_ticket_group_id'] ?? '');
         $catalogReplacement = $this->nullableReplacementId($this->replacementSelection['group_catalog_group_id'] ?? '');
 
@@ -340,19 +363,29 @@ class SettingsPage extends Component
             $this->ensureGroupReplacementBelongsToBoard($group->ticket_board_id, $catalogReplacement, $group->id);
         }
 
-        DB::transaction(function () use ($group, $ticketReplacement, $catalogReplacement) {
+        DB::transaction(function () use ($group, $ticketReplacement, $catalogReplacement): void {
             $group->tickets()->update(['ticket_group_id' => $ticketReplacement]);
             $group->board->catalogItems()->where('default_ticket_group_id', $group->id)->update([
                 'default_ticket_group_id' => $catalogReplacement,
             ]);
+            $wasDefault = $group->is_default;
+            $wasClosed = $group->is_closed;
             $group->delete();
             $this->normalizeSortOrder(TicketGroup::class, $group->ticket_board_id);
+
+            if ($wasDefault) {
+                $this->ensureSingleActiveGroupFlag($group->ticket_board_id, 'is_default', $ticketReplacement);
+            }
+
+            if ($wasClosed) {
+                $this->ensureSingleActiveGroupFlag($group->ticket_board_id, 'is_closed', $catalogReplacement);
+            }
         });
 
         $this->cancelDeletion();
         $this->loadBoardMeta();
-
-        session()->flash('status', 'Grupo removido com sucesso.');
+        $this->setOpenSection('groups');
+        session()->flash('status', 'Etapa removida com sucesso.');
     }
 
     public function addStatus(): void
@@ -368,7 +401,7 @@ class SettingsPage extends Component
         $board = $this->board();
         $this->authorize('update', $board);
 
-        DB::transaction(function () use ($validated, $board) {
+        DB::transaction(function () use ($validated, $board): void {
             $hasActiveDefault = $board->statuses()->where('is_active', true)->where('is_default', true)->exists();
             $shouldBeDefault = (bool) $validated['statusForm']['is_default'] || ! $hasActiveDefault;
             $isActive = $shouldBeDefault ? true : (bool) $validated['statusForm']['is_active'];
@@ -389,14 +422,9 @@ class SettingsPage extends Component
             ]);
         });
 
-        $this->statusForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_default' => false,
-            'is_closed' => false,
-            'is_active' => true,
-        ];
-
+        $this->statusForm = $this->emptyStatusForm();
+        $this->loadBoardMeta();
+        $this->setOpenSection('statuses');
         session()->flash('status', 'Status criado com sucesso.');
     }
 
@@ -415,18 +443,13 @@ class SettingsPage extends Component
 
         $this->cancelDeletion();
         $this->resetValidation();
+        $this->setOpenSection('statuses');
     }
 
     public function cancelEditingStatus(): void
     {
         $this->editingStatusId = null;
-        $this->editStatusForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_default' => false,
-            'is_closed' => false,
-            'is_active' => true,
-        ];
+        $this->editStatusForm = $this->emptyStatusForm();
         $this->resetValidation();
     }
 
@@ -446,17 +469,15 @@ class SettingsPage extends Component
 
         if ($status->is_default && ! $requestedDefault) {
             session()->flash('error', 'O board precisa manter exatamente um status padrao ativo.');
-
             return;
         }
 
         if ($status->is_default && ! $requestedActive) {
             session()->flash('error', 'O status padrao nao pode ser inativado sem definir outro padrao ativo.');
-
             return;
         }
 
-        DB::transaction(function () use ($validated, $status, $requestedDefault, $requestedActive) {
+        DB::transaction(function () use ($validated, $status, $requestedDefault, $requestedActive): void {
             if ($requestedDefault) {
                 $status->board->statuses()->whereKeyNot($status->id)->update(['is_default' => false]);
             }
@@ -469,15 +490,12 @@ class SettingsPage extends Component
                 'is_active' => $requestedActive,
             ]);
 
-            $this->ensureSingleActiveDefaultStatus(
-                $status->ticket_board_id,
-                $requestedDefault ? $status->id : null,
-            );
+            $this->ensureSingleActiveDefaultStatus($status->ticket_board_id, $requestedDefault ? $status->id : null);
         });
 
         $this->cancelEditingStatus();
         $this->loadBoardMeta();
-
+        $this->setOpenSection('statuses');
         session()->flash('status', 'Status atualizado com sucesso.');
     }
 
@@ -485,7 +503,7 @@ class SettingsPage extends Component
     {
         $this->moveOrderedItem($this->statusForBoard($statusId), 'up');
         $this->loadBoardMeta();
-
+        $this->setOpenSection('statuses');
         session()->flash('status', 'Ordem dos status atualizada.');
     }
 
@@ -493,7 +511,7 @@ class SettingsPage extends Component
     {
         $this->moveOrderedItem($this->statusForBoard($statusId), 'down');
         $this->loadBoardMeta();
-
+        $this->setOpenSection('statuses');
         session()->flash('status', 'Ordem dos status atualizada.');
     }
 
@@ -523,6 +541,7 @@ class SettingsPage extends Component
 
         $this->cancelEditingGroup();
         $this->cancelEditingStatus();
+        $this->setOpenSection('statuses');
     }
 
     public function deleteStatus(): void
@@ -530,11 +549,16 @@ class SettingsPage extends Component
         abort_unless($this->pendingDeletionType === 'status', 404);
 
         $status = $this->statusForBoard($this->pendingDeletionId);
-        $replacementId = $this->replacementSelection['status_replacement_id'] ?? '';
+        $activeStatusesCount = (int) ($this->deletionContext['active_statuses_count'] ?? 0);
 
+        if ($activeStatusesCount <= 1) {
+            session()->flash('error', 'Este status e o ultimo ativo do board e nao pode ser excluido.');
+            return;
+        }
+
+        $replacementId = $this->replacementSelection['status_replacement_id'] ?? '';
         if ($replacementId === '') {
             session()->flash('error', 'Selecione um status substituto para continuar.');
-
             return;
         }
 
@@ -547,11 +571,10 @@ class SettingsPage extends Component
 
         if (! $replacement) {
             session()->flash('error', 'O status substituto precisa ser ativo e pertencer a este board.');
-
             return;
         }
 
-        DB::transaction(function () use ($status, $replacement) {
+        DB::transaction(function () use ($status, $replacement): void {
             $status->tickets()->update(['ticket_status_id' => $replacement->id]);
 
             if ($status->is_default || ! $status->board->statuses()
@@ -570,7 +593,7 @@ class SettingsPage extends Component
 
         $this->cancelDeletion();
         $this->loadBoardMeta();
-
+        $this->setOpenSection('statuses');
         session()->flash('status', 'Status removido com sucesso.');
     }
 
@@ -579,11 +602,7 @@ class SettingsPage extends Component
         $this->pendingDeletionType = null;
         $this->pendingDeletionId = null;
         $this->deletionContext = [];
-        $this->replacementSelection = [
-            'group_ticket_group_id' => '',
-            'group_catalog_group_id' => '',
-            'status_replacement_id' => '',
-        ];
+        $this->replacementSelection = ['group_ticket_group_id' => '', 'group_catalog_group_id' => '', 'status_replacement_id' => ''];
     }
 
     public function addField(): void
@@ -594,6 +613,7 @@ class SettingsPage extends Component
             'fieldForm.placeholder' => ['nullable', 'string', 'max:120'],
             'fieldForm.help_text' => ['nullable', 'string'],
             'fieldForm.is_required' => ['boolean'],
+            'fieldForm.show_on_board' => ['boolean'],
             'fieldForm.is_active' => ['boolean'],
             'fieldForm.options_text' => ['nullable', 'string'],
         ]);
@@ -611,6 +631,7 @@ class SettingsPage extends Component
             'settings' => null,
             'sort_order' => ((int) $board->fields()->max('sort_order')) + 1,
             'is_required' => (bool) $validated['fieldForm']['is_required'],
+            'show_on_board' => (bool) $validated['fieldForm']['show_on_board'],
             'is_active' => (bool) $validated['fieldForm']['is_active'],
         ]);
 
@@ -625,29 +646,53 @@ class SettingsPage extends Component
             ]);
         }
 
-        $this->fieldForm = [
-            'name' => '',
-            'type' => 'text',
-            'placeholder' => '',
-            'help_text' => '',
-            'is_required' => false,
-            'is_active' => true,
-            'options_text' => '',
-        ];
-
+        $this->fieldForm = $this->emptyFieldForm();
+        $this->loadBoardMeta();
+        $this->setOpenSection('fields');
         session()->flash('status', 'Campo criado com sucesso.');
     }
 
     public function deleteField(int $fieldId): void
     {
-        $field = TicketField::query()->findOrFail($fieldId);
-        $this->authorize('update', $field->board);
+        $field = $this->fieldForBoard($fieldId);
         $field->delete();
 
+        if (in_array($fieldId, $this->formForm['field_ids'], true)) {
+            $this->formForm['field_ids'] = array_values(array_diff($this->formForm['field_ids'], [$fieldId]));
+            $this->formForm['required_field_ids'] = array_values(array_diff($this->formForm['required_field_ids'], [$fieldId]));
+        }
+
+        $this->loadBoardMeta();
+        $this->setOpenSection('fields');
         session()->flash('status', 'Campo removido com sucesso.');
     }
 
-    public function addForm(): void
+    public function startEditingForm(int $formId): void
+    {
+        $form = $this->formForBoard($formId);
+
+        $this->editingFormId = $form->id;
+        $this->formForm = [
+            'name' => $form->name,
+            'description' => $form->description ?? '',
+            'field_ids' => $form->fields->sortBy('pivot.sort_order')->pluck('id')->all(),
+            'required_field_ids' => $form->fields->filter(fn (TicketField $field) => (bool) $field->pivot?->is_required)->pluck('id')->all(),
+            'is_default' => $form->is_default,
+            'is_active' => $form->is_active,
+        ];
+
+        $this->resetValidation();
+        $this->setOpenSection('forms');
+    }
+
+    public function cancelEditingForm(): void
+    {
+        $this->editingFormId = null;
+        $this->formForm = $this->emptyFormForm();
+        $this->resetValidation();
+    }
+
+    public function saveForm(): void
     {
         $validated = $this->validate([
             'formForm.name' => ['required', 'string', 'max:80'],
@@ -663,49 +708,48 @@ class SettingsPage extends Component
         $board = $this->board();
         $this->authorize('update', $board);
 
+        $fieldIds = array_values(array_unique(array_map('intval', $validated['formForm']['field_ids'] ?? [])));
+        $requiredIds = array_values(array_intersect(array_map('intval', $validated['formForm']['required_field_ids'] ?? []), $fieldIds));
+        $form = $this->editingFormId ? $this->formForBoard($this->editingFormId) : new TicketForm();
+
         if ($validated['formForm']['is_default']) {
-            $board->forms()->update(['is_default' => false]);
+            $board->forms()->whereKeyNot($form->id)->update(['is_default' => false]);
         }
 
-        $form = TicketForm::query()->create([
+        $form->fill([
             'ticket_board_id' => $board->id,
             'name' => $validated['formForm']['name'],
             'description' => $validated['formForm']['description'] ?: null,
             'is_default' => (bool) $validated['formForm']['is_default'],
             'is_active' => (bool) $validated['formForm']['is_active'],
         ]);
+        $form->save();
 
-        $syncPayload = collect($validated['formForm']['field_ids'])
-            ->mapWithKeys(fn (int $fieldId, int $index) => [
-                $fieldId => [
-                    'is_required' => in_array($fieldId, $validated['formForm']['required_field_ids'], true),
-                    'sort_order' => $index + 1,
-                ],
-            ])
-            ->all();
+        $syncPayload = collect($fieldIds)->mapWithKeys(fn (int $fieldId, int $index) => [
+            $fieldId => ['is_required' => in_array($fieldId, $requiredIds, true), 'sort_order' => $index + 1],
+        ])->all();
 
         $form->fields()->sync($syncPayload);
 
-        $this->formForm = [
-            'name' => '',
-            'description' => '',
-            'field_ids' => [],
-            'required_field_ids' => [],
-            'is_default' => false,
-            'is_active' => true,
-        ];
-
-        session()->flash('status', 'Formulario criado com sucesso.');
+        $wasEditing = $this->editingFormId !== null;
+        $this->cancelEditingForm();
+        $this->loadBoardMeta();
+        $this->setOpenSection('forms');
+        session()->flash('status', $wasEditing ? 'Formulario atualizado com sucesso.' : 'Formulario criado com sucesso.');
     }
 
     public function deleteForm(int $formId): void
     {
-        $form = TicketForm::query()->findOrFail($formId);
-        $this->authorize('update', $form->board);
-
+        $form = $this->formForBoard($formId);
         $form->catalogItems()->update(['ticket_form_id' => null]);
         $form->delete();
 
+        if ($this->editingFormId === $formId) {
+            $this->cancelEditingForm();
+        }
+
+        $this->loadBoardMeta();
+        $this->setOpenSection('forms');
         session()->flash('status', 'Formulario removido com sucesso.');
     }
 
@@ -733,30 +777,26 @@ class SettingsPage extends Component
             'is_active' => (bool) $validated['catalogForm']['is_active'],
         ]);
 
-        $this->catalogForm = [
-            'name' => '',
-            'description' => '',
-            'ticket_form_id' => $board->forms()->where('is_default', true)->value('id'),
-            'default_ticket_group_id' => $board->groups()->value('id'),
-            'default_priority' => 'medium',
-            'is_active' => true,
-        ];
-
+        $this->catalogForm = $this->emptyCatalogForm($board);
+        $this->loadBoardMeta();
+        $this->setOpenSection('forms');
         session()->flash('status', 'Item do catalogo criado com sucesso.');
     }
 
     public function deleteCatalogItem(int $catalogItemId): void
     {
-        $catalogItem = ServiceCatalogItem::query()->findOrFail($catalogItemId);
-        $this->authorize('update', $catalogItem->board);
+        $catalogItem = $this->catalogItemForBoard($catalogItemId);
         $catalogItem->delete();
 
+        $this->loadBoardMeta();
+        $this->setOpenSection('forms');
         session()->flash('status', 'Item do catalogo removido com sucesso.');
     }
 
     public function addAutomationCondition(): void
     {
         $this->automationConditions[] = $this->emptyCondition(count($this->automationConditions) + 1);
+        $this->setOpenSection('automations');
     }
 
     public function removeAutomationCondition(int $index): void
@@ -769,6 +809,7 @@ class SettingsPage extends Component
     public function addAutomationAction(): void
     {
         $this->automationActions[] = $this->emptyAction(count($this->automationActions) + 1);
+        $this->setOpenSection('automations');
     }
 
     public function removeAutomationAction(int $index): void
@@ -780,11 +821,18 @@ class SettingsPage extends Component
 
     public function startEditingAutomation(int $ruleId): void
     {
-        $rule = TicketAutomationRule::query()
-            ->with(['conditions', 'actions'])
-            ->findOrFail($ruleId);
-
+        $rule = TicketAutomationRule::query()->with(['conditions', 'actions'])->findOrFail($ruleId);
         $this->authorize('update', $rule->board);
+
+        if (
+            $rule->conditions->contains(fn ($condition) => ! in_array($condition->field->value, $this->supportedAutomationConditionFieldValues(), true))
+            || $rule->actions->contains(fn ($action) => ! in_array($action->action->value, $this->supportedAutomationActionTypeValues(), true))
+        ) {
+            session()->flash('error', 'Esta automacao ainda usa configuracoes legadas de status e precisa ser revisada antes da edicao.');
+            $this->setOpenSection('automations');
+
+            return;
+        }
 
         $this->editingAutomationRuleId = $rule->id;
         $this->automationForm = [
@@ -796,30 +844,24 @@ class SettingsPage extends Component
             'inactive_for_minutes' => data_get($rule->trigger_settings, 'inactive_for_minutes'),
             'is_active' => $rule->is_active,
         ];
-
-        $this->automationConditions = $rule->conditions
-            ->map(fn ($condition, $index) => [
-                'field' => $condition->field->value,
-                'operator' => $condition->operator->value,
-                'value' => $condition->value,
-                'sort_order' => $index + 1,
-            ])
-            ->values()
-            ->all();
-
-        $this->automationActions = $rule->actions
-            ->map(fn ($action, $index) => [
-                'action' => $action->action->value,
-                'payload' => $action->payload ?? [],
-                'sort_order' => $index + 1,
-            ])
-            ->values()
-            ->all();
+        $this->automationConditions = $rule->conditions->map(fn ($condition, int $index) => [
+            'field' => $condition->field->value,
+            'operator' => $condition->operator->value,
+            'value' => $condition->value,
+            'sort_order' => $index + 1,
+        ])->values()->all();
+        $this->automationActions = $rule->actions->map(fn ($action, int $index) => [
+            'action' => $action->action->value,
+            'payload' => $action->payload ?? [],
+            'sort_order' => $index + 1,
+        ])->values()->all();
+        $this->setOpenSection('automations');
     }
 
     public function cancelAutomationEditing(): void
     {
         $this->resetAutomationForm();
+        $this->setOpenSection('automations');
     }
 
     public function saveAutomation(): void
@@ -845,10 +887,7 @@ class SettingsPage extends Component
 
         $normalizedConditions = $this->validatedAutomationConditions($board);
         $normalizedActions = $this->validatedAutomationActions($board);
-
-        $rule = $this->editingAutomationRuleId
-            ? TicketAutomationRule::query()->whereKey($this->editingAutomationRuleId)->firstOrFail()
-            : new TicketAutomationRule();
+        $rule = $this->editingAutomationRuleId ? TicketAutomationRule::query()->whereKey($this->editingAutomationRuleId)->firstOrFail() : new TicketAutomationRule();
 
         if ($this->editingAutomationRuleId) {
             $this->authorize('update', $rule->board);
@@ -860,9 +899,7 @@ class SettingsPage extends Component
             'description' => $validated['automationForm']['description'] ?: null,
             'trigger' => $validated['automationForm']['trigger'],
             'run_mode' => $validated['automationForm']['trigger'] === TicketAutomationTrigger::TICKET_INACTIVE->value ? 'scheduled' : 'sync',
-            'trigger_settings' => $validated['automationForm']['trigger'] === TicketAutomationTrigger::TICKET_INACTIVE->value
-                ? ['inactive_for_minutes' => (int) $validated['automationForm']['inactive_for_minutes']]
-                : null,
+            'trigger_settings' => $validated['automationForm']['trigger'] === TicketAutomationTrigger::TICKET_INACTIVE->value ? ['inactive_for_minutes' => (int) $validated['automationForm']['inactive_for_minutes']] : null,
             'cooldown_minutes' => $validated['automationForm']['cooldown_minutes'],
             'sort_order' => $validated['automationForm']['sort_order'],
             'is_active' => (bool) $validated['automationForm']['is_active'],
@@ -876,7 +913,7 @@ class SettingsPage extends Component
 
         $this->loadBoardMeta();
         $this->resetAutomationForm();
-
+        $this->setOpenSection('automations');
         session()->flash('status', 'Automacao salva com sucesso.');
     }
 
@@ -884,10 +921,9 @@ class SettingsPage extends Component
     {
         $rule = TicketAutomationRule::query()->findOrFail($ruleId);
         $this->authorize('update', $rule->board);
-
         $rule->update(['is_active' => ! $rule->is_active]);
         $this->loadBoardMeta();
-
+        $this->setOpenSection('automations');
         session()->flash('status', 'Automacao atualizada com sucesso.');
     }
 
@@ -895,7 +931,6 @@ class SettingsPage extends Component
     {
         $rule = TicketAutomationRule::query()->findOrFail($ruleId);
         $this->authorize('update', $rule->board);
-
         $rule->delete();
         $this->loadBoardMeta();
 
@@ -903,6 +938,7 @@ class SettingsPage extends Component
             $this->resetAutomationForm();
         }
 
+        $this->setOpenSection('automations');
         session()->flash('status', 'Automacao removida com sucesso.');
     }
 
@@ -916,19 +952,380 @@ class SettingsPage extends Component
             return "{$field->label()}: {$operator->label()}";
         }
 
-        $formattedValue = collect(is_array($value) ? $value : [$value])
-            ->filter(fn ($item) => ! is_null($item) && $item !== '')
-            ->map(fn ($item) => (string) $item)
-            ->join(', ');
+        $formattedValue = collect(is_array($value) ? $value : [$value])->filter(fn ($item) => ! is_null($item) && $item !== '')
+            ->map(fn ($item) => $this->automationConditionValueLabel($field, $item))->join(', ');
 
-        return "{$field->label()}: {$operator->label()} {$formattedValue}";
+        return trim("{$field->label()}: {$operator->label()} {$formattedValue}");
     }
 
     public function describeAutomationAction(array|\App\Modules\Tickets\Models\TicketAutomationRuleAction $action): string
     {
         $type = TicketAutomationActionType::from(is_array($action) ? $action['action'] : $action->action->value);
+        $payload = is_array($action) ? ($action['payload'] ?? []) : ($action->payload ?? []);
 
-        return $type->label();
+        return match ($type) {
+            TicketAutomationActionType::ASSIGN_FIXED_ASSIGNEE => 'Atribuir '.($this->assigneeName((int) data_get($payload, 'assignee_id')) ?? 'responsavel'),
+            TicketAutomationActionType::CHANGE_GROUP => 'Mover para '.($this->groupName((int) data_get($payload, 'group_id')) ?? 'etapa'),
+            TicketAutomationActionType::CHANGE_PRIORITY => 'Mudar prioridade para '.($this->priorityLabel((string) data_get($payload, 'priority')) ?? 'nova prioridade'),
+            TicketAutomationActionType::ADD_SYSTEM_MESSAGE => 'Registrar mensagem automatica',
+            TicketAutomationActionType::SEND_NOTIFICATION => 'Enviar notificacao',
+            TicketAutomationActionType::CHANGE_STATUS => 'Acao legada de status',
+            TicketAutomationActionType::REOPEN_TICKET => 'Acao legada de reabertura',
+        };
+    }
+
+    private function supportedAutomationConditionFields(): array
+    {
+        return [
+            TicketAutomationConditionField::PRIORITY,
+            TicketAutomationConditionField::GROUP_ID,
+            TicketAutomationConditionField::HAS_ASSIGNEE,
+            TicketAutomationConditionField::IS_CLOSED,
+        ];
+    }
+
+    private function supportedAutomationActionTypes(): array
+    {
+        return [
+            TicketAutomationActionType::ASSIGN_FIXED_ASSIGNEE,
+            TicketAutomationActionType::CHANGE_GROUP,
+            TicketAutomationActionType::CHANGE_PRIORITY,
+            TicketAutomationActionType::ADD_SYSTEM_MESSAGE,
+            TicketAutomationActionType::SEND_NOTIFICATION,
+        ];
+    }
+
+    private function supportedAutomationConditionFieldValues(): array
+    {
+        return array_map(fn (TicketAutomationConditionField $field) => $field->value, $this->supportedAutomationConditionFields());
+    }
+
+    private function supportedAutomationActionTypeValues(): array
+    {
+        return array_map(fn (TicketAutomationActionType $type) => $type->value, $this->supportedAutomationActionTypes());
+    }
+
+    private function validatedAutomationConditions(TicketBoard $board): array
+    {
+        $conditions = collect($this->automationConditions)
+            ->values()
+            ->filter(fn ($condition) => filled(data_get($condition, 'field')));
+
+        if ($conditions->isEmpty()) {
+            throw ValidationException::withMessages([
+                'automationConditions' => 'Adicione pelo menos uma condicao para a automacao.',
+            ]);
+        }
+
+        $validGroupIds = $board->groups->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $validPriorityValues = collect(TicketPriority::cases())->map(fn (TicketPriority $priority) => $priority->value)->all();
+        $supportedFields = $this->supportedAutomationConditionFieldValues();
+
+        return $conditions->map(function (array $condition, int $index) use ($validGroupIds, $validPriorityValues, $supportedFields) {
+            $field = TicketAutomationConditionField::tryFrom((string) data_get($condition, 'field'));
+            $operator = TicketAutomationConditionOperator::tryFrom((string) data_get($condition, 'operator'));
+
+            if (! $field || ! $operator) {
+                throw ValidationException::withMessages([
+                    'automationConditions' => 'Existe uma condicao com campo ou operador invalido.',
+                ]);
+            }
+
+            if (! in_array($field->value, $supportedFields, true)) {
+                throw ValidationException::withMessages([
+                    'automationConditions' => 'As automacoes novas aceitam apenas prioridade, etapa, responsavel e fechamento.',
+                ]);
+            }
+
+            if (
+                in_array($field, [TicketAutomationConditionField::HAS_ASSIGNEE, TicketAutomationConditionField::IS_CLOSED], true)
+                && ! in_array($operator, [TicketAutomationConditionOperator::IS_TRUE, TicketAutomationConditionOperator::IS_FALSE], true)
+            ) {
+                throw ValidationException::withMessages([
+                    'automationConditions' => "A condicao {$field->label()} aceita apenas operadores booleanos.",
+                ]);
+            }
+
+            if (
+                ! in_array($field, [TicketAutomationConditionField::HAS_ASSIGNEE, TicketAutomationConditionField::IS_CLOSED], true)
+                && in_array($operator, [TicketAutomationConditionOperator::IS_TRUE, TicketAutomationConditionOperator::IS_FALSE], true)
+            ) {
+                throw ValidationException::withMessages([
+                    'automationConditions' => "A condicao {$field->label()} precisa de um operador baseado em valor.",
+                ]);
+            }
+
+            $rawValues = is_array(data_get($condition, 'value'))
+                ? data_get($condition, 'value')
+                : [data_get($condition, 'value')];
+
+            $values = collect($rawValues)
+                ->filter(fn ($value) => ! is_null($value) && $value !== '')
+                ->map(fn ($value) => is_numeric($value) ? (int) $value : (string) $value)
+                ->values();
+
+            if (in_array($field, [TicketAutomationConditionField::HAS_ASSIGNEE, TicketAutomationConditionField::IS_CLOSED], true)) {
+                $normalizedValue = [];
+            } elseif ($values->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'automationConditions' => "Informe ao menos um valor para a condicao {$field->label()}.",
+                ]);
+            } else {
+                $normalizedValue = match ($field) {
+                    TicketAutomationConditionField::PRIORITY => $values
+                        ->each(function ($value) use ($field, $validPriorityValues): void {
+                            if (! in_array((string) $value, $validPriorityValues, true)) {
+                                throw ValidationException::withMessages([
+                                    'automationConditions' => "A condicao {$field->label()} recebeu uma prioridade invalida.",
+                                ]);
+                            }
+                        })
+                        ->map(fn ($value) => (string) $value)
+                        ->all(),
+                    TicketAutomationConditionField::GROUP_ID => $values
+                        ->each(function ($value) use ($field, $validGroupIds): void {
+                            if (! in_array((int) $value, $validGroupIds, true)) {
+                                throw ValidationException::withMessages([
+                                    'automationConditions' => "A condicao {$field->label()} recebeu uma etapa invalida para este quadro.",
+                                ]);
+                            }
+                        })
+                        ->map(fn ($value) => (int) $value)
+                        ->all(),
+                    default => $values->all(),
+                };
+            }
+
+            return [
+                'field' => $field->value,
+                'operator' => $operator->value,
+                'value' => $normalizedValue,
+                'sort_order' => $index + 1,
+            ];
+        })->all();
+    }
+
+    private function validatedAutomationActions(TicketBoard $board): array
+    {
+        $actions = collect($this->automationActions)
+            ->values()
+            ->filter(fn ($action) => filled(data_get($action, 'action')));
+
+        if ($actions->isEmpty()) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Adicione pelo menos uma acao para a automacao.',
+            ]);
+        }
+
+        $validAssigneeIds = $this->boardAssignees()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $validStatusIds = $board->statuses->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $validGroupIds = $board->groups->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $validPriorityValues = collect(TicketPriority::cases())->map(fn (TicketPriority $priority) => $priority->value)->all();
+        $supportedActions = $this->supportedAutomationActionTypeValues();
+
+        return $actions->map(function (array $action, int $index) use ($board, $validAssigneeIds, $validStatusIds, $validGroupIds, $validPriorityValues, $supportedActions) {
+            $type = TicketAutomationActionType::tryFrom((string) data_get($action, 'action'));
+
+            if (! $type) {
+                throw ValidationException::withMessages([
+                    'automationActions' => 'Existe uma acao com tipo invalido.',
+                ]);
+            }
+
+            $payload = (array) data_get($action, 'payload', []);
+
+            if (! in_array($type->value, $supportedActions, true)) {
+                if ($type === TicketAutomationActionType::CHANGE_STATUS) {
+                    $type = TicketAutomationActionType::CHANGE_GROUP;
+                    $payload = $this->validatedLegacyStatusToGroupPayload($board, $payload, $validStatusIds, false);
+                } elseif ($type === TicketAutomationActionType::REOPEN_TICKET) {
+                    $type = TicketAutomationActionType::CHANGE_GROUP;
+                    $payload = $this->validatedLegacyStatusToGroupPayload($board, [
+                        'status_id' => data_get($payload, 'target_status_id'),
+                    ], $validStatusIds, true);
+                } else {
+                    throw ValidationException::withMessages([
+                        'automationActions' => 'As automacoes novas aceitam apenas acoes de etapa, prioridade, responsavel, mensagem e notificacao.',
+                    ]);
+                }
+            }
+
+            $normalizedPayload = match ($type) {
+                TicketAutomationActionType::ASSIGN_FIXED_ASSIGNEE => $this->validatedAssigneePayload($payload, $validAssigneeIds),
+                TicketAutomationActionType::CHANGE_GROUP => $this->validatedGroupPayload($payload, $validGroupIds),
+                TicketAutomationActionType::CHANGE_PRIORITY => $this->validatedPriorityPayload($payload, $validPriorityValues),
+                TicketAutomationActionType::ADD_SYSTEM_MESSAGE => $this->validatedSystemMessagePayload($payload),
+                TicketAutomationActionType::SEND_NOTIFICATION => $this->validatedNotificationPayload($payload),
+                default => throw ValidationException::withMessages([
+                    'automationActions' => 'Existe uma acao que nao pode mais ser usada neste editor.',
+                ]),
+            };
+
+            return [
+                'action' => $type->value,
+                'payload' => $normalizedPayload,
+                'sort_order' => $index + 1,
+            ];
+        })->all();
+    }
+
+    private function validatedAssigneePayload(array $payload, array $validAssigneeIds): array
+    {
+        $assigneeId = data_get($payload, 'assignee_id');
+
+        if (! filled($assigneeId) || ! in_array((int) $assigneeId, $validAssigneeIds, true)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Selecione um responsavel valido para a acao de atribuicao.',
+            ]);
+        }
+
+        return ['assignee_id' => (int) $assigneeId];
+    }
+
+    private function validatedStatusPayload(array $payload, array $validStatusIds): array
+    {
+        $statusId = data_get($payload, 'status_id');
+
+        if (! filled($statusId) || ! in_array((int) $statusId, $validStatusIds, true)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Selecione um status valido para este quadro.',
+            ]);
+        }
+
+        return ['status_id' => (int) $statusId];
+    }
+
+    private function validatedGroupPayload(array $payload, array $validGroupIds): array
+    {
+        $groupId = data_get($payload, 'group_id');
+
+        if (! filled($groupId) || ! in_array((int) $groupId, $validGroupIds, true)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Selecione uma etapa valida para este quadro.',
+            ]);
+        }
+
+        return ['group_id' => (int) $groupId];
+    }
+
+    private function validatedLegacyStatusToGroupPayload(TicketBoard $board, array $payload, array $validStatusIds, bool $requireOpenGroup): array
+    {
+        $statusId = data_get($payload, 'status_id');
+
+        if (! filled($statusId) || ! in_array((int) $statusId, $validStatusIds, true)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Selecione um status legado valido para converter a automacao.',
+            ]);
+        }
+
+        $status = $board->statuses->firstWhere('id', (int) $statusId);
+        $targetGroup = $board->groups->firstWhere('sort_order', $status?->sort_order);
+
+        if (! $targetGroup) {
+            $targetGroup = $requireOpenGroup
+                ? $board->groups->firstWhere('is_closed', false)
+                : $board->groups->firstWhere('is_closed', (bool) $status?->is_closed);
+        }
+
+        if (! $targetGroup || ($requireOpenGroup && $targetGroup->is_closed)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Nao foi possivel converter o status legado para uma etapa valida deste quadro.',
+            ]);
+        }
+
+        return ['group_id' => (int) $targetGroup->id];
+    }
+
+    private function validatedPriorityPayload(array $payload, array $validPriorityValues): array
+    {
+        $priority = data_get($payload, 'priority');
+
+        if (! is_string($priority) || ! in_array($priority, $validPriorityValues, true)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Selecione uma prioridade valida.',
+            ]);
+        }
+
+        return ['priority' => $priority];
+    }
+
+    private function validatedSystemMessagePayload(array $payload): array
+    {
+        $message = trim((string) data_get($payload, 'message'));
+
+        if ($message === '') {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Informe a mensagem automatica que sera registrada no ticket.',
+            ]);
+        }
+
+        return ['message' => $message];
+    }
+
+    private function validatedNotificationPayload(array $payload): array
+    {
+        $title = trim((string) data_get($payload, 'title'));
+        $message = trim((string) data_get($payload, 'message'));
+
+        if ($title === '' || $message === '') {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Informe titulo e mensagem para a notificacao automatica.',
+            ]);
+        }
+
+        return [
+            'title' => $title,
+            'message' => $message,
+        ];
+    }
+
+    private function validatedReopenPayload(array $payload, array $validOpenStatusIds): array
+    {
+        $targetStatusId = data_get($payload, 'target_status_id');
+
+        if (! filled($targetStatusId) || ! in_array((int) $targetStatusId, $validOpenStatusIds, true)) {
+            throw ValidationException::withMessages([
+                'automationActions' => 'Selecione um status aberto valido para a reabertura.',
+            ]);
+        }
+
+        $message = trim((string) data_get($payload, 'message'));
+
+        return [
+            'target_status_id' => (int) $targetStatusId,
+            'message' => $message !== '' ? $message : null,
+        ];
+    }
+
+    private function automationConditionValueLabel(TicketAutomationConditionField $field, mixed $value): string
+    {
+        return match ($field) {
+            TicketAutomationConditionField::PRIORITY => $this->priorityLabel((string) $value) ?? (string) $value,
+            TicketAutomationConditionField::STATUS_ID => $this->statusName((int) $value) ?? 'Status removido',
+            TicketAutomationConditionField::GROUP_ID => $this->groupName((int) $value) ?? 'Etapa removida',
+            TicketAutomationConditionField::HAS_ASSIGNEE => (bool) $value ? 'Sim' : 'Nao',
+            TicketAutomationConditionField::IS_CLOSED => (bool) $value ? 'Fechado' : 'Aberto',
+        };
+    }
+
+    private function assigneeName(int $assigneeId): ?string
+    {
+        return $this->boardAssignees()->firstWhere('id', $assigneeId)?->name;
+    }
+
+    private function statusName(int $statusId): ?string
+    {
+        return $this->board()?->statuses->firstWhere('id', $statusId)?->name;
+    }
+
+    private function groupName(int $groupId): ?string
+    {
+        return $this->board()?->groups->firstWhere('id', $groupId)?->name;
+    }
+
+    private function priorityLabel(string $priority): ?string
+    {
+        return TicketPriority::tryFrom($priority)?->label();
     }
 
     public function render(): View
@@ -940,32 +1337,25 @@ class SettingsPage extends Component
             'sectorOptions' => $this->availableSectors(),
             'fieldTypes' => TicketFieldType::cases(),
             'priorities' => TicketPriority::cases(),
-            'groupImpacts' => $board
-                ? $board->groups->mapWithKeys(fn (TicketGroup $group) => [$group->id => $this->groupImpact($group)])->all()
-                : [],
-            'statusImpacts' => $board
-                ? $board->statuses->mapWithKeys(fn (TicketStatus $status) => [$status->id => $this->statusImpact($status)])->all()
-                : [],
+            'groupImpacts' => $board ? $board->groups->mapWithKeys(fn (TicketGroup $group) => [$group->id => $this->groupImpact($group)])->all() : [],
             'automationTriggers' => TicketAutomationTrigger::cases(),
-            'automationConditionFields' => TicketAutomationConditionField::cases(),
+            'automationConditionFields' => $this->supportedAutomationConditionFields(),
             'automationConditionOperators' => TicketAutomationConditionOperator::cases(),
-            'automationActionTypes' => TicketAutomationActionType::cases(),
+            'automationActionTypes' => $this->supportedAutomationActionTypes(),
             'automationAssignees' => $this->boardAssignees(),
         ])->layout('layouts.portal', [
             'title' => 'Configurar quadro',
-            'subtitle' => 'Grupos, status, campos, formularios, catalogo, SLA e automacoes do setor.',
+            'subtitle' => 'Etapas, SLA, automacoes, campos e formularios do setor.',
         ]);
     }
 
     private function loadBoardMeta(): void
     {
         $board = $this->board();
-
         $this->boardName = $board?->name ?? '';
         $this->boardDescription = $board?->description ?? '';
         $this->catalogForm['ticket_form_id'] = $board?->forms()->where('is_default', true)->value('id');
-        $this->catalogForm['default_ticket_group_id'] = $board?->groups()->value('id');
-
+        $this->catalogForm['default_ticket_group_id'] = $board?->defaultGroup()?->id;
         $policy = $board?->slaPolicy;
         $this->slaIsActive = $policy?->is_active ?? true;
         $this->slaTargets = [];
@@ -988,28 +1378,24 @@ class SettingsPage extends Component
         }
 
         $sector = Sector::query()->find($this->selectedSectorId);
-
         if (! $sector) {
             return null;
         }
 
         abort_unless($this->availableSectors()->pluck('id')->contains($sector->id), 403);
 
-        $board = TicketBoard::query()
-            ->with([
-                'sector.company',
-                'groups',
-                'statuses',
-                'fields.options',
-                'forms.fields',
-                'catalogItems.form',
-                'catalogItems.defaultGroup',
-                'slaPolicy.targets',
-                'automationRules.conditions',
-                'automationRules.actions',
-            ])
-            ->where('sector_id', $sector->id)
-            ->first();
+        $board = TicketBoard::query()->with([
+            'sector.company',
+            'groups',
+            'statuses',
+            'fields.options',
+            'forms.fields',
+            'catalogItems.form',
+            'catalogItems.defaultGroup',
+            'slaPolicy.targets',
+            'automationRules.conditions',
+            'automationRules.actions',
+        ])->where('sector_id', $sector->id)->first();
 
         if ($board) {
             return $board;
@@ -1017,27 +1403,23 @@ class SettingsPage extends Component
 
         app(SectorProvisioningService::class)->provision($sector);
 
-        return TicketBoard::query()
-            ->with([
-                'sector.company',
-                'groups',
-                'statuses',
-                'fields.options',
-                'forms.fields',
-                'catalogItems.form',
-                'catalogItems.defaultGroup',
-                'slaPolicy.targets',
-                'automationRules.conditions',
-                'automationRules.actions',
-            ])
-            ->where('sector_id', $sector->id)
-            ->first();
+        return TicketBoard::query()->with([
+            'sector.company',
+            'groups',
+            'statuses',
+            'fields.options',
+            'forms.fields',
+            'catalogItems.form',
+            'catalogItems.defaultGroup',
+            'slaPolicy.targets',
+            'automationRules.conditions',
+            'automationRules.actions',
+        ])->where('sector_id', $sector->id)->first();
     }
 
     private function availableSectors(): Collection
     {
         $query = Sector::query()->with('company')->orderBy('name');
-
         if (! auth()->user()->isSuperAdmin()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
@@ -1051,8 +1433,7 @@ class SettingsPage extends Component
             return collect();
         }
 
-        return User::query()
-            ->withSectorAccess($this->selectedSectorId, ['sector_admin', 'technician'])
+        return User::query()->withSectorAccess($this->selectedSectorId, ['sector_admin', 'technician'])
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -1062,9 +1443,7 @@ class SettingsPage extends Component
     {
         $group = TicketGroup::query()->findOrFail($groupId);
         $this->authorize('update', $group->board);
-
         abort_unless($group->ticket_board_id === $this->board()?->id, 404);
-
         return $group;
     }
 
@@ -1072,10 +1451,32 @@ class SettingsPage extends Component
     {
         $status = TicketStatus::query()->findOrFail($statusId);
         $this->authorize('update', $status->board);
-
         abort_unless($status->ticket_board_id === $this->board()?->id, 404);
-
         return $status;
+    }
+
+    private function fieldForBoard(int $fieldId): TicketField
+    {
+        $field = TicketField::query()->findOrFail($fieldId);
+        $this->authorize('update', $field->board);
+        abort_unless($field->ticket_board_id === $this->board()?->id, 404);
+        return $field;
+    }
+
+    private function formForBoard(int $formId): TicketForm
+    {
+        $form = TicketForm::query()->with('fields')->findOrFail($formId);
+        $this->authorize('update', $form->board);
+        abort_unless($form->ticket_board_id === $this->board()?->id, 404);
+        return $form;
+    }
+
+    private function catalogItemForBoard(int $catalogItemId): ServiceCatalogItem
+    {
+        $catalogItem = ServiceCatalogItem::query()->findOrFail($catalogItemId);
+        $this->authorize('update', $catalogItem->board);
+        abort_unless($catalogItem->ticket_board_id === $this->board()?->id, 404);
+        return $catalogItem;
     }
 
     private function groupImpact(TicketGroup $group): array
@@ -1083,6 +1484,7 @@ class SettingsPage extends Component
         return [
             'tickets_count' => $group->tickets()->count(),
             'catalog_count' => $group->board->catalogItems()->where('default_ticket_group_id', $group->id)->count(),
+            'remaining_groups_count' => max($group->board->groups()->count() - 1, 0),
         ];
     }
 
@@ -1102,9 +1504,7 @@ class SettingsPage extends Component
     {
         $column = $direction === 'up' ? '<' : '>';
         $sort = $direction === 'up' ? 'desc' : 'asc';
-
-        $neighbour = $item::query()
-            ->where('ticket_board_id', $item->getAttribute('ticket_board_id'))
+        $neighbour = $item::query()->where('ticket_board_id', $item->getAttribute('ticket_board_id'))
             ->where('sort_order', $column, $item->getAttribute('sort_order'))
             ->orderBy('sort_order', $sort)
             ->first();
@@ -1113,9 +1513,8 @@ class SettingsPage extends Component
             return;
         }
 
-        DB::transaction(function () use ($item, $neighbour) {
+        DB::transaction(function () use ($item, $neighbour): void {
             $currentOrder = $item->getAttribute('sort_order');
-
             $item->update(['sort_order' => $neighbour->getAttribute('sort_order')]);
             $neighbour->update(['sort_order' => $currentOrder]);
             $this->normalizeSortOrder($item::class, $item->getAttribute('ticket_board_id'));
@@ -1124,98 +1523,36 @@ class SettingsPage extends Component
 
     private function normalizeSortOrder(string $modelClass, int $boardId): void
     {
-        $modelClass::query()
-            ->where('ticket_board_id', $boardId)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->values()
-            ->each(fn (Model $model, int $index) => $model->update(['sort_order' => $index + 1]));
+        $modelClass::query()->where('ticket_board_id', $boardId)->orderBy('sort_order')->orderBy('id')->get()
+            ->values()->each(fn (Model $model, int $index) => $model->update(['sort_order' => $index + 1]));
     }
 
     private function parsedOptions(?string $optionsText): array
     {
-        return collect(preg_split('/\r\n|\r|\n/', (string) $optionsText))
-            ->filter()
-            ->values()
+        return collect(preg_split('/\r\n|\r|\n/', (string) $optionsText))->filter()->values()
             ->map(function (string $line) {
                 [$label, $color] = array_pad(array_map('trim', explode('|', $line, 2)), 2, null);
-
-                return [
-                    'label' => $label,
-                    'value' => Str::slug($label, '_'),
-                    'color' => $color ?: null,
-                ];
-            })
-            ->all();
+                return ['label' => $label, 'value' => Str::slug($label, '_'), 'color' => $color ?: null];
+            })->all();
     }
 
     private function resetForms(): void
     {
         $this->resetValidation();
-
-        $this->groupForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_collapsed_by_default' => false,
-            'is_active' => true,
-        ];
-
-        $this->editGroupForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_collapsed_by_default' => false,
-            'is_active' => true,
-        ];
-
-        $this->statusForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_default' => false,
-            'is_closed' => false,
-            'is_active' => true,
-        ];
-
-        $this->editStatusForm = [
-            'name' => '',
-            'color' => '#2563eb',
-            'is_default' => false,
-            'is_closed' => false,
-            'is_active' => true,
-        ];
-
-        $this->fieldForm = [
-            'name' => '',
-            'type' => 'text',
-            'placeholder' => '',
-            'help_text' => '',
-            'is_required' => false,
-            'is_active' => true,
-            'options_text' => '',
-        ];
-
-        $this->formForm = [
-            'name' => '',
-            'description' => '',
-            'field_ids' => [],
-            'required_field_ids' => [],
-            'is_default' => false,
-            'is_active' => true,
-        ];
-
+        $this->openSection = 'groups';
+        $this->groupForm = $this->emptyGroupForm();
+        $this->editGroupForm = $this->emptyGroupForm();
+        $this->statusForm = $this->emptyStatusForm();
+        $this->editStatusForm = $this->emptyStatusForm();
+        $this->fieldForm = $this->emptyFieldForm();
+        $this->formForm = $this->emptyFormForm();
+        $this->editingGroupId = null;
+        $this->editingStatusId = null;
+        $this->editingFormId = null;
         $board = $this->board();
-
-        $this->catalogForm = [
-            'name' => '',
-            'description' => '',
-            'ticket_form_id' => $board?->forms()->where('is_default', true)->value('id'),
-            'default_ticket_group_id' => $board?->groups()->value('id'),
-            'default_priority' => 'medium',
-            'is_active' => true,
-        ];
-
+        $this->catalogForm = $this->emptyCatalogForm($board);
         $this->resetAutomationForm();
-        $this->cancelBoardMaintenanceState();
+        $this->cancelDeletion();
     }
 
     private function resetAutomationForm(): void
@@ -1234,11 +1571,23 @@ class SettingsPage extends Component
         $this->automationActions = [$this->emptyAction(1)];
     }
 
-    private function cancelBoardMaintenanceState(): void
+    private function ensureSingleActiveGroupFlag(int $boardId, string $flag, ?int $preferredGroupId = null): void
     {
-        $this->cancelEditingGroup();
-        $this->cancelEditingStatus();
-        $this->cancelDeletion();
+        $groups = TicketGroup::query()->where('ticket_board_id', $boardId)->orderBy('sort_order')->orderBy('id')->get();
+        $preferred = $preferredGroupId ? $groups->firstWhere('id', $preferredGroupId) : null;
+
+        $selectedGroup = $preferred && $preferred->is_active
+            ? $preferred
+            : ($flag === 'is_closed'
+                ? ($groups->first(fn (TicketGroup $group) => $group->is_active && $group->is_closed) ?? $groups->where('is_active', true)->last() ?? $groups->last())
+                : ($groups->first(fn (TicketGroup $group) => $group->is_active && $group->is_default) ?? $groups->firstWhere('is_active', true) ?? $groups->first()));
+
+        if (! $selectedGroup) {
+            throw new \RuntimeException('O quadro precisa manter ao menos uma etapa.');
+        }
+
+        TicketGroup::query()->where('ticket_board_id', $boardId)->update([$flag => false]);
+        $selectedGroup->forceFill([$flag => true, 'is_active' => true])->save();
     }
 
     private function ensureSingleActiveDefaultStatus(int $boardId, ?int $preferredStatusId = null): void
@@ -1264,51 +1613,77 @@ class SettingsPage extends Component
             ->where('ticket_board_id', $boardId)
             ->update(['is_default' => false]);
 
-        $defaultStatus->forceFill([
-            'is_default' => true,
-            'is_active' => true,
-        ])->save();
+        TicketStatus::query()
+            ->whereKey($defaultStatus->id)
+            ->update([
+                'is_default' => true,
+                'is_active' => true,
+            ]);
     }
 
     private function nullableReplacementId(mixed $value): ?int
     {
-        if ($value === '' || $value === null) {
-            return null;
-        }
-
-        return (int) $value;
+        return ($value === '' || $value === null) ? null : (int) $value;
     }
 
     private function ensureGroupReplacementBelongsToBoard(int $boardId, int $replacementId, int $deletedGroupId): void
     {
-        $exists = TicketGroup::query()
-            ->where('ticket_board_id', $boardId)
-            ->whereKey($replacementId)
-            ->whereKeyNot($deletedGroupId)
-            ->exists();
-
+        $exists = TicketGroup::query()->where('ticket_board_id', $boardId)->whereKey($replacementId)->whereKeyNot($deletedGroupId)->exists();
         abort_unless($exists, 422);
+    }
+
+    private function groupRules(string $prefix): array
+    {
+        return [
+            "{$prefix}.name" => ['required', 'string', 'max:80'],
+            "{$prefix}.color" => ['required', 'string', 'max:20'],
+            "{$prefix}.is_collapsed_by_default" => ['boolean'],
+            "{$prefix}.is_default" => ['boolean'],
+            "{$prefix}.is_closed" => ['boolean'],
+            "{$prefix}.is_active" => ['boolean'],
+        ];
+    }
+
+    private function emptyGroupForm(): array
+    {
+        return ['name' => '', 'color' => '#2563eb', 'is_collapsed_by_default' => false, 'is_default' => false, 'is_closed' => false, 'is_active' => true];
+    }
+
+    private function emptyFieldForm(): array
+    {
+        return ['name' => '', 'type' => 'text', 'placeholder' => '', 'help_text' => '', 'is_required' => false, 'show_on_board' => true, 'is_active' => true, 'options_text' => ''];
+    }
+
+    private function emptyStatusForm(): array
+    {
+        return ['name' => '', 'color' => '#2563eb', 'is_default' => false, 'is_closed' => false, 'is_active' => true];
+    }
+
+    private function emptyFormForm(): array
+    {
+        return ['name' => '', 'description' => '', 'field_ids' => [], 'required_field_ids' => [], 'is_default' => false, 'is_active' => true];
+    }
+
+    private function emptyCatalogForm(?TicketBoard $board): array
+    {
+        return [
+            'name' => '',
+            'description' => '',
+            'ticket_form_id' => $board?->forms()->where('is_default', true)->value('id'),
+            'default_ticket_group_id' => $board?->defaultGroup()?->id,
+            'default_priority' => TicketPriority::MEDIUM->value,
+            'is_active' => true,
+        ];
     }
 
     private function emptyCondition(int $sortOrder): array
     {
-        return [
-            'field' => TicketAutomationConditionField::PRIORITY->value,
-            'operator' => TicketAutomationConditionOperator::IN->value,
-            'value' => [],
-            'sort_order' => $sortOrder,
-        ];
+        return ['field' => TicketAutomationConditionField::PRIORITY->value, 'operator' => TicketAutomationConditionOperator::IN->value, 'value' => [], 'sort_order' => $sortOrder];
     }
 
     private function emptyAction(int $sortOrder): array
     {
-        return [
-            'action' => TicketAutomationActionType::CHANGE_STATUS->value,
-            'payload' => [
-                'status_id' => null,
-            ],
-            'sort_order' => $sortOrder,
-        ];
+        return ['action' => TicketAutomationActionType::CHANGE_GROUP->value, 'payload' => ['group_id' => null], 'sort_order' => $sortOrder];
     }
 
     private function reindexAutomationConditions(): void
@@ -1323,178 +1698,6 @@ class SettingsPage extends Component
         foreach ($this->automationActions as $index => &$action) {
             $action['sort_order'] = $index + 1;
         }
-    }
-
-    private function validatedAutomationConditions(TicketBoard $board): array
-    {
-        if (count($this->automationConditions) === 0) {
-            throw ValidationException::withMessages([
-                'automationConditions' => 'Adicione ao menos uma condicao.',
-            ]);
-        }
-
-        $statusIds = $board->statuses->pluck('id')->all();
-        $groupIds = $board->groups->pluck('id')->all();
-        $priorityValues = collect(TicketPriority::cases())->map->value->all();
-
-        return collect($this->automationConditions)->values()->map(function (array $condition, int $index) use ($statusIds, $groupIds, $priorityValues) {
-            $field = TicketAutomationConditionField::tryFrom((string) ($condition['field'] ?? ''));
-            $operator = TicketAutomationConditionOperator::tryFrom((string) ($condition['operator'] ?? ''));
-
-            if (! $field || ! $operator) {
-                throw ValidationException::withMessages([
-                    "automationConditions.{$index}.field" => 'Condicao invalida.',
-                ]);
-            }
-
-            $value = $condition['value'] ?? null;
-
-            if ($field === TicketAutomationConditionField::PRIORITY) {
-                $values = array_values(array_filter(is_array($value) ? $value : [$value], fn ($item) => $item !== null && $item !== ''));
-
-                if ($values === [] || collect($values)->diff($priorityValues)->isNotEmpty()) {
-                    throw ValidationException::withMessages([
-                        "automationConditions.{$index}.value" => 'Selecione prioridades validas.',
-                    ]);
-                }
-
-                $value = $values;
-            }
-
-            if ($field === TicketAutomationConditionField::STATUS_ID) {
-                $values = array_map('intval', array_values(array_filter(is_array($value) ? $value : [$value])));
-
-                if ($values === [] || collect($values)->diff($statusIds)->isNotEmpty()) {
-                    throw ValidationException::withMessages([
-                        "automationConditions.{$index}.value" => 'Selecione status validos.',
-                    ]);
-                }
-
-                $value = $values;
-            }
-
-            if ($field === TicketAutomationConditionField::GROUP_ID) {
-                $values = array_map('intval', array_values(array_filter(is_array($value) ? $value : [$value])));
-
-                if ($values === [] || collect($values)->diff($groupIds)->isNotEmpty()) {
-                    throw ValidationException::withMessages([
-                        "automationConditions.{$index}.value" => 'Selecione grupos validos.',
-                    ]);
-                }
-
-                $value = $values;
-            }
-
-            if (in_array($field, [TicketAutomationConditionField::HAS_ASSIGNEE, TicketAutomationConditionField::IS_CLOSED], true)) {
-                $value = null;
-            }
-
-            return [
-                'field' => $field->value,
-                'operator' => $operator->value,
-                'value' => $value,
-                'sort_order' => $index + 1,
-            ];
-        })->all();
-    }
-
-    private function validatedAutomationActions(TicketBoard $board): array
-    {
-        if (count($this->automationActions) === 0) {
-            throw ValidationException::withMessages([
-                'automationActions' => 'Adicione ao menos uma acao.',
-            ]);
-        }
-
-        $statusIds = $board->statuses->pluck('id')->all();
-        $openStatusIds = $board->statuses->where('is_closed', false)->pluck('id')->all();
-        $groupIds = $board->groups->pluck('id')->all();
-        $assigneeIds = $this->boardAssignees()->pluck('id')->all();
-        $priorityValues = collect(TicketPriority::cases())->map->value->all();
-
-        return collect($this->automationActions)->values()->map(function (array $action, int $index) use ($statusIds, $openStatusIds, $groupIds, $assigneeIds, $priorityValues) {
-            $type = TicketAutomationActionType::tryFrom((string) ($action['action'] ?? ''));
-
-            if (! $type) {
-                throw ValidationException::withMessages([
-                    "automationActions.{$index}.action" => 'Acao invalida.',
-                ]);
-            }
-
-            $payload = is_array($action['payload'] ?? null) ? $action['payload'] : [];
-
-            if ($type === TicketAutomationActionType::ASSIGN_FIXED_ASSIGNEE) {
-                $assigneeId = isset($payload['assignee_id']) ? (int) $payload['assignee_id'] : 0;
-
-                if (! in_array($assigneeId, $assigneeIds, true)) {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.assignee_id" => 'Selecione um responsavel valido.',
-                    ]);
-                }
-            }
-
-            if ($type === TicketAutomationActionType::CHANGE_STATUS) {
-                $statusId = isset($payload['status_id']) ? (int) $payload['status_id'] : 0;
-
-                if (! in_array($statusId, $statusIds, true)) {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.status_id" => 'Selecione um status valido.',
-                    ]);
-                }
-            }
-
-            if ($type === TicketAutomationActionType::CHANGE_GROUP) {
-                $groupId = isset($payload['group_id']) ? (int) $payload['group_id'] : 0;
-
-                if (! in_array($groupId, $groupIds, true)) {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.group_id" => 'Selecione um grupo valido.',
-                    ]);
-                }
-            }
-
-            if ($type === TicketAutomationActionType::CHANGE_PRIORITY) {
-                $priority = (string) ($payload['priority'] ?? '');
-
-                if (! in_array($priority, $priorityValues, true)) {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.priority" => 'Selecione uma prioridade valida.',
-                    ]);
-                }
-            }
-
-            if ($type === TicketAutomationActionType::ADD_SYSTEM_MESSAGE) {
-                if (trim((string) ($payload['message'] ?? '')) === '') {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.message" => 'Informe a mensagem automatica.',
-                    ]);
-                }
-            }
-
-            if ($type === TicketAutomationActionType::SEND_NOTIFICATION) {
-                if (trim((string) ($payload['title'] ?? '')) === '' || trim((string) ($payload['message'] ?? '')) === '') {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.title" => 'Informe titulo e mensagem da notificacao.',
-                    ]);
-                }
-            }
-
-            if ($type === TicketAutomationActionType::REOPEN_TICKET) {
-                $statusId = isset($payload['target_status_id']) ? (int) $payload['target_status_id'] : 0;
-
-                if (! in_array($statusId, $openStatusIds, true)) {
-                    throw ValidationException::withMessages([
-                        "automationActions.{$index}.payload.target_status_id" => 'Selecione um status aberto para reabrir o chamado.',
-                    ]);
-                }
-            }
-
-            return [
-                'action' => $type->value,
-                'payload' => $payload,
-                'sort_order' => $index + 1,
-            ];
-        })->all();
     }
 
     private function uniqueSlug(string $modelClass, int $boardId, string $name): string

@@ -153,7 +153,7 @@ class Ticket extends Model
 
     public function isClosed(): bool
     {
-        return ! is_null($this->resolved_at);
+        return (bool) ($this->group?->is_closed || ! is_null($this->resolved_at));
     }
 
     public function firstResponseSlaState(): string

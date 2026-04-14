@@ -20,44 +20,30 @@ class ProfileUpdateTest extends TestCase
 
         $this->get(route('profile.edit'))
             ->assertOk()
-            ->assertSee('Dados pessoais')
-            ->assertSee('Senha de acesso');
+            ->assertSee('Foto de perfil')
+            ->assertSee('Seguranca da conta')
+            ->assertSee('Conta administrada pela equipe')
+            ->assertDontSee('Laravel Starter Kit');
     }
 
-    public function test_profile_information_can_be_updated(): void
+    public function test_appearance_route_redirects_to_profile_anchor(): void
     {
-        $user = User::factory()->create();
+        $this->actingAs(User::factory()->create());
 
-        $this->actingAs($user);
-
-        $response = Livewire::test('pages::settings.profile')
-            ->set('name', 'Test User')
-            ->set('email', 'test@example.com')
-            ->call('updateProfileInformation');
-
-        $response->assertHasNoErrors();
-
-        $user->refresh();
-
-        $this->assertEquals('Test User', $user->name);
-        $this->assertEquals('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
+        $this->get(route('appearance.edit'))
+            ->assertRedirect(route('profile.edit'));
     }
 
-    public function test_email_verification_status_is_unchanged_when_email_address_is_unchanged(): void
+    public function test_profile_page_hides_admin_managed_fields(): void
     {
-        $user = User::factory()->create();
+        $this->actingAs(User::factory()->create());
 
-        $this->actingAs($user);
-
-        $response = Livewire::test('pages::settings.profile')
-            ->set('name', 'Test User')
-            ->set('email', $user->email)
-            ->call('updateProfileInformation');
-
-        $response->assertHasNoErrors();
-
-        $this->assertNotNull($user->refresh()->email_verified_at);
+        $this->get(route('profile.edit'))
+            ->assertOk()
+            ->assertDontSee('Aparencia')
+            ->assertDontSee('Excluir conta')
+            ->assertDontSee('wire:model="name"', false)
+            ->assertDontSee('wire:model="email"', false);
     }
 
     public function test_profile_photo_can_be_uploaded(): void
@@ -69,10 +55,8 @@ class ProfileUpdateTest extends TestCase
         $this->actingAs($user);
 
         $response = Livewire::test('pages::settings.profile')
-            ->set('name', $user->name)
-            ->set('email', $user->email)
-            ->set('photo', UploadedFile::fake()->image('avatar.png'))
-            ->call('updateProfileInformation');
+            ->set('photo', $this->fakePng('avatar.png'))
+            ->call('saveProfilePhoto');
 
         $response->assertHasNoErrors();
 
@@ -95,10 +79,8 @@ class ProfileUpdateTest extends TestCase
         $this->actingAs($user);
 
         $response = Livewire::test('pages::settings.profile')
-            ->set('name', $user->name)
-            ->set('email', $user->email)
-            ->set('photo', UploadedFile::fake()->image('new-avatar.png'))
-            ->call('updateProfileInformation');
+            ->set('photo', $this->fakePng('new-avatar.png'))
+            ->call('saveProfilePhoto');
 
         $response->assertHasNoErrors();
 
@@ -179,5 +161,13 @@ class ProfileUpdateTest extends TestCase
         $response->assertHasErrors(['password']);
 
         $this->assertNotNull($user->fresh());
+    }
+
+    private function fakePng(string $name): UploadedFile
+    {
+        return UploadedFile::fake()->createWithContent(
+            $name,
+            base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5Wf6kAAAAASUVORK5CYII='),
+        );
     }
 }

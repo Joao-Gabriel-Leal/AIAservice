@@ -75,7 +75,152 @@ class DashboardController extends Controller
             90 => '90 dias',
         ];
 
-        return view('modules.dashboard.index', compact('stats', 'recentTickets', 'ratingSummary', 'period', 'periodOptions'));
+        $chartDates = collect(range(0, $period - 1))
+            ->map(fn (int $offset) => $periodStart->copy()->addDays($offset));
+
+        $createdByDay = (clone $ticketsQuery)
+            ->where('created_at', '>=', $periodStart)
+            ->selectRaw('DATE(created_at) as chart_date, COUNT(*) as total')
+            ->groupBy('chart_date')
+            ->pluck('total', 'chart_date');
+
+        $resolvedByDay = (clone $ticketsQuery)
+            ->whereNotNull('resolved_at')
+            ->where('resolved_at', '>=', $periodStart)
+            ->selectRaw('DATE(resolved_at) as chart_date, COUNT(*) as total')
+            ->groupBy('chart_date')
+            ->pluck('total', 'chart_date');
+
+        $statusDistribution = (clone $ticketsQuery)
+            ->leftJoin('ticket_statuses', 'ticket_statuses.id', '=', 'tickets.ticket_status_id')
+            ->selectRaw('COALESCE(ticket_statuses.name, ?) as status_name', ['Sem status'])
+            ->selectRaw('COALESCE(ticket_statuses.color, ?) as status_color', ['#94a3b8'])
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('status_name', 'status_color')
+            ->orderByDesc('total')
+            ->get();
+
+        $charts = [
+            'volume' => [
+                'type' => 'line',
+                'data' => [
+                    'labels' => $chartDates->map(fn ($date) => $date->format('d/m'))->all(),
+                    'datasets' => [
+                        [
+                            'label' => 'Criados',
+                            'data' => $chartDates->map(fn ($date) => (int) ($createdByDay[$date->toDateString()] ?? 0))->all(),
+                            'borderColor' => '#0ea5e9',
+                            'backgroundColor' => 'rgba(14, 165, 233, 0.16)',
+                            'tension' => 0.35,
+                            'fill' => true,
+                            'borderWidth' => 2,
+                            'pointRadius' => 3,
+                        ],
+                        [
+                            'label' => 'Resolvidos',
+                            'data' => $chartDates->map(fn ($date) => (int) ($resolvedByDay[$date->toDateString()] ?? 0))->all(),
+                            'borderColor' => '#10b981',
+                            'backgroundColor' => 'rgba(16, 185, 129, 0.14)',
+                            'tension' => 0.35,
+                            'fill' => true,
+                            'borderWidth' => 2,
+                            'pointRadius' => 3,
+                        ],
+                    ],
+                ],
+                'options' => [
+                    'responsive' => true,
+                    'maintainAspectRatio' => false,
+                    'plugins' => [
+                        'legend' => [
+                            'position' => 'top',
+                            'align' => 'start',
+                        ],
+                    ],
+                    'scales' => [
+                        'y' => [
+                            'beginAtZero' => true,
+                            'ticks' => [
+                                'precision' => 0,
+                            ],
+                            'grid' => [
+                                'color' => 'rgba(148, 163, 184, 0.14)',
+                            ],
+                        ],
+                        'x' => [
+                            'grid' => [
+                                'display' => false,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'status' => [
+                'type' => 'doughnut',
+                'data' => [
+                    'labels' => $statusDistribution->pluck('status_name')->all(),
+                    'datasets' => [[
+                        'data' => $statusDistribution->pluck('total')->map(fn ($value) => (int) $value)->all(),
+                        'backgroundColor' => $statusDistribution->pluck('status_color')->all(),
+                        'borderWidth' => 0,
+                    ]],
+                ],
+                'options' => [
+                    'responsive' => true,
+                    'maintainAspectRatio' => false,
+                    'plugins' => [
+                        'legend' => [
+                            'position' => 'bottom',
+                        ],
+                    ],
+                    'cutout' => '68%',
+                ],
+            ],
+            'health' => [
+                'type' => 'bar',
+                'data' => [
+                    'labels' => ['Abertos', 'Sem responsavel', 'SLA em atraso'],
+                    'datasets' => [[
+                        'label' => 'Chamados',
+                        'data' => [
+                            (int) $stats['open_tickets'],
+                            (int) $stats['unassigned_open_tickets'],
+                            (int) $stats['overdue_sla'],
+                        ],
+                        'backgroundColor' => ['#0f172a', '#f59e0b', '#ef4444'],
+                        'borderRadius' => 14,
+                        'maxBarThickness' => 42,
+                    ]],
+                ],
+                'options' => [
+                    'responsive' => true,
+                    'maintainAspectRatio' => false,
+                    'plugins' => [
+                        'legend' => [
+                            'display' => false,
+                        ],
+                    ],
+                    'scales' => [
+                        'y' => [
+                            'beginAtZero' => true,
+                            'ticks' => [
+                                'precision' => 0,
+                            ],
+                            'grid' => [
+                                'color' => 'rgba(148, 163, 184, 0.14)',
+                            ],
+                        ],
+                        'x' => [
+                            'grid' => [
+                                'display' => false,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        return view('modules.dashboard.index', compact('stats', 'recentTickets', 'ratingSummary', 'period', 'periodOptions', 'charts'));
     }
 
     private function resolvePeriod(string $period): int

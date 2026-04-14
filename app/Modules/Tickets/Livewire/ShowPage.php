@@ -34,7 +34,7 @@ class ShowPage extends Component
         $ticket = $this->ticket();
         $this->authorize('update', $ticket);
 
-        if (! in_array($field, ['title', 'priority', 'ticket_status_id', 'ticket_group_id', 'assignee_id'], true)) {
+        if (! in_array($field, ['title', 'priority', 'ticket_group_id', 'assignee_id'], true)) {
             return;
         }
 
@@ -88,14 +88,13 @@ class ShowPage extends Component
     public function render(): View
     {
         $ticket = $this->ticket();
-        $board = $ticket->board()->with(['groups', 'statuses', 'fields.options'])->first();
+        $board = $ticket->board()->with(['groups', 'fields.options'])->first();
         $canRate = auth()->user()->can('rate', $ticket);
 
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
             'board' => $board,
             'fields' => $board?->fields->where('is_active', true)->values() ?? collect(),
-            'statuses' => $board?->statuses ?? collect(),
             'groups' => $board?->groups ?? collect(),
             'assignees' => User::query()
                 ->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician'])
@@ -123,7 +122,6 @@ class ShowPage extends Component
                 'sector.company',
                 'requester',
                 'assignee',
-                'status',
                 'group',
                 'catalogItem.form',
                 'fieldValues.field.options',

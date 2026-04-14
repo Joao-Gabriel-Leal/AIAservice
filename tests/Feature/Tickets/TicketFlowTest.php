@@ -75,6 +75,23 @@ class TicketFlowTest extends TestCase
         ]);
     }
 
+    public function test_create_page_requires_explicit_sector_and_catalog_selection_when_opened_without_a_catalog(): void
+    {
+        ['sector' => $sector] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        Livewire::actingAs($requester)
+            ->test(CreatePage::class)
+            ->assertSet('selectedSectorId', null)
+            ->assertSet('selectedCatalogId', null)
+            ->set('selectedSectorId', $sector->id)
+            ->assertSet('selectedCatalogId', null);
+    }
+
     public function test_board_inline_update_and_chat_work_inside_sector_scope(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
@@ -250,7 +267,7 @@ class TicketFlowTest extends TestCase
     {
         Notification::fake();
 
-        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status, 'closedStatus' => $closedStatus] = $this->ticketContext();
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status, 'closedGroup' => $closedGroup] = $this->ticketContext();
 
         $requester = User::factory()->create([
             'role' => UserRole::REQUESTER,
@@ -277,7 +294,7 @@ class TicketFlowTest extends TestCase
 
         Livewire::actingAs($technician)
             ->test(ShowPage::class, ['ticket' => $ticket])
-            ->call('updateFixedField', 'ticket_status_id', (string) $closedStatus->id);
+            ->call('updateFixedField', 'ticket_group_id', (string) $closedGroup->id);
 
         Notification::assertSentTo(
             $requester,
@@ -316,6 +333,7 @@ class TicketFlowTest extends TestCase
             'room' => $room,
             'board' => $board,
             'group' => $board->groups()->firstOrFail(),
+            'closedGroup' => $board->groups()->where('is_closed', true)->firstOrFail(),
             'status' => $board->statuses()->where('is_closed', false)->firstOrFail(),
             'closedStatus' => $board->statuses()->where('is_closed', true)->firstOrFail(),
             'catalog' => $board->catalogItems()->firstOrFail(),

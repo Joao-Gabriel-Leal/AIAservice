@@ -72,4 +72,18 @@ class TicketBoard extends Model
     {
         return $this->hasMany(TicketAutomationRule::class)->orderBy('sort_order')->orderBy('id');
     }
+
+    public function defaultGroup(): ?TicketGroup
+    {
+        return $this->groups->firstWhere('is_default', true)
+            ?? $this->groups->firstWhere('is_active', true)
+            ?? $this->groups->first();
+    }
+
+    public function closedGroup(): ?TicketGroup
+    {
+        return $this->groups->firstWhere('is_closed', true)
+            ?? $this->groups->filter(fn (TicketGroup $group) => $group->is_active)->last()
+            ?? $this->groups->last();
+    }
 }

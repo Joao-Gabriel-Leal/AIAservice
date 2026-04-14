@@ -6,6 +6,7 @@ use App\Enums\TicketAutomationActionType;
 use App\Models\User;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAutomationRuleAction;
+use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Notifications\TicketActivityNotification;
 use Illuminate\Support\Facades\Notification;
@@ -60,9 +61,12 @@ class TicketAutomationActionExecutor
             return null;
         }
 
+        $group = $this->groupForLegacyStatus($ticket, $status);
+
         $ticket->forceFill([
             'ticket_status_id' => $status->id,
-            'resolved_at' => $status->is_closed ? now() : null,
+            'ticket_group_id' => $group?->id ?? $ticket->ticket_group_id,
+            'resolved_at' => ($group?->is_closed || $status->is_closed) ? now() : null,
         ])->save();
 
         $this->ticketSlaService->evaluateTicket($ticket->fresh());
@@ -83,7 +87,16 @@ class TicketAutomationActionExecutor
             return null;
         }
 
-        $ticket->forceFill(['ticket_group_id' => $groupId])->save();
+        $group = $groupId ? TicketGroup::query()->find($groupId) : null;
+        $legacyStatus = $group ? $this->legacyStatusForGroup($ticket->ticket_board_id, $group) : null;
+
+        $ticket->forceFill([
+            'ticket_group_id' => $groupId,
+            'ticket_status_id' => $legacyStatus?->id ?? $ticket->ticket_status_id,
+            'resolved_at' => $group?->is_closed ? now() : null,
+        ])->save();
+
+        $this->ticketSlaService->evaluateTicket($ticket->fresh());
 
         return [
             'type' => TicketAutomationActionType::CHANGE_GROUP->value,
@@ -182,8 +195,11 @@ class TicketAutomationActionExecutor
             return null;
         }
 
+        $group = $this->groupForLegacyStatus($ticket, $status);
+
         $ticket->forceFill([
             'ticket_status_id' => $status->id,
+            'ticket_group_id' => $group?->id ?? $ticket->ticket_group_id,
             'resolved_at' => null,
         ])->save();
 
@@ -202,5 +218,38 @@ class TicketAutomationActionExecutor
             'status_id' => $status->id,
             'message' => $message !== '' ? $message : null,
         ];
+    }
+
+    private function groupForLegacyStatus(Ticket $ticket, TicketStatus $status): ?TicketGroup
+    {
+        $directMatch = TicketGroup::query()
+            ->where('ticket_board_id', $ticket->ticket_board_id)
+            ->where('sort_order', $status->sort_order)
+            ->first();
+
+        if ($directMatch) {
+            return $directMatch;
+        }
+
+        $fallbackQuery = TicketGroup::query()
+            ->where('ticket_board_id', $ticket->ticket_board_id)
+            ->where('is_closed', $status->is_closed);
+
+        return $status->is_closed
+            ? $fallbackQuery->orderByDesc('sort_order')->first()
+            : $fallbackQuery->orderBy('sort_order')->first();
+    }
+
+    private function legacyStatusForGroup(int $boardId, TicketGroup $group): ?TicketStatus
+    {
+        return TicketStatus::query()
+            ->where('ticket_board_id', $boardId)
+            ->where('sort_order', $group->sort_order)
+            ->first()
+            ?? TicketStatus::query()
+                ->where('ticket_board_id', $boardId)
+                ->where('is_closed', $group->is_closed)
+                ->when($group->is_closed, fn ($query) => $query->orderByDesc('sort_order'), fn ($query) => $query->orderBy('sort_order'))
+                ->first();
     }
 }

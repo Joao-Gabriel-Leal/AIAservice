@@ -43,14 +43,15 @@ class CreatePage extends Component
             $this->priority = $catalogItem->default_priority?->value ?? TicketPriority::MEDIUM->value;
         } else {
             $this->selectedSectorId = $this->resolveSectorId($request->integer('sector'));
-            $this->selectedCatalogId = $this->catalogItems()->first()?->id;
+            $this->selectedCatalogId = null;
         }
     }
 
     public function updatedSelectedSectorId(): void
     {
-        $this->selectedCatalogId = $this->catalogItems()->first()?->id;
+        $this->selectedCatalogId = null;
         $this->dynamicValues = [];
+        $this->priority = TicketPriority::MEDIUM->value;
     }
 
     public function updatedSelectedCatalogId(): void
@@ -59,6 +60,8 @@ class CreatePage extends Component
 
         if ($catalog?->default_priority) {
             $this->priority = $catalog->default_priority->value;
+        } else {
+            $this->priority = TicketPriority::MEDIUM->value;
         }
     }
 
@@ -71,13 +74,15 @@ class CreatePage extends Component
 
         $form = $catalog->form;
         $validated = $this->validate($this->rules($form?->fields ?? collect()));
-        $status = $board->statuses->firstWhere('is_default', true) ?? $board->statuses->first();
+        $groupId = $catalog->default_ticket_group_id
+            ?? $board->defaultGroup()?->id;
+        $legacyStatusId = $this->legacyStatusIdForGroup($board, $groupId);
 
         $ticket = $workflowService->createTicket(auth()->user(), [
             'sector_id' => $board->sector_id,
             'ticket_board_id' => $board->id,
-            'ticket_group_id' => $catalog->default_ticket_group_id,
-            'ticket_status_id' => $status?->id,
+            'ticket_group_id' => $groupId,
+            'ticket_status_id' => $legacyStatusId,
             'service_catalog_item_id' => $catalog->id,
             'room_id' => null,
             'title' => $validated['title'],
@@ -102,7 +107,7 @@ class CreatePage extends Component
             'formFields' => $formFields,
         ])->layout('layouts.portal', [
             'title' => 'Abrir chamado',
-            'subtitle' => 'Preencha as informacoes do chamado e envie para o quadro do setor.',
+            'subtitle' => 'Selecione o setor e o formulario correto antes de enviar o chamado.',
         ]);
     }
 
@@ -147,6 +152,7 @@ class CreatePage extends Component
             ->with([
                 'form.fields.options',
                 'form.fields',
+                'board.groups',
                 'board.statuses',
             ])
             ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
@@ -160,7 +166,7 @@ class CreatePage extends Component
         }
 
         $board = TicketBoard::query()
-            ->with(['statuses', 'catalogItems'])
+            ->with(['groups', 'statuses', 'catalogItems'])
             ->where('sector_id', $this->selectedSectorId)
             ->first();
 
@@ -177,7 +183,7 @@ class CreatePage extends Component
         app(SectorProvisioningService::class)->provision($sector);
 
         return TicketBoard::query()
-            ->with(['statuses', 'catalogItems'])
+            ->with(['groups', 'statuses', 'catalogItems'])
             ->where('sector_id', $this->selectedSectorId)
             ->first();
     }
@@ -221,6 +227,24 @@ class CreatePage extends Component
             return $requestedSectorId;
         }
 
-        return $this->availableSectors()->first()?->id;
+        return null;
+    }
+
+    private function legacyStatusIdForGroup(TicketBoard $board, ?int $groupId): ?int
+    {
+        if (! $groupId) {
+            return $board->statuses->firstWhere('is_default', true)?->id
+                ?? $board->statuses->first()?->id;
+        }
+
+        $group = $board->groups->firstWhere('id', $groupId);
+        if (! $group) {
+            return $board->statuses->firstWhere('is_default', true)?->id
+                ?? $board->statuses->first()?->id;
+        }
+
+        return $board->statuses->firstWhere('sort_order', $group->sort_order)?->id
+            ?? $board->statuses->firstWhere('is_closed', $group->is_closed)?->id
+            ?? $board->statuses->first()?->id;
     }
 }

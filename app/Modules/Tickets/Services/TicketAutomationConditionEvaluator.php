@@ -12,7 +12,7 @@ class TicketAutomationConditionEvaluator
 {
     public function matches(TicketAutomationRule $rule, Ticket $ticket): bool
     {
-        $ticket->loadMissing('status');
+        $ticket->loadMissing(['group', 'status']);
 
         foreach ($rule->conditions as $condition) {
             if (! $this->matchesCondition($condition, $ticket)) {
@@ -45,7 +45,7 @@ class TicketAutomationConditionEvaluator
             TicketAutomationConditionField::STATUS_ID => $ticket->ticket_status_id,
             TicketAutomationConditionField::GROUP_ID => $ticket->ticket_group_id,
             TicketAutomationConditionField::HAS_ASSIGNEE => ! is_null($ticket->assignee_id),
-            TicketAutomationConditionField::IS_CLOSED => (bool) ($ticket->status?->is_closed || $ticket->isClosed()),
+            TicketAutomationConditionField::IS_CLOSED => (bool) ($ticket->group?->is_closed || $ticket->isClosed()),
         };
     }
 

@@ -71,7 +71,7 @@
                                     <th class="px-4 py-3 font-medium">Solicitante</th>
                                     <th class="px-4 py-3 font-medium">Responsavel</th>
                                     <th class="px-4 py-3 font-medium">Prioridade</th>
-                                    <th class="px-4 py-3 font-medium">Status</th>
+                                    <th class="px-4 py-3 font-medium">Etapa</th>
                                     <th class="px-4 py-3 font-medium">SLA</th>
                                     @foreach ($fields as $field)
                                         <th class="px-4 py-3 font-medium">{{ $field->name }}</th>
@@ -116,21 +116,19 @@
                                         <td class="px-4 py-4">
                                             @if ($canUpdate)
                                                 <div class="space-y-2">
-                                                    <select wire:change="updateFixedField({{ $ticket->id }}, 'ticket_status_id', $event.target.value)" class="w-44 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
-                                                        @foreach ($board->statuses as $status)
-                                                            <option value="{{ $status->id }}" @selected($ticket->ticket_status_id === $status->id)>{{ $status->name }}</option>
-                                                        @endforeach
-                                                    </select>
+                                                    <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
+                                                        {{ $ticket->group?->name ?? 'Sem etapa' }}
+                                                    </span>
                                                     <select wire:change="updateFixedField({{ $ticket->id }}, 'ticket_group_id', $event.target.value)" class="w-44 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
-                                                        <option value="">Sem grupo</option>
+                                                        <option value="">Sem etapa</option>
                                                         @foreach ($board->groups as $boardGroup)
                                                             <option value="{{ $boardGroup->id }}" @selected($ticket->ticket_group_id === $boardGroup->id)>{{ $boardGroup->name }}</option>
                                                         @endforeach
                                                     </select>
                                                 </div>
                                             @else
-                                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?: '#64748b' }}">
-                                                    {{ $ticket->status?->name ?? 'Sem status' }}
+                                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
+                                                    {{ $ticket->group?->name ?? 'Sem etapa' }}
                                                 </span>
                                             @endif
                                         </td>
@@ -212,7 +210,7 @@
         @if ($ungroupedTickets->isNotEmpty())
             <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-6 py-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Sem grupo</h3>
+                    <h3 class="text-lg font-semibold text-slate-900">Sem etapa</h3>
                     <p class="text-sm text-slate-500">Chamados sem etapa definida no quadro.</p>
                 </div>
                 <div class="divide-y divide-slate-100">
@@ -223,8 +221,8 @@
                                 <p class="text-sm text-slate-500">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?: '#64748b' }}">
-                                    {{ $ticket->status?->name ?? 'Sem status' }}
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
+                                    {{ $ticket->group?->name ?? 'Sem etapa' }}
                                 </span>
                                 @php
                                     $slaState = $ticket->overallSlaState();

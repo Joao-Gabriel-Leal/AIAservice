@@ -2,7 +2,7 @@
     <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-2">
             <h2 class="text-xl font-semibold text-slate-900">Novo chamado</h2>
-            <p class="text-sm text-slate-500">Escolha o setor e o catalogo de servico para montar o formulario certo.</p>
+            <p class="text-sm text-slate-500">Selecione o setor e o formulario publicado por ele antes de montar o chamado.</p>
         </div>
     </div>
 
@@ -14,7 +14,7 @@
                         <label class="text-sm text-slate-600">
                             <span class="mb-2 block font-medium">Setor</span>
                             <select wire:model.live="selectedSectorId" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
-                                <option value="">Selecione</option>
+                                <option value="">Selecione um setor</option>
                                 @foreach ($sectorOptions as $sectorOption)
                                     <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
                                 @endforeach
@@ -23,14 +23,24 @@
                         </label>
 
                         <label class="text-sm text-slate-600">
-                            <span class="mb-2 block font-medium">Catalogo</span>
-                            <select wire:model.live="selectedCatalogId" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
-                                @forelse ($catalogItems as $catalogItem)
+                            <span class="mb-2 block font-medium">Formulario do setor</span>
+                            <select wire:model.live="selectedCatalogId" @disabled(! $selectedSectorId || $catalogItems->isEmpty()) class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                                <option value="">
+                                    @if (! $selectedSectorId)
+                                        Selecione primeiro um setor
+                                    @elseif ($catalogItems->isEmpty())
+                                        Nenhum formulario disponivel
+                                    @else
+                                        Selecione um formulario
+                                    @endif
+                                </option>
+                                @foreach ($catalogItems as $catalogItem)
                                     <option value="{{ $catalogItem->id }}">{{ $catalogItem->name }}</option>
-                                @empty
-                                    <option value="">Nenhum item disponivel</option>
-                                @endforelse
+                                @endforeach
                             </select>
+                            @if ($selectedSectorId && $catalogItems->isEmpty())
+                                <span class="mt-1 block text-xs text-amber-600">Este setor ainda nao possui formularios ativos para abertura.</span>
+                            @endif
                             @error('selectedCatalogId') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
                         </label>
 
@@ -142,7 +152,7 @@
                     <h3 class="text-lg font-semibold">Enviar para o quadro</h3>
                     <p class="mt-2 text-sm text-slate-300">Depois da abertura voce pode acompanhar historico, conversa e atualizacoes do chamado.</p>
 
-                    <button type="submit" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="submit" class="ui-action mt-6 w-full rounded-2xl bg-sky-500 px-4 py-3 text-sm font-medium text-white hover:bg-sky-400">
+                    <button type="submit" @disabled(! $selectedSectorId || ! $selectedCatalogId) wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="submit" class="ui-action mt-6 w-full rounded-2xl bg-sky-500 px-4 py-3 text-sm font-medium text-white hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300">
                         <span wire:loading.remove wire:target="submit">Criar chamado</span>
                         <span wire:loading wire:target="submit">Criando...</span>
                     </button>

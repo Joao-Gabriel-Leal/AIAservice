@@ -16,12 +16,12 @@ enum TicketAutomationActionType: string
     {
         return match ($this) {
             self::ASSIGN_FIXED_ASSIGNEE => 'Atribuir responsavel fixo',
-            self::CHANGE_STATUS => 'Mudar status',
-            self::CHANGE_GROUP => 'Mudar grupo',
+            self::CHANGE_STATUS => 'Mudar status (legado)',
+            self::CHANGE_GROUP => 'Mover para etapa',
             self::CHANGE_PRIORITY => 'Mudar prioridade',
             self::ADD_SYSTEM_MESSAGE => 'Registrar mensagem automatica',
             self::SEND_NOTIFICATION => 'Enviar notificacao',
-            self::REOPEN_TICKET => 'Reabrir chamado',
+            self::REOPEN_TICKET => 'Reabrir chamado (legado)',
         };
     }
 }

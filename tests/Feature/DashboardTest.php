@@ -32,6 +32,19 @@ class DashboardTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_dashboard_renders_visual_sections_and_chart_payloads(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get(route('dashboard', ['period' => 30]));
+
+        $response->assertOk();
+        $response->assertSeeText('Volume no periodo');
+        $response->assertSeeText('Distribuicao por status');
+        $response->assertSeeText('Saude operacional');
+        $response->assertSee('data-chart=', false);
+    }
+
     public function test_dashboard_shows_rating_summary_for_technicians(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status, 'closedStatus' => $closedStatus] = $this->ticketContext();

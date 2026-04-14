@@ -11,8 +11,8 @@
 
                     <div class="flex flex-wrap gap-2">
                         <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">{{ $ticket->priority?->label() }}</span>
-                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?: '#64748b' }}">
-                            {{ $ticket->status?->name ?? 'Sem status' }}
+                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
+                            {{ $ticket->group?->name ?? 'Sem etapa' }}
                         </span>
                     </div>
                 </div>
@@ -88,7 +88,7 @@
                             <div class="flex items-center gap-3 rounded-full bg-amber-50 px-4 py-2">
                                 <div class="flex items-center gap-1" aria-label="Nota {{ $ticket->rating->rating }} de 5">
                                     @for ($score = 1; $score <= 5; $score++)
-                                        <span class="text-lg leading-none {{ $score <= $ticket->rating->rating ? 'text-amber-400' : 'text-slate-300' }}">★</span>
+                                        <span class="text-lg leading-none {{ $score <= $ticket->rating->rating ? 'text-amber-400' : 'text-slate-300' }}">&#9733;</span>
                                     @endfor
                                 </div>
                                 <span class="text-sm font-semibold text-amber-700">{{ $ticket->rating->rating }}/5</span>
@@ -112,7 +112,7 @@
                                         aria-label="{{ $score }} de 5"
                                     >
                                         <input type="radio" wire:model.live="ratingValue" value="{{ $score }}" class="sr-only" />
-                                        <span class="text-3xl leading-none transition {{ $ratingValue !== null && $score <= $ratingValue ? 'text-amber-400' : 'text-slate-300 group-hover:text-amber-300' }}">★</span>
+                                        <span class="text-3xl leading-none transition {{ $ratingValue !== null && $score <= $ratingValue ? 'text-amber-400' : 'text-slate-300 group-hover:text-amber-300' }}">&#9733;</span>
                                     </label>
                                 @endfor
 
@@ -164,7 +164,7 @@
                     <p class="text-sm text-slate-500">Tecnicos e admins de setor podem ajustar o fluxo sem sair da tela.</p>
                 </div>
 
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     <label class="text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Responsavel</span>
                         @can('update', $ticket)
@@ -193,29 +193,16 @@
                     </label>
 
                     <label class="text-sm text-slate-600">
-                        <span class="mb-2 block font-medium">Status</span>
-                        @can('update', $ticket)
-                            <select wire:change="updateFixedField('ticket_status_id', $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
-                                @foreach ($statuses as $status)
-                                    <option value="{{ $status->id }}" @selected($ticket->ticket_status_id === $status->id)>{{ $status->name }}</option>
-                                @endforeach
-                            </select>
-                        @else
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">{{ $ticket->status?->name ?? 'Sem status' }}</div>
-                        @endcan
-                    </label>
-
-                    <label class="text-sm text-slate-600">
-                        <span class="mb-2 block font-medium">Grupo</span>
+                        <span class="mb-2 block font-medium">Etapa</span>
                         @can('update', $ticket)
                             <select wire:change="updateFixedField('ticket_group_id', $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
-                                <option value="">Sem grupo</option>
+                                <option value="">Sem etapa</option>
                                 @foreach ($groups as $group)
                                     <option value="{{ $group->id }}" @selected($ticket->ticket_group_id === $group->id)>{{ $group->name }}</option>
                                 @endforeach
                             </select>
                         @else
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">{{ $ticket->group?->name ?? 'Sem grupo' }}</div>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">{{ $ticket->group?->name ?? 'Sem etapa' }}</div>
                         @endcan
                     </label>
                 </div>
@@ -227,8 +214,8 @@
                 wire:target="updateDynamicField"
             >
                 <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Campos dinamicos</h3>
-                    <p class="text-sm text-slate-500">Valores adicionais configurados pelo setor.</p>
+                    <h3 class="text-lg font-semibold text-slate-900">Campos do chamado</h3>
+                    <p class="text-sm text-slate-500">Informacoes extras configuradas pelo setor para este fluxo.</p>
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
@@ -278,7 +265,7 @@
                         </label>
                     @empty
                         <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                            O setor ainda nao configurou campos dinamicos neste board.
+                            O setor ainda nao configurou campos do chamado neste quadro.
                         </div>
                     @endforelse
                 </div>

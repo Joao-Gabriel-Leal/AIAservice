@@ -1,18 +1,23 @@
 <?php
 
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
 
-    Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');
+    Route::view('settings/profile', 'pages.settings.index')->name('profile.edit');
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
+    Route::get('settings/appearance', function (): RedirectResponse {
+        return redirect()->to(route('profile.edit'));
+    })->name('appearance.edit');
 
-    Route::livewire('settings/security', 'pages::settings.security')
+    Route::get('settings/security', function (): RedirectResponse {
+        return redirect()->to(route('profile.edit').'#seguranca');
+    })
         ->middleware(
             when(
                 Features::canManageTwoFactorAuthentication()

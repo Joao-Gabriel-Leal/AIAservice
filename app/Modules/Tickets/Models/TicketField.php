@@ -24,6 +24,7 @@ class TicketField extends Model
         'settings',
         'sort_order',
         'is_required',
+        'show_on_board',
         'is_active',
     ];
 
@@ -33,6 +34,7 @@ class TicketField extends Model
             'type' => TicketFieldType::class,
             'settings' => 'array',
             'is_required' => 'boolean',
+            'show_on_board' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

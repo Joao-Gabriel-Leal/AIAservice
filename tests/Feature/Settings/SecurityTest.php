@@ -25,14 +25,24 @@ class SecurityTest extends TestCase
         ]);
     }
 
-    public function test_security_settings_page_can_be_rendered(): void
+    public function test_security_route_redirects_to_profile_anchor_when_password_is_confirmed(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user)
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('security.edit'))
+            ->assertRedirect(route('profile.edit').'#seguranca');
+    }
+
+    public function test_profile_page_can_render_security_controls(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('profile.edit'))
             ->assertOk()
+            ->assertSee('Foto de perfil')
             ->assertSee('Autenticacao em dois fatores')
             ->assertSee('Ativar 2FA');
     }
@@ -47,17 +57,16 @@ class SecurityTest extends TestCase
         $response->assertRedirect(route('password.confirm'));
     }
 
-    public function test_security_settings_page_renders_without_two_factor_when_feature_is_disabled(): void
+    public function test_profile_page_renders_without_two_factor_when_feature_is_disabled(): void
     {
         config(['fortify.features' => []]);
 
         $user = User::factory()->create();
 
         $this->actingAs($user)
-            ->withSession(['auth.password_confirmed_at' => time()])
-            ->get(route('security.edit'))
+            ->get(route('profile.edit'))
             ->assertOk()
-            ->assertSee('Atualizar senha')
+            ->assertSee('Seguranca da conta')
             ->assertDontSee('Autenticacao em dois fatores');
     }
 
@@ -73,7 +82,7 @@ class SecurityTest extends TestCase
 
         $this->actingAs($user);
 
-        $component = Livewire::test('pages::settings.security');
+        $component = Livewire::test('pages::settings.profile');
 
         $component->assertSet('twoFactorEnabled', false);
 
@@ -92,7 +101,7 @@ class SecurityTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = Livewire::test('pages::settings.security')
+        $response = Livewire::test('pages::settings.profile')
             ->set('current_password', 'password')
             ->set('password', 'new-password')
             ->set('password_confirmation', 'new-password')
@@ -111,7 +120,7 @@ class SecurityTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = Livewire::test('pages::settings.security')
+        $response = Livewire::test('pages::settings.profile')
             ->set('current_password', 'wrong-password')
             ->set('password', 'new-password')
             ->set('password_confirmation', 'new-password')

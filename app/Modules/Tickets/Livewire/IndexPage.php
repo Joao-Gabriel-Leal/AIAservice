@@ -36,7 +36,7 @@ class IndexPage extends Component
 
         $tickets = Ticket::query()
             ->visibleTo($user)
-            ->with(['sector.company', 'status', 'group', 'requester', 'assignee', 'rating'])
+            ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem'])
             ->when($this->selectedSectorId, fn ($query) => $query->where('sector_id', $this->selectedSectorId))
             ->latest('updated_at')
             ->paginate(12);

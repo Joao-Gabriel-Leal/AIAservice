@@ -19,6 +19,8 @@ class TicketGroup extends Model
         'color',
         'sort_order',
         'is_collapsed_by_default',
+        'is_default',
+        'is_closed',
         'is_active',
     ];
 
@@ -26,6 +28,8 @@ class TicketGroup extends Model
     {
         return [
             'is_collapsed_by_default' => 'boolean',
+            'is_default' => 'boolean',
+            'is_closed' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

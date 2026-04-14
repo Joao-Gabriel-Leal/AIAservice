@@ -51,7 +51,7 @@ class TicketAutomationEngine
         array $context = [],
     ): TicketAutomationExecution {
         $rule->loadMissing(['conditions', 'actions']);
-        $ticket->loadMissing(['status', 'requester', 'assignee']);
+        $ticket->loadMissing(['group', 'status', 'requester', 'assignee']);
 
         $baseContext = $this->baseContext($ticket, $trigger, $context);
         $idempotencyKey = $this->idempotencyService->generateKey($rule, $ticket, $trigger->value, $baseContext);
@@ -96,7 +96,7 @@ class TicketAutomationEngine
 
                 if ($appliedAction) {
                     $appliedActions[] = $appliedAction;
-                    $ticket->refresh()->loadMissing(['status', 'requester', 'assignee']);
+                    $ticket->refresh()->loadMissing(['group', 'status', 'requester', 'assignee']);
                 }
             }
 

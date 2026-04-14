@@ -10,7 +10,7 @@ use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketSlaPolicy;
 use App\Modules\Tickets\Models\TicketSlaTarget;
 use App\Modules\Tickets\Notifications\TicketActivityNotification;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 
@@ -93,7 +93,7 @@ class TicketSlaService
         return $ticket->fresh();
     }
 
-    public function captureFirstResponse(User $actor, Ticket $ticket, ?Carbon $respondedAt = null): void
+    public function captureFirstResponse(User $actor, Ticket $ticket, ?CarbonInterface $respondedAt = null): void
     {
         if (! $this->shouldCountAsFirstResponse($actor, $ticket) || $ticket->first_responded_at) {
             return;
@@ -110,7 +110,7 @@ class TicketSlaService
         }
     }
 
-    public function evaluateTicket(Ticket $ticket, ?Carbon $checkedAt = null): void
+    public function evaluateTicket(Ticket $ticket, ?CarbonInterface $checkedAt = null): void
     {
         $checkedAt ??= now();
 
@@ -164,7 +164,7 @@ class TicketSlaService
         return $actor->hasOperationalAccess($ticket->sector_id);
     }
 
-    private function maybeWarnFirstResponse(Ticket $ticket, Carbon $checkedAt): void
+    private function maybeWarnFirstResponse(Ticket $ticket, CarbonInterface $checkedAt): void
     {
         if ($ticket->first_response_warning_sent_at || ! $ticket->first_response_due_at) {
             return;
@@ -181,7 +181,7 @@ class TicketSlaService
         }
     }
 
-    private function maybeWarnResolution(Ticket $ticket, Carbon $checkedAt): void
+    private function maybeWarnResolution(Ticket $ticket, CarbonInterface $checkedAt): void
     {
         if ($ticket->resolution_warning_sent_at || ! $ticket->resolution_due_at) {
             return;
@@ -198,7 +198,7 @@ class TicketSlaService
         }
     }
 
-    private function markFirstResponseBreached(Ticket $ticket, Carbon $breachedAt, bool $notify): void
+    private function markFirstResponseBreached(Ticket $ticket, CarbonInterface $breachedAt, bool $notify): void
     {
         if ($ticket->first_response_breached_at) {
             return;
@@ -220,7 +220,7 @@ class TicketSlaService
         }
     }
 
-    private function markResolutionBreached(Ticket $ticket, Carbon $breachedAt, bool $notify): void
+    private function markResolutionBreached(Ticket $ticket, CarbonInterface $breachedAt, bool $notify): void
     {
         if ($ticket->resolution_breached_at) {
             return;
@@ -271,7 +271,7 @@ class TicketSlaService
         ])->filter()->unique('id')->values();
     }
 
-    private function isInsideWarningWindow(Carbon $checkedAt, Carbon $dueAt, ?int $targetMinutes): bool
+    private function isInsideWarningWindow(CarbonInterface $checkedAt, CarbonInterface $dueAt, ?int $targetMinutes): bool
     {
         if (! $targetMinutes || $checkedAt->greaterThan($dueAt)) {
             return false;

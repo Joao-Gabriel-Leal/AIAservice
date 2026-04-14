@@ -1,70 +1,73 @@
 <?php
 
 use App\Concerns\PasswordValidationRules;
-use App\Concerns\ProfileValidationRules;
 use App\Concerns\UpdatesUserPassword;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
-use Livewire\Attributes\Computed;
+use Laravel\Fortify\Fortify;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
 new #[Title('Meu perfil')] class extends Component {
-    use ProfileValidationRules;
     use PasswordValidationRules;
     use UpdatesUserPassword;
     use WithFileUploads;
 
-    public string $name = '';
-    public string $email = '';
     public string $current_password = '';
     public string $password = '';
     public string $password_confirmation = '';
+    public bool $canManageTwoFactor = false;
+    public bool $twoFactorEnabled = false;
+    public bool $requiresTwoFactorConfirmation = false;
     public $photo = null;
 
     /**
      * Mount the component.
      */
-    public function mount(): void
-    {
-        $this->name = Auth::user()->name;
-        $this->email = Auth::user()->email;
-    }
-
-    /**
-     * Update the profile information for the currently authenticated user.
-     */
-    public function updateProfileInformation(): void
+    public function mount(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
         $user = Auth::user();
 
+        $this->canManageTwoFactor = Features::canManageTwoFactorAuthentication();
+
+        if (! $this->canManageTwoFactor) {
+            return;
+        }
+
+        if (
+            Fortify::confirmsTwoFactorAuthentication()
+            && filled($user->two_factor_secret)
+            && is_null($user->two_factor_confirmed_at)
+        ) {
+            $disableTwoFactorAuthentication($user);
+            $user = $user->fresh();
+            Auth::setUser($user);
+        }
+
+        $this->twoFactorEnabled = $user->hasEnabledTwoFactorAuthentication();
+        $this->requiresTwoFactorConfirmation = Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm');
+    }
+
+    /**
+     * Save a new profile photo for the authenticated user.
+     */
+    public function saveProfilePhoto(): void
+    {
         $validated = $this->validate([
-            ...$this->profileRules($user->id),
-            'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
-        $user->fill([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-        ]);
-
-        if ($user->isDirty('email')) {
-            $user->email_verified_at = null;
-        }
-
-        $user->save();
-
-        if ($this->photo instanceof UploadedFile) {
-            $user->updateProfilePhoto($this->photo);
-        }
+        $user = Auth::user();
+        $user->updateProfilePhoto($validated['photo']);
 
         $this->reset('photo');
         Auth::setUser($user->fresh());
 
-        session()->flash('status', 'Perfil atualizado com sucesso.');
+        session()->flash('status', 'Foto de perfil atualizada com sucesso.');
     }
 
     /**
@@ -92,173 +95,135 @@ new #[Title('Meu perfil')] class extends Component {
     }
 
     /**
-     * Send an email verification notification to the current user.
+     * Handle the two-factor authentication enabled event.
      */
-    public function resendVerificationNotification(): void
+    #[On('two-factor-enabled')]
+    public function onTwoFactorEnabled(): void
     {
-        $user = Auth::user();
+        $this->twoFactorEnabled = true;
+        Auth::setUser(Auth::user()->fresh());
 
-        if ($user->hasVerifiedEmail()) {
-            $this->redirectIntended(default: route('dashboard', absolute: false));
-
-            return;
-        }
-
-        $user->sendEmailVerificationNotification();
-
-        session()->flash('status', 'Enviamos um novo link de verificacao para o seu email.');
+        session()->flash('status', 'Autenticacao em dois fatores ativada com sucesso.');
     }
 
-    #[Computed]
-    public function hasUnverifiedEmail(): bool
+    /**
+     * Disable two-factor authentication for the user.
+     */
+    public function disableTwoFactor(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
-        return Auth::user() instanceof MustVerifyEmail && ! Auth::user()->hasVerifiedEmail();
-    }
+        $disableTwoFactorAuthentication(Auth::user());
 
-    #[Computed]
-    public function showDeleteUser(): bool
-    {
-        return ! (Auth::user() instanceof MustVerifyEmail)
-            || (Auth::user() instanceof MustVerifyEmail && Auth::user()->hasVerifiedEmail());
-    }
+        $this->twoFactorEnabled = false;
+        Auth::setUser(Auth::user()->fresh());
 
-    #[Computed]
-    public function canManageTwoFactor(): bool
-    {
-        return Features::canManageTwoFactorAuthentication();
-    }
-
-    #[Computed]
-    public function twoFactorEnabled(): bool
-    {
-        return Auth::user()->hasEnabledTwoFactorAuthentication();
+        session()->flash('status', 'Autenticacao em dois fatores desativada com sucesso.');
     }
 }; ?>
 
-<x-layouts.portal title="Meu perfil" subtitle="Atualize seus dados pessoais, a foto e as configuracoes basicas da sua conta.">
-    <x-profile.shell
-        current="profile"
-        heading="Meu perfil"
-        subheading="Padronize sua conta com o mesmo visual do portal e mantenha seus dados sempre atualizados."
-    >
-        <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="mb-6">
-                <h3 class="text-lg font-semibold text-slate-900">Dados pessoais</h3>
-                <p class="text-sm text-slate-500">Atualize nome, email e a foto que sera exibida no menu e nos cards da sua conta.</p>
-            </div>
+<div class="mx-auto max-w-5xl space-y-6">
+    @if (session('status'))
+        <div class="ui-panel rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {{ session('status') }}
+        </div>
+    @endif
 
-            <form wire:submit="updateProfileInformation" class="space-y-6">
-                <div class="flex flex-col gap-6 lg:flex-row">
-                    <div class="lg:w-72">
-                        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                            <p class="text-sm font-medium text-slate-900">Foto de perfil</p>
-                            <p class="mt-1 text-sm text-slate-500">Use uma imagem clara para facilitar sua identificacao no sistema.</p>
+    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-3 border-b border-slate-200 pb-5">
+            <h2 class="text-lg font-semibold text-slate-900">Foto de perfil</h2>
+            <p class="max-w-3xl text-sm text-slate-500">
+                Atualize a imagem exibida no menu lateral e nos componentes que mostram seu avatar.
+            </p>
+        </div>
 
-                            <div class="mt-5 flex justify-center">
-                                @if ($photo)
-                                    <img
-                                        src="{{ $photo->temporaryUrl() }}"
-                                        alt="Preview da nova foto de perfil"
-                                        class="size-28 rounded-[1.75rem] object-cover shadow-sm ring-4 ring-white"
-                                    >
-                                @else
-                                    <x-user-avatar :user="auth()->user()" size="xl" class="size-28 rounded-[1.75rem] text-2xl shadow-sm ring-4 ring-white" />
-                                @endif
-                            </div>
+        <div class="grid gap-6 pt-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <form wire:submit="saveProfilePhoto" class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <p class="text-sm font-semibold text-slate-900">Avatar da conta</p>
+                <p class="mt-1 text-sm text-slate-500">Use uma imagem clara, quadrada e de facil identificacao.</p>
 
-                            <div class="mt-5 space-y-3">
-                                <label class="flex cursor-pointer items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900">
-                                    <span>Trocar foto</span>
-                                    <input type="file" wire:model="photo" accept=".jpg,.jpeg,.png,.webp" class="sr-only">
-                                </label>
-
-                                @if (auth()->user()->hasProfilePhoto() || $photo)
-                                    <button
-                                        type="button"
-                                        wire:click="removeProfilePhoto"
-                                        class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-50"
-                                    >
-                                        Remover foto
-                                    </button>
-                                @endif
-                            </div>
-
-                            <p class="mt-4 text-xs text-slate-500">Formatos aceitos: JPG, PNG ou WEBP com ate 2 MB.</p>
-                            @error('photo') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                            <div wire:loading wire:target="photo" class="mt-2 text-xs text-slate-500">Preparando imagem...</div>
-                        </div>
-                    </div>
-
-                    <div class="flex-1 space-y-4">
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <label class="block text-sm text-slate-600 md:col-span-2">
-                                <span class="mb-2 block font-medium">Nome</span>
-                                <input
-                                    type="text"
-                                    wire:model="name"
-                                    class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none"
-                                    autocomplete="name"
-                                    required
-                                >
-                                @error('name') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                            </label>
-
-                            <label class="block text-sm text-slate-600 md:col-span-2">
-                                <span class="mb-2 block font-medium">Email</span>
-                                <input
-                                    type="email"
-                                    wire:model="email"
-                                    class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none"
-                                    autocomplete="email"
-                                    required
-                                >
-                                @error('email') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                            </label>
-                        </div>
-
-                        @if ($this->hasUnverifiedEmail)
-                            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-                                <p class="font-medium">Seu email ainda nao foi verificado.</p>
-                                <p class="mt-1 text-amber-700">Confirme o endereco para liberar todos os fluxos de seguranca da conta.</p>
-                                <button
-                                    type="button"
-                                    wire:click.prevent="resendVerificationNotification"
-                                    class="mt-3 rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-100"
-                                >
-                                    Reenviar email de verificacao
-                                </button>
-                            </div>
-                        @endif
-
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                            A foto de perfil sera usada no menu lateral, no acesso rapido da conta e nos componentes que exibem seu avatar.
-                        </div>
-                    </div>
+                <div class="mt-5 flex justify-center">
+                    @if ($photo)
+                        <img
+                            src="{{ $photo->temporaryUrl() }}"
+                            alt="Preview da nova foto de perfil"
+                            class="size-24 rounded-3xl object-cover ring-4 ring-white"
+                        >
+                    @else
+                        <x-user-avatar :user="auth()->user()" size="xl" class="size-24 rounded-3xl text-xl ring-4 ring-white" />
+                    @endif
                 </div>
 
-                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                    <p class="text-sm text-slate-500">Salve as alteracoes para refletir o novo avatar e os dados atualizados em toda a interface.</p>
+                <div class="mt-5 space-y-3">
+                    <label class="flex cursor-pointer items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900">
+                        <span>Escolher foto</span>
+                        <input type="file" wire:model="photo" accept=".jpg,.jpeg,.png,.webp" class="sr-only">
+                    </label>
+
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
                         wire:loading.class="ui-loading"
-                        wire:target="updateProfileInformation,photo"
-                        class="ui-action rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
+                        wire:target="saveProfilePhoto,photo"
+                        class="ui-action ui-action-primary w-full rounded-2xl px-4 py-3 text-sm"
                     >
-                        Salvar perfil
+                        Salvar foto
                     </button>
+
+                    @if (auth()->user()->hasProfilePhoto() || $photo)
+                        <button
+                            type="button"
+                            wire:click="removeProfilePhoto"
+                            class="ui-action ui-action-danger w-full rounded-2xl px-4 py-3 text-sm"
+                        >
+                            Remover foto
+                        </button>
+                    @endif
                 </div>
+
+                <p class="mt-4 text-xs text-slate-500">Formatos aceitos: JPG, PNG ou WEBP com ate 2 MB.</p>
+                @error('photo') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                <div wire:loading wire:target="photo" class="mt-2 text-xs text-slate-500">Preparando imagem...</div>
             </form>
-        </section>
 
-        <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="mb-6">
-                <h3 class="text-lg font-semibold text-slate-900">Senha de acesso</h3>
-                <p class="text-sm text-slate-500">Mantenha uma senha forte e exclusiva para proteger suas credenciais.</p>
+            <div class="space-y-4">
+                <div class="rounded-3xl border border-slate-200 bg-white p-5">
+                    <p class="text-sm font-semibold text-slate-900">Conta administrada pela equipe</p>
+                    <p class="mt-2 text-sm text-slate-500">
+                        Nome, email, acessos e demais dados cadastrais sao gerenciados apenas pelo super admin.
+                    </p>
+                </div>
+
+                <div class="rounded-3xl border border-sky-200 bg-sky-50 p-5">
+                    <p class="text-sm font-semibold text-sky-900">O que voce pode ajustar aqui</p>
+                    <div class="mt-3 grid gap-3 md:grid-cols-3">
+                        <div class="rounded-2xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-600">
+                            <p class="font-medium text-slate-900">Foto</p>
+                            <p class="mt-1">Atualiza seu avatar no sistema.</p>
+                        </div>
+                        <div class="rounded-2xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-600">
+                            <p class="font-medium text-slate-900">Senha</p>
+                            <p class="mt-1">Mantem suas credenciais protegidas.</p>
+                        </div>
+                        <div class="rounded-2xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-600">
+                            <p class="font-medium text-slate-900">2FA</p>
+                            <p class="mt-1">Adiciona verificacao extra no login.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
+        </div>
+    </section>
 
+    <section id="seguranca" class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-3 border-b border-slate-200 pb-5">
+            <h2 class="text-lg font-semibold text-slate-900">Seguranca da conta</h2>
+            <p class="max-w-3xl text-sm text-slate-500">
+                Troque sua senha e mantenha os controles de autenticacao em um unico lugar.
+            </p>
+        </div>
+
+        <div class="space-y-6 pt-6">
             <form wire:submit="updatePassword" class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-3">
+                <div class="grid gap-4 lg:grid-cols-3">
                     <label class="block text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Senha atual</span>
                         <input
@@ -296,45 +261,71 @@ new #[Title('Meu perfil')] class extends Component {
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                    <p class="text-sm text-slate-500">Sempre que possivel, use uma senha longa com combinacao de letras, numeros e simbolos.</p>
+                    <p class="text-sm text-slate-500">Use uma senha longa, exclusiva e diferente das combinacoes antigas.</p>
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
                         wire:loading.class="ui-loading"
                         wire:target="updatePassword"
-                        class="ui-action rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
+                        class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm"
                     >
                         Atualizar senha
                     </button>
                 </div>
             </form>
-        </section>
 
-        @if ($this->canManageTwoFactor)
-            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900">Seguranca avancada</h3>
-                        <p class="mt-1 text-sm text-slate-500">Gerencie autenticacao em dois fatores e outros recursos extras da sua conta.</p>
+            @if ($canManageTwoFactor)
+                <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-900">Autenticacao em dois fatores</h3>
+                            <p class="mt-1 max-w-2xl text-sm text-slate-500">
+                                Proteja o acesso com aplicativo autenticador e codigos de recuperacao.
+                            </p>
+                        </div>
+
+                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold {{ $twoFactorEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700' }}">
+                            {{ $twoFactorEnabled ? 'Ativada' : 'Desativada' }}
+                        </span>
                     </div>
 
-                    <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $this->twoFactorEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
-                        {{ $this->twoFactorEnabled ? '2FA ativada' : '2FA disponivel' }}
-                    </span>
+                    @if ($twoFactorEnabled)
+                        <div class="mt-5 space-y-5">
+                            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+                                Sua conta ja exige verificacao adicional no login. Guarde os codigos de recuperacao em local seguro.
+                            </div>
+
+                            <button
+                                type="button"
+                                wire:click="disableTwoFactor"
+                                class="ui-action ui-action-danger rounded-2xl px-4 py-3 text-sm"
+                            >
+                                Desativar 2FA
+                            </button>
+
+                            <livewire:pages::settings.two-factor.recovery-codes />
+                        </div>
+                    @else
+                        <div class="mt-5 space-y-5">
+                            <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
+                                Ao ativar o recurso, o sistema passa a solicitar um codigo do aplicativo autenticador durante o login.
+                            </div>
+
+                            <flux:modal.trigger name="two-factor-setup-modal">
+                                <button
+                                    type="button"
+                                    wire:click="$dispatch('start-two-factor-setup')"
+                                    class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm"
+                                >
+                                    Ativar 2FA
+                                </button>
+                            </flux:modal.trigger>
+
+                            <livewire:pages::settings.two-factor-setup-modal :requires-confirmation="$requiresTwoFactorConfirmation" />
+                        </div>
+                    @endif
                 </div>
-
-                <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                    A tela de seguranca permite ativar a autenticacao em dois fatores, gerar codigos de recuperacao e revisar os controles extras da conta.
-                </div>
-
-                <a href="{{ route('security.edit') }}" class="mt-5 inline-flex rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900">
-                    Abrir seguranca avancada
-                </a>
-            </section>
-        @endif
-
-        @if ($this->showDeleteUser)
-            <livewire:pages::settings.delete-user-form />
-        @endif
-    </x-profile.shell>
-</x-layouts.portal>
+            @endif
+        </div>
+    </section>
+</div>

@@ -53,7 +53,7 @@ class BoardPage extends Component
         $ticket = Ticket::query()->findOrFail($ticketId);
         $this->authorize('update', $ticket);
 
-        if (! in_array($field, ['title', 'priority', 'ticket_status_id', 'ticket_group_id', 'assignee_id'], true)) {
+        if (! in_array($field, ['title', 'priority', 'ticket_group_id', 'assignee_id'], true)) {
             return;
         }
 
@@ -80,7 +80,10 @@ class BoardPage extends Component
     {
         $board = $this->board();
         $groups = $board?->groups ?? collect();
-        $fields = $board?->fields->where('is_active', true)->values() ?? collect();
+        $fields = $board?->fields
+            ->where('is_active', true)
+            ->where('show_on_board', true)
+            ->values() ?? collect();
 
         $ticketsByGroup = collect();
         $ungroupedTickets = collect();
@@ -93,7 +96,6 @@ class BoardPage extends Component
                 ->with([
                     'requester',
                     'assignee',
-                    'status',
                     'group',
                     'fieldValues',
                     'fieldValues.field.options',
@@ -125,7 +127,7 @@ class BoardPage extends Component
             'canUpdate' => true,
         ])->layout('layouts.portal', [
             'title' => 'Quadro de chamados',
-            'subtitle' => 'Visualizacao operacional dos chamados por grupo.',
+            'subtitle' => 'Visualizacao operacional dos chamados por etapa.',
         ]);
     }
 
@@ -139,7 +141,6 @@ class BoardPage extends Component
             ->with([
                 'sector.company',
                 'groups',
-                'statuses',
                 'fields.options',
             ])
             ->where('sector_id', $this->selectedSectorId)
@@ -161,7 +162,6 @@ class BoardPage extends Component
             ->with([
                 'sector.company',
                 'groups',
-                'statuses',
                 'fields.options',
             ])
             ->where('sector_id', $this->selectedSectorId)
@@ -181,7 +181,7 @@ class BoardPage extends Component
 
     private function resolveSectorId(?Sector $sector = null): ?int
     {
-        if ($sector) {
+        if ($sector?->exists) {
             abort_unless(auth()->user()->isSuperAdmin() || auth()->user()->hasOperationalAccess($sector->id), 403);
 
             return $sector->id;

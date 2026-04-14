@@ -38,7 +38,7 @@
                 <tr>
                     <th class="px-6 py-3 font-medium">Titulo</th>
                     <th class="px-6 py-3 font-medium">Setor</th>
-                    <th class="px-6 py-3 font-medium">Status</th>
+                    <th class="px-6 py-3 font-medium">Etapa</th>
                     <th class="px-6 py-3 font-medium">Solicitante</th>
                     <th class="px-6 py-3 font-medium">Responsavel</th>
                     <th class="px-6 py-3 font-medium">Atualizado</th>
@@ -50,7 +50,7 @@
                     <tr class="ui-row-interactive hover:bg-slate-50">
                         <td class="px-6 py-4">
                             <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
-                            <p class="text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Chamado geral' }}</p>
+                            <p class="text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
                         </td>
                         <td class="px-6 py-4 text-slate-600">
                             <p>{{ $ticket->sector?->name ?? 'Sem setor' }}</p>
@@ -58,8 +58,8 @@
                         </td>
                         <td class="px-6 py-4">
                             <div class="flex flex-wrap gap-2">
-                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?? '#64748b' }}">
-                                    {{ $ticket->status?->name ?? 'Sem status' }}
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?? '#64748b' }}">
+                                    {{ $ticket->group?->name ?? 'Sem etapa' }}
                                 </span>
                                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">
                                     {{ $ticket->priority?->label() }}
