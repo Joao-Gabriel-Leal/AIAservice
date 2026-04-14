@@ -1,15 +1,12 @@
 <div class="grid gap-6 md:grid-cols-2">
     <label class="block">
         <span class="mb-2 block text-sm font-medium text-slate-700">Setor</span>
-        <select name="sector_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required @disabled(auth()->user()->isSectorAdmin())>
+        <select name="sector_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
             <option value="">Selecione</option>
             @foreach ($sectors as $sectorOption)
-                <option value="{{ $sectorOption->id }}" @selected(old('sector_id', $room->sector_id ?: auth()->user()->sector_id) == $sectorOption->id)>{{ $sectorOption->name }}</option>
+                <option value="{{ $sectorOption->id }}" @selected(old('sector_id', $room->sector_id) == $sectorOption->id)>{{ $sectorOption->name }}</option>
             @endforeach
         </select>
-        @if (auth()->user()->isSectorAdmin())
-            <input type="hidden" name="sector_id" value="{{ auth()->user()->sector_id }}">
-        @endif
         @error('sector_id') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
     </label>
 

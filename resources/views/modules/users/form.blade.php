@@ -1,69 +1,105 @@
-<div class="grid gap-6 md:grid-cols-2">
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Nome</span>
-        <input type="text" name="name" value="{{ old('name', $userModel->name) }}" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
-        @error('name') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-    </label>
+<div class="space-y-8">
+    <div class="grid gap-6 md:grid-cols-2">
+        <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Nome</span>
+            <input type="text" name="name" value="{{ old('name', $userModel->name) }}" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
+            @error('name') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+        </label>
 
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Email</span>
-        <input type="email" name="email" value="{{ old('email', $userModel->email) }}" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
-        @error('email') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-    </label>
+        <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Email</span>
+            <input type="email" name="email" value="{{ old('email', $userModel->email) }}" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
+            @error('email') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+        </label>
 
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Senha {{ $userModel->exists ? '(deixe em branco para manter)' : '' }}</span>
-        <input type="password" name="password" class="w-full rounded-2xl border border-slate-300 px-4 py-3" {{ $userModel->exists ? '' : 'required' }}>
-        @error('password') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-    </label>
+        <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Senha {{ $userModel->exists ? '(deixe em branco para manter)' : '' }}</span>
+            <input type="password" name="password" class="w-full rounded-2xl border border-slate-300 px-4 py-3" {{ $userModel->exists ? '' : 'required' }}>
+            @error('password') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+        </label>
 
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Confirmar senha</span>
-        <input type="password" name="password_confirmation" class="w-full rounded-2xl border border-slate-300 px-4 py-3" {{ $userModel->exists ? '' : 'required' }}>
-    </label>
+        <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Confirmar senha</span>
+            <input type="password" name="password_confirmation" class="w-full rounded-2xl border border-slate-300 px-4 py-3" {{ $userModel->exists ? '' : 'required' }}>
+        </label>
 
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Perfil</span>
-        <select name="role" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
-            @foreach ($roles as $value => $label)
-                <option value="{{ $value }}" @selected(old('role', $userModel->role?->value) == $value)>{{ $label }}</option>
-            @endforeach
-        </select>
-        @error('role') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-    </label>
-
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Setor</span>
-        <select name="sector_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3" @disabled(auth()->user()->isSectorAdmin())>
-            <option value="">Selecione</option>
-            @foreach ($sectors as $sectorOption)
-                <option value="{{ $sectorOption->id }}" @selected(old('sector_id', $userModel->sector_id ?: auth()->user()->sector_id) == $sectorOption->id)>{{ $sectorOption->name }}</option>
-            @endforeach
-        </select>
-        @if (auth()->user()->isSectorAdmin())
-            <input type="hidden" name="sector_id" value="{{ auth()->user()->sector_id }}">
+        @if (auth()->user()->isSuperAdmin())
+            <label class="block md:col-span-2">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Perfil global</span>
+                <select name="global_role" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>
+                    @foreach ($globalRoles as $value => $label)
+                        <option value="{{ $value }}" @selected(old('global_role', $userModel->global_role?->value ?? \App\Enums\GlobalUserRole::COLLABORATOR->value) === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+                @error('global_role') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+            </label>
+        @else
+            <input type="hidden" name="global_role" value="{{ \App\Enums\GlobalUserRole::COLLABORATOR->value }}">
+            <div class="md:col-span-2 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                Novos usuarios criados por administradores de setor entram como colaboradores e recebem acesso pelos vinculos abaixo.
+            </div>
         @endif
-        @error('sector_id') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-    </label>
+    </div>
 
-    <label class="block">
-        <span class="mb-2 block text-sm font-medium text-slate-700">Sala</span>
-        <select name="room_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
-            <option value="">Selecione</option>
-            @foreach ($rooms as $roomOption)
-                <option value="{{ $roomOption->id }}" @selected(old('room_id', $userModel->room_id) == $roomOption->id)>{{ $roomOption->name }} ({{ $roomOption->sector?->name }})</option>
-            @endforeach
-        </select>
-        @error('room_id') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-    </label>
+    <section class="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-900">Acessos por setor</h3>
+            <p class="mt-1 text-sm text-slate-500">Cada colaborador pode ter um unico nivel por setor. Deixe em branco para nao conceder acesso naquele setor.</p>
+        </div>
 
-    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <input type="checkbox" name="must_change_password" value="1" @checked(old('must_change_password', $userModel->must_change_password ?? ! $userModel->exists)) class="size-4 rounded border-slate-300">
-        <span class="text-sm text-slate-700">Obrigar troca de senha no primeiro acesso</span>
-    </label>
+        @error('sector_accesses') <span class="block text-sm text-rose-600">{{ $message }}</span> @enderror
 
-    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-        <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $userModel->is_active ?? true)) class="size-4 rounded border-slate-300">
-        <span class="text-sm text-slate-700">Usuário ativo</span>
-    </label>
+        @if ($sectors->isEmpty())
+            <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+                Nenhum setor disponivel para vinculacao neste contexto.
+            </div>
+        @else
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50 text-left text-slate-500">
+                        <tr>
+                            <th class="px-4 py-3 font-medium">Setor</th>
+                            <th class="px-4 py-3 font-medium">Empresa</th>
+                            <th class="px-4 py-3 font-medium">Nivel de acesso</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach ($sectors as $sectorOption)
+                            @php($currentAccess = $userModel->sectorAccesses->firstWhere('sector_id', $sectorOption->id))
+                            <tr>
+                                <td class="px-4 py-4 font-medium text-slate-900">{{ $sectorOption->name }}</td>
+                                <td class="px-4 py-4 text-slate-600">{{ $sectorOption->company?->name ?? 'Sem empresa' }}</td>
+                                <td class="px-4 py-4">
+                                    <select name="sector_accesses[{{ $sectorOption->id }}]" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
+                                        <option value="">Sem acesso</option>
+                                        @foreach ($accessLevels as $value => $label)
+                                            <option
+                                                value="{{ $value }}"
+                                                @selected(old("sector_accesses.{$sectorOption->id}", $currentAccess?->access_level?->value) === $value)
+                                            >
+                                                {{ $label }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error("sector_accesses.{$sectorOption->id}") <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </section>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input type="checkbox" name="must_change_password" value="1" @checked(old('must_change_password', $userModel->must_change_password ?? ! $userModel->exists)) class="size-4 rounded border-slate-300">
+            <span class="text-sm text-slate-700">Obrigar troca de senha no primeiro acesso</span>
+        </label>
+
+        <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $userModel->is_active ?? true)) class="size-4 rounded border-slate-300">
+            <span class="text-sm text-slate-700">Usuario ativo</span>
+        </label>
+    </div>
 </div>

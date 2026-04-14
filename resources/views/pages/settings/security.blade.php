@@ -1,9 +1,8 @@
 <?php
 
 use App\Concerns\PasswordValidationRules;
-use Flux\Flux;
+use App\Concerns\UpdatesUserPassword;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -11,17 +10,16 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Security settings')] class extends Component {
+new #[Title('Seguranca da conta')] class extends Component {
     use PasswordValidationRules;
+    use UpdatesUserPassword;
 
     public string $current_password = '';
     public string $password = '';
     public string $password_confirmation = '';
 
     public bool $canManageTwoFactor;
-
     public bool $twoFactorEnabled;
-
     public bool $requiresConfirmation;
 
     /**
@@ -46,24 +44,9 @@ new #[Title('Security settings')] class extends Component {
      */
     public function updatePassword(): void
     {
-        try {
-            $validated = $this->validate([
-                'current_password' => $this->currentPasswordRules(),
-                'password' => $this->passwordRules(),
-            ]);
-        } catch (ValidationException $e) {
-            $this->reset('current_password', 'password', 'password_confirmation');
+        $this->updateAuthenticatedUserPassword();
 
-            throw $e;
-        }
-
-        Auth::user()->update([
-            'password' => $validated['password'],
-        ]);
-
-        $this->reset('current_password', 'password', 'password_confirmation');
-
-        Flux::toast(variant: 'success', text: __('Password updated.'));
+        session()->flash('status', 'Senha atualizada com sucesso.');
     }
 
     /**
@@ -80,94 +63,127 @@ new #[Title('Security settings')] class extends Component {
      */
     public function disable(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
-        $disableTwoFactorAuthentication(auth()->user());
+        $disableTwoFactorAuthentication(Auth::user());
 
         $this->twoFactorEnabled = false;
+        session()->flash('status', 'Autenticacao em dois fatores desativada com sucesso.');
     }
 }; ?>
 
-<section class="w-full">
-    @include('partials.settings-heading')
-
-    <flux:heading class="sr-only">{{ __('Security settings') }}</flux:heading>
-
-    <x-pages::settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
-        <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
-            <flux:input
-                wire:model="current_password"
-                :label="__('Current password')"
-                type="password"
-                required
-                autocomplete="current-password"
-                viewable
-            />
-            <flux:input
-                wire:model="password"
-                :label="__('New password')"
-                type="password"
-                required
-                autocomplete="new-password"
-                viewable
-            />
-            <flux:input
-                wire:model="password_confirmation"
-                :label="__('Confirm password')"
-                type="password"
-                required
-                autocomplete="new-password"
-                viewable
-            />
-
-            <div class="flex items-center gap-4">
-                <flux:button variant="primary" type="submit" data-test="update-password-button">
-                    {{ __('Save') }}
-                </flux:button>
+<x-layouts.portal title="Seguranca" subtitle="Acompanhe os controles extras de acesso e mantenha a conta protegida.">
+    <x-profile.shell
+        current="security"
+        heading="Seguranca da conta"
+        subheading="Concentre senha, autenticacao em dois fatores e demais controles de acesso em uma experiencia alinhada ao portal."
+    >
+        <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-slate-900">Atualizar senha</h3>
+                <p class="text-sm text-slate-500">Troque sua senha sempre que houver suspeita de compartilhamento ou reutilizacao indevida.</p>
             </div>
-        </form>
+
+            <form method="POST" wire:submit="updatePassword" class="space-y-4">
+                <div class="grid gap-4 md:grid-cols-3">
+                    <label class="block text-sm text-slate-600">
+                        <span class="mb-2 block font-medium">Senha atual</span>
+                        <input
+                            type="password"
+                            wire:model="current_password"
+                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                            autocomplete="current-password"
+                            required
+                        >
+                        @error('current_password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="block text-sm text-slate-600">
+                        <span class="mb-2 block font-medium">Nova senha</span>
+                        <input
+                            type="password"
+                            wire:model="password"
+                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                            autocomplete="new-password"
+                            required
+                        >
+                        @error('password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="block text-sm text-slate-600">
+                        <span class="mb-2 block font-medium">Confirmar nova senha</span>
+                        <input
+                            type="password"
+                            wire:model="password_confirmation"
+                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                            autocomplete="new-password"
+                            required
+                        >
+                    </label>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                    <p class="text-sm text-slate-500">Escolha uma senha exclusiva para este ambiente interno e evite repetir combinacoes antigas.</p>
+                    <button
+                        type="submit"
+                        wire:loading.attr="disabled"
+                        wire:loading.class="ui-loading"
+                        wire:target="updatePassword"
+                        class="ui-action rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800"
+                    >
+                        Atualizar senha
+                    </button>
+                </div>
+            </form>
+        </section>
 
         @if ($canManageTwoFactor)
-            <section class="mt-12">
-                <flux:heading>{{ __('Two-factor authentication') }}</flux:heading>
-                <flux:subheading>{{ __('Manage your two-factor authentication settings') }}</flux:subheading>
+            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">Autenticacao em dois fatores</h3>
+                        <p class="mt-1 text-sm text-slate-500">Adicione uma camada extra de protecao com aplicativo autenticador e codigos de recuperacao.</p>
+                    </div>
 
-                <div class="flex flex-col w-full mx-auto space-y-6 text-sm" wire:cloak>
-                    @if ($twoFactorEnabled)
-                        <div class="space-y-4">
-                            <flux:text>
-                                {{ __('You will be prompted for a secure, random pin during login, which you can retrieve from the TOTP-supported application on your phone.') }}
-                            </flux:text>
-
-                            <div class="flex justify-start">
-                                <flux:button
-                                    variant="danger"
-                                    wire:click="disable"
-                                >
-                                    {{ __('Disable 2FA') }}
-                                </flux:button>
-                            </div>
-
-                            <livewire:pages::settings.two-factor.recovery-codes :$requiresConfirmation />
-                        </div>
-                    @else
-                        <div class="space-y-4">
-                            <flux:text variant="subtle">
-                                {{ __('When you enable two-factor authentication, you will be prompted for a secure pin during login. This pin can be retrieved from a TOTP-supported application on your phone.') }}
-                            </flux:text>
-
-                            <flux:modal.trigger name="two-factor-setup-modal">
-                                <flux:button
-                                    variant="primary"
-                                    wire:click="$dispatch('start-two-factor-setup')"
-                                >
-                                    {{ __('Enable 2FA') }}
-                                </flux:button>
-                            </flux:modal.trigger>
-
-                            <livewire:pages::settings.two-factor-setup-modal :requires-confirmation="$requiresConfirmation" />
-                        </div>
-                    @endif
+                    <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $twoFactorEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
+                        {{ $twoFactorEnabled ? 'Ativada' : 'Desativada' }}
+                    </span>
                 </div>
+
+                @if ($twoFactorEnabled)
+                    <div class="mt-5 space-y-5">
+                        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+                            Seu login ja conta com verificacao em duas etapas. Guarde os codigos de recuperacao em um local seguro.
+                        </div>
+
+                        <button
+                            type="button"
+                            wire:click="disable"
+                            class="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-50"
+                        >
+                            Desativar 2FA
+                        </button>
+
+                        <livewire:pages::settings.two-factor.recovery-codes :$requiresConfirmation />
+                    </div>
+                @else
+                    <div class="mt-5 space-y-5">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                            Ao ativar o recurso, voce precisara informar um codigo gerado no celular durante o login.
+                        </div>
+
+                        <flux:modal.trigger name="two-factor-setup-modal">
+                            <button
+                                type="button"
+                                wire:click="$dispatch('start-two-factor-setup')"
+                                class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
+                            >
+                                Ativar 2FA
+                            </button>
+                        </flux:modal.trigger>
+
+                        <livewire:pages::settings.two-factor-setup-modal :requires-confirmation="$requiresConfirmation" />
+                    </div>
+                @endif
             </section>
         @endif
-    </x-pages::settings.layout>
-</section>
+    </x-profile.shell>
+</x-layouts.portal>

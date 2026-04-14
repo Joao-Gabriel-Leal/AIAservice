@@ -2,7 +2,6 @@
 
 namespace App\Modules\Shared\Http\Middleware;
 
-use App\Enums\UserRole;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,11 +14,18 @@ class EnsureRole
 
         abort_unless($user, Response::HTTP_UNAUTHORIZED);
 
-        $allowed = collect($roles)
-            ->map(fn (string $role) => UserRole::from($role))
-            ->all();
+        $isAllowed = collect($roles)->contains(function (string $role) use ($user) {
+            return match ($role) {
+                'super_admin' => $user->isSuperAdmin(),
+                'collaborator' => ! $user->isSuperAdmin(),
+                'sector_admin' => $user->isSectorAdmin(),
+                'technician' => $user->isTechnician(),
+                'requester' => $user->isRequester(),
+                default => false,
+            };
+        });
 
-        abort_unless(in_array($user->role, $allowed, true), Response::HTTP_FORBIDDEN);
+        abort_unless($isAllowed, Response::HTTP_FORBIDDEN);
 
         return $next($request);
     }

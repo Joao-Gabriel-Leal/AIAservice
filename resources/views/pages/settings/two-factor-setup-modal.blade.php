@@ -128,24 +128,24 @@ new class extends Component {
     {
         if ($this->setupComplete) {
             return [
-                'title' => __('Two-factor authentication enabled'),
-                'description' => __('Two-factor authentication is now enabled. Scan the QR code or enter the setup key in your authenticator app.'),
-                'buttonText' => __('Close'),
+                'title' => 'Autenticacao em dois fatores ativada',
+                'description' => 'O 2FA foi ativado. Escaneie o QR code ou informe a chave manualmente no aplicativo autenticador.',
+                'buttonText' => 'Fechar',
             ];
         }
 
         if ($this->showVerificationStep) {
             return [
-                'title' => __('Verify authentication code'),
-                'description' => __('Enter the 6-digit code from your authenticator app.'),
-                'buttonText' => __('Continue'),
+                'title' => 'Confirme o codigo de autenticacao',
+                'description' => 'Digite o codigo de 6 digitos exibido no aplicativo autenticador.',
+                'buttonText' => 'Continuar',
             ];
         }
 
         return [
-            'title' => __('Enable two-factor authentication'),
-            'description' => __('To finish enabling two-factor authentication, scan the QR code or enter the setup key in your authenticator app.'),
-            'buttonText' => __('Continue'),
+            'title' => 'Ativar autenticacao em dois fatores',
+            'description' => 'Para concluir a ativacao, escaneie o QR code ou informe a chave manualmente no aplicativo autenticador.',
+            'buttonText' => 'Continuar',
         ];
     }
 }; ?>
@@ -188,7 +188,7 @@ new class extends Component {
                             name="code"
                             wire:model="code"
                             length="6"
-                            label="OTP Code"
+                            label="Codigo OTP"
                             label:sr-only
                             class="mx-auto"
                         />
@@ -200,7 +200,7 @@ new class extends Component {
                             class="flex-1"
                             wire:click="resetVerification"
                         >
-                            {{ __('Back') }}
+                            Voltar
                         </flux:button>
 
                         <flux:button
@@ -209,7 +209,7 @@ new class extends Component {
                             wire:click="confirmTwoFactor"
                             x-bind:disabled="$wire.code.length < 6"
                         >
-                            {{ __('Confirm') }}
+                            Confirmar
                         </flux:button>
                     </div>
                 </div>
@@ -252,7 +252,7 @@ new class extends Component {
                     <div class="relative flex items-center justify-center w-full">
                         <div class="absolute inset-0 w-full h-px top-1/2 bg-stone-200 dark:bg-stone-600"></div>
                         <span class="relative px-2 text-sm bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-400">
-                            {{ __('or, enter the code manually') }}
+                            ou informe a chave manualmente
                         </span>
                     </div>
 

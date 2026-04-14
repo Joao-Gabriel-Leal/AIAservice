@@ -4,7 +4,6 @@ namespace App\Modules\Tickets\Livewire;
 
 use App\Enums\TicketPriority;
 use App\Models\User;
-use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketBoard;
@@ -12,6 +11,7 @@ use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -25,8 +25,6 @@ class CreatePage extends Component
 
     public ?int $selectedCatalogId = null;
 
-    public ?int $roomId = null;
-
     public string $title = '';
 
     public string $description = '';
@@ -37,18 +35,16 @@ class CreatePage extends Component
 
     public array $attachments = [];
 
-    public function mount(?ServiceCatalogItem $catalogItem = null): void
+    public function mount(?ServiceCatalogItem $catalogItem = null, Request $request): void
     {
         if ($catalogItem) {
             $this->selectedSectorId = $catalogItem->board?->sector_id;
             $this->selectedCatalogId = $catalogItem->id;
             $this->priority = $catalogItem->default_priority?->value ?? TicketPriority::MEDIUM->value;
         } else {
-            $this->selectedSectorId = $this->resolveSectorId();
+            $this->selectedSectorId = $this->resolveSectorId($request->integer('sector'));
             $this->selectedCatalogId = $this->catalogItems()->first()?->id;
         }
-
-        $this->roomId = auth()->user()->room_id;
     }
 
     public function updatedSelectedSectorId(): void
@@ -83,7 +79,7 @@ class CreatePage extends Component
             'ticket_group_id' => $catalog->default_ticket_group_id,
             'ticket_status_id' => $status?->id,
             'service_catalog_item_id' => $catalog->id,
-            'room_id' => $validated['roomId'] ?: auth()->user()->room_id,
+            'room_id' => null,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'requester_id' => auth()->id(),
@@ -101,7 +97,6 @@ class CreatePage extends Component
         return view('livewire.tickets.create-page', [
             'sectorOptions' => $this->availableSectors(),
             'catalogItems' => $this->catalogItems(),
-            'roomOptions' => $this->rooms(),
             'sectorUsers' => $this->sectorUsers(),
             'priorities' => TicketPriority::cases(),
             'formFields' => $formFields,
@@ -116,7 +111,6 @@ class CreatePage extends Component
         $rules = [
             'selectedSectorId' => ['required', 'exists:sectors,id'],
             'selectedCatalogId' => ['required', 'exists:service_catalog_items,id'],
-            'roomId' => ['nullable', 'exists:rooms,id'],
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string'],
             'priority' => ['required', 'string'],
@@ -155,6 +149,7 @@ class CreatePage extends Component
                 'form.fields',
                 'board.statuses',
             ])
+            ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
             ->find($this->selectedCatalogId);
     }
 
@@ -191,11 +186,7 @@ class CreatePage extends Component
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (! auth()->user()->isSuperAdmin()) {
-            $query->where('id', auth()->user()->sector_id);
-        }
-
-        return $query->get();
+        return $query->where('is_active', true)->get();
     }
 
     private function catalogItems(): Collection
@@ -211,19 +202,6 @@ class CreatePage extends Component
             ->get();
     }
 
-    private function rooms(): Collection
-    {
-        if (! $this->selectedSectorId) {
-            return collect();
-        }
-
-        return Room::query()
-            ->where('sector_id', $this->selectedSectorId)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
-    }
-
     private function sectorUsers(): Collection
     {
         if (! $this->selectedSectorId) {
@@ -231,16 +209,16 @@ class CreatePage extends Component
         }
 
         return User::query()
-            ->where('sector_id', $this->selectedSectorId)
+            ->withSectorAccess($this->selectedSectorId)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
     }
 
-    private function resolveSectorId(): ?int
+    private function resolveSectorId(?int $requestedSectorId = null): ?int
     {
-        if (! auth()->user()->isSuperAdmin()) {
-            return auth()->user()->sector_id;
+        if ($requestedSectorId && $this->availableSectors()->pluck('id')->contains($requestedSectorId)) {
+            return $requestedSectorId;
         }
 
         return $this->availableSectors()->first()?->id;

@@ -1,5 +1,5 @@
 <div class="space-y-6">
-    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-2">
             <h2 class="text-xl font-semibold text-slate-900">Novo chamado</h2>
             <p class="text-sm text-slate-500">Escolha o setor e o catalogo de servico para montar o formulario certo.</p>
@@ -9,11 +9,12 @@
     <form wire:submit="submit" class="space-y-6">
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div class="space-y-6">
-                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="grid gap-4 md:grid-cols-2">
                         <label class="text-sm text-slate-600">
                             <span class="mb-2 block font-medium">Setor</span>
                             <select wire:model.live="selectedSectorId" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                                <option value="">Selecione</option>
                                 @foreach ($sectorOptions as $sectorOption)
                                     <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
                                 @endforeach
@@ -34,17 +35,6 @@
                         </label>
 
                         <label class="text-sm text-slate-600">
-                            <span class="mb-2 block font-medium">Sala</span>
-                            <select wire:model="roomId" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
-                                <option value="">Usar sala do usuario</option>
-                                @foreach ($roomOptions as $roomOption)
-                                    <option value="{{ $roomOption->id }}">{{ $roomOption->name }}</option>
-                                @endforeach
-                            </select>
-                            @error('roomId') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="text-sm text-slate-600">
                             <span class="mb-2 block font-medium">Prioridade</span>
                             <select wire:model="priority" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
                                 @foreach ($priorities as $priorityOption)
@@ -56,7 +46,7 @@
                     </div>
                 </section>
 
-                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="space-y-4">
                         <label class="block text-sm text-slate-600">
                             <span class="mb-2 block font-medium">Titulo</span>
@@ -73,7 +63,7 @@
                 </section>
 
                 @if ($formFields->isNotEmpty())
-                    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                         <div class="mb-4">
                             <h3 class="text-lg font-semibold text-slate-900">Campos personalizados</h3>
                             <p class="text-sm text-slate-500">Este formulario foi configurado pelo setor para capturar mais contexto.</p>
@@ -128,7 +118,7 @@
             </div>
 
             <aside class="space-y-6">
-                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-slate-900">Anexos</h3>
                     <p class="mt-1 text-sm text-slate-500">Arquivos ficam no storage privado e respeitam policy de acesso.</p>
 
@@ -148,12 +138,13 @@
                     @endif
                 </section>
 
-                <section class="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
+                <section class="ui-panel rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
                     <h3 class="text-lg font-semibold">Enviar para o quadro</h3>
                     <p class="mt-2 text-sm text-slate-300">Depois da abertura voce pode acompanhar historico, conversa e atualizacoes do chamado.</p>
 
-                    <button type="submit" class="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-sky-500 px-4 py-3 text-sm font-medium text-white hover:bg-sky-400">
-                        Criar chamado
+                    <button type="submit" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="submit" class="ui-action mt-6 w-full rounded-2xl bg-sky-500 px-4 py-3 text-sm font-medium text-white hover:bg-sky-400">
+                        <span wire:loading.remove wire:target="submit">Criar chamado</span>
+                        <span wire:loading wire:target="submit">Criando...</span>
                     </button>
                 </section>
             </aside>

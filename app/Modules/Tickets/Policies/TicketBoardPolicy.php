@@ -9,11 +9,11 @@ class TicketBoardPolicy
 {
     public function view(User $user, TicketBoard $board): bool
     {
-        return $user->isSuperAdmin() || $user->sector_id === $board->sector_id;
+        return $user->isSuperAdmin() || $user->hasOperationalAccess($board->sector_id);
     }
 
     public function update(User $user, TicketBoard $board): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $board->sector_id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($board->sector_id);
     }
 }

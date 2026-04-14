@@ -19,6 +19,10 @@ class ShowPage extends Component
 
     public string $message = '';
 
+    public ?int $ratingValue = null;
+
+    public string $ratingComment = '';
+
     public function mount(Ticket $ticket): void
     {
         $this->authorize('view', $ticket);
@@ -61,10 +65,31 @@ class ShowPage extends Component
         $this->reset('message');
     }
 
+    public function submitRating(TicketWorkflowService $workflowService): void
+    {
+        $validated = $this->validate([
+            'ratingValue' => ['required', 'integer', 'min:1', 'max:5'],
+            'ratingComment' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $ticket = $this->ticket();
+
+        $this->authorize('rate', $ticket);
+
+        $workflowService->submitRating(auth()->user(), $ticket, [
+            'rating' => $validated['ratingValue'],
+            'comment' => $validated['ratingComment'],
+        ]);
+
+        $this->reset('ratingValue', 'ratingComment');
+        session()->flash('status', 'Avaliacao registrada com sucesso.');
+    }
+
     public function render(): View
     {
         $ticket = $this->ticket();
         $board = $ticket->board()->with(['groups', 'statuses', 'fields.options'])->first();
+        $canRate = auth()->user()->can('rate', $ticket);
 
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
@@ -73,17 +98,17 @@ class ShowPage extends Component
             'statuses' => $board?->statuses ?? collect(),
             'groups' => $board?->groups ?? collect(),
             'assignees' => User::query()
-                ->where('sector_id', $ticket->sector_id)
-                ->whereIn('role', ['sector_admin', 'technician'])
+                ->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician'])
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(),
             'sectorUsers' => User::query()
-                ->where('sector_id', $ticket->sector_id)
+                ->withSectorAccess($ticket->sector_id)
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(),
             'priorities' => TicketPriority::cases(),
+            'canRate' => $canRate,
         ])->layout('layouts.portal', [
             'title' => "Chamado #{$ticket->id}",
             'subtitle' => 'Detalhes, historico e conversa do chamado.',
@@ -96,7 +121,6 @@ class ShowPage extends Component
             ->visibleTo(auth()->user())
             ->with([
                 'sector.company',
-                'room',
                 'requester',
                 'assignee',
                 'status',
@@ -106,6 +130,7 @@ class ShowPage extends Component
                 'messages.user',
                 'attachments.uploader',
                 'activityLogs.causer',
+                'rating.user',
             ])
             ->findOrFail($this->ticketId);
     }

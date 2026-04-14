@@ -26,6 +26,7 @@ class BoardPage extends Component
     public function mount(?Sector $sector = null): void
     {
         $this->selectedSectorId = $this->resolveSectorId($sector);
+        abort_if(! $this->selectedSectorId, 403);
 
         $board = $this->board();
 
@@ -105,8 +106,7 @@ class BoardPage extends Component
             $ungroupedTickets = (clone $ticketQuery)->whereNull('ticket_group_id')->get();
 
             $assignees = User::query()
-                ->where('sector_id', $board->sector_id)
-                ->whereIn('role', ['sector_admin', 'technician'])
+                ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get();
@@ -122,7 +122,7 @@ class BoardPage extends Component
             'sectorUsers' => $assignees,
             'priorities' => TicketPriority::cases(),
             'sectorOptions' => $this->availableSectors(),
-            'canUpdate' => ! auth()->user()->isRequester(),
+            'canUpdate' => true,
         ])->layout('layouts.portal', [
             'title' => 'Quadro de chamados',
             'subtitle' => 'Visualizacao operacional dos chamados por grupo.',
@@ -173,20 +173,18 @@ class BoardPage extends Component
         $query = Sector::query()->with('company')->orderBy('name');
 
         if (! auth()->user()->isSuperAdmin()) {
-            $query->where('id', auth()->user()->sector_id);
+            $query->whereIn('id', auth()->user()->operationalSectorIds());
         }
 
-        return $query->get();
+        return $query->where('is_active', true)->get();
     }
 
     private function resolveSectorId(?Sector $sector = null): ?int
     {
         if ($sector) {
-            return $sector->id;
-        }
+            abort_unless(auth()->user()->isSuperAdmin() || auth()->user()->hasOperationalAccess($sector->id), 403);
 
-        if (! auth()->user()->isSuperAdmin()) {
-            return auth()->user()->sector_id;
+            return $sector->id;
         }
 
         return $this->availableSectors()->first()?->id;

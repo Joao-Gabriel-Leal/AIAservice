@@ -41,6 +41,7 @@
 
             <flux:dropdown position="top" align="end">
                 <flux:profile
+                    :avatar="auth()->user()->profilePhotoUrl()"
                     :initials="auth()->user()->initials()"
                     icon-trailing="chevron-down"
                 />
@@ -52,6 +53,7 @@
                                 <flux:avatar
                                     :name="auth()->user()->name"
                                     :initials="auth()->user()->initials()"
+                                    :src="auth()->user()->profilePhotoUrl()"
                                 />
 
                                 <div class="grid flex-1 text-start text-sm leading-tight">
@@ -66,7 +68,7 @@
 
                     <flux:menu.radio.group>
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
-                            {{ __('Settings') }}
+                            Meu perfil
                         </flux:menu.item>
                     </flux:menu.radio.group>
 
@@ -81,7 +83,7 @@
                             class="w-full cursor-pointer"
                             data-test="logout-button"
                         >
-                            {{ __('Log out') }}
+                            Sair
                         </flux:menu.item>
                     </form>
                 </flux:menu>

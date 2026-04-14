@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Management;
 
+use App\Enums\GlobalUserRole;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
@@ -47,25 +48,34 @@ class AdministrationFlowTest extends TestCase
             'is_active' => '1',
         ])->assertRedirect(route('rooms.index', absolute: false));
 
-        $room = Room::query()->firstOrFail();
-
         $this->post(route('users.store'), [
             'name' => 'Tecnico Padrao',
             'email' => 'tecnico@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
-            'role' => UserRole::TECHNICIAN->value,
-            'sector_id' => $sector->id,
-            'room_id' => $room->id,
+            'global_role' => GlobalUserRole::COLLABORATOR->value,
+            'sector_accesses' => [
+                $sector->id => 'technician',
+            ],
             'must_change_password' => '1',
             'is_active' => '1',
         ])->assertRedirect(route('users.index', absolute: false));
 
+        $createdUser = User::query()->where('email', 'tecnico@example.com')->firstOrFail();
+
         $this->assertDatabaseHas('users', [
+            'id' => $createdUser->id,
             'email' => 'tecnico@example.com',
+            'global_role' => GlobalUserRole::COLLABORATOR->value,
             'role' => UserRole::TECHNICIAN->value,
             'sector_id' => $sector->id,
-            'room_id' => $room->id,
+            'room_id' => null,
+        ]);
+
+        $this->assertDatabaseHas('user_sector_accesses', [
+            'user_id' => $createdUser->id,
+            'sector_id' => $sector->id,
+            'access_level' => 'technician',
         ]);
     }
 

@@ -25,7 +25,7 @@ class SectorController extends Controller
         $query = Sector::query()->with('company')->latest();
 
         if (auth()->user()->isSectorAdmin()) {
-            $query->where('id', auth()->user()->sector_id);
+            $query->whereIn('id', auth()->user()->adminSectorIds());
         }
 
         $sectors = $query->paginate(12);

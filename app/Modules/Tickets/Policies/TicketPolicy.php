@@ -14,15 +14,9 @@ class TicketPolicy
 
     public function view(User $user, Ticket $ticket): bool
     {
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        if ($user->isRequester()) {
-            return $ticket->requester_id === $user->id;
-        }
-
-        return $ticket->sector_id === $user->sector_id;
+        return $user->isSuperAdmin()
+            || $ticket->requester_id === $user->id
+            || $user->hasOperationalAccess($ticket->sector_id);
     }
 
     public function create(User $user): bool
@@ -32,15 +26,7 @@ class TicketPolicy
 
     public function update(User $user, Ticket $ticket): bool
     {
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        if ($user->isRequester()) {
-            return false;
-        }
-
-        return $ticket->sector_id === $user->sector_id;
+        return $user->isSuperAdmin() || $user->hasOperationalAccess($ticket->sector_id);
     }
 
     public function comment(User $user, Ticket $ticket): bool
@@ -48,8 +34,15 @@ class TicketPolicy
         return $this->view($user, $ticket);
     }
 
+    public function rate(User $user, Ticket $ticket): bool
+    {
+        return $ticket->requester_id === $user->id
+            && $ticket->isClosed()
+            && ! $ticket->rating()->exists();
+    }
+
     public function manageBoard(User $user, Ticket $ticket): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $ticket->sector_id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($ticket->sector_id);
     }
 }

@@ -38,6 +38,7 @@ class TicketMessageCreated implements ShouldBroadcastNow
                 'id' => $this->message->user?->id,
                 'name' => $this->message->user?->name,
                 'initials' => $this->message->user?->initials(),
+                'profile_photo_url' => $this->message->user?->profilePhotoUrl(),
             ],
         ];
     }

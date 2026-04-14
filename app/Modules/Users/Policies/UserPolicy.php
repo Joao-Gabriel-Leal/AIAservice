@@ -2,41 +2,28 @@
 
 namespace App\Modules\Users\Policies;
 
-use App\Enums\UserRole;
 use App\Models\User;
 
 class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin();
+        return $user->isSuperAdmin();
     }
 
     public function view(User $user, User $model): bool
     {
-        if ($user->isSuperAdmin() || $user->id === $model->id) {
-            return true;
-        }
-
-        return $user->isSectorAdmin() && $user->sector_id === $model->sector_id;
+        return $user->isSuperAdmin();
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin();
+        return $user->isSuperAdmin();
     }
 
     public function update(User $user, User $model): bool
     {
-        if ($user->isSuperAdmin() || $user->id === $model->id) {
-            return true;
-        }
-
-        if (! $user->isSectorAdmin() || $user->sector_id !== $model->sector_id) {
-            return false;
-        }
-
-        return $model->role !== UserRole::SUPER_ADMIN;
+        return $user->isSuperAdmin();
     }
 
     public function delete(User $user, User $model): bool
@@ -45,12 +32,6 @@ class UserPolicy
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->isSectorAdmin()
-            && $user->sector_id === $model->sector_id
-            && $model->role !== UserRole::SUPER_ADMIN;
+        return $user->isSuperAdmin();
     }
 }

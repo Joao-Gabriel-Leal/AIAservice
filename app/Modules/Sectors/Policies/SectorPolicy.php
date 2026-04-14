@@ -14,7 +14,7 @@ class SectorPolicy
 
     public function view(User $user, Sector $sector): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $sector->id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($sector->id);
     }
 
     public function create(User $user): bool
@@ -24,7 +24,7 @@ class SectorPolicy
 
     public function update(User $user, Sector $sector): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $sector->id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($sector->id);
     }
 
     public function delete(User $user, Sector $sector): bool

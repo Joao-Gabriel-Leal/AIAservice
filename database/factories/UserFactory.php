@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\GlobalUserRole;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -15,6 +16,40 @@ class UserFactory extends Factory
 {
     protected static ?string $password;
 
+    public function configure(): static
+    {
+        return $this
+            ->afterMaking(function (User $user) {
+                if ($user->role === UserRole::SUPER_ADMIN) {
+                    $user->global_role = GlobalUserRole::SUPER_ADMIN;
+                }
+            })
+            ->afterCreating(function (User $user) {
+                if ($user->role === UserRole::SUPER_ADMIN) {
+                    if ($user->global_role !== GlobalUserRole::SUPER_ADMIN) {
+                        $user->forceFill(['global_role' => GlobalUserRole::SUPER_ADMIN])->save();
+                    }
+
+                    return;
+                }
+
+                if (! $user->sector_id) {
+                    return;
+                }
+
+                $accessLevel = match ($user->role) {
+                    UserRole::SECTOR_ADMIN => 'sector_admin',
+                    UserRole::TECHNICIAN => 'technician',
+                    default => 'requester',
+                };
+
+                $user->sectorAccesses()->updateOrCreate(
+                    ['sector_id' => $user->sector_id],
+                    ['access_level' => $accessLevel],
+                );
+            });
+    }
+
     public function definition(): array
     {
         return [
@@ -22,7 +57,9 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'profile_photo_path' => null,
             'role' => UserRole::REQUESTER,
+            'global_role' => GlobalUserRole::COLLABORATOR,
             'sector_id' => null,
             'room_id' => null,
             'must_change_password' => false,
@@ -45,6 +82,7 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::SUPER_ADMIN,
+            'global_role' => GlobalUserRole::SUPER_ADMIN,
             'sector_id' => null,
             'room_id' => null,
         ]);

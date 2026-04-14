@@ -1,0 +1,269 @@
+<?php
+
+namespace Tests\Feature\Tickets;
+
+use App\Enums\TicketPriority;
+use App\Enums\UserRole;
+use App\Models\User;
+use App\Modules\Companies\Models\Company;
+use App\Modules\Rooms\Models\Room;
+use App\Modules\Sectors\Models\Sector;
+use App\Modules\Tickets\Livewire\SettingsPage;
+use App\Modules\Tickets\Models\ServiceCatalogItem;
+use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Models\TicketGroup;
+use App\Modules\Tickets\Models\TicketStatus;
+use App\Modules\Tickets\Services\SectorProvisioningService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class BoardSettingsMaintenanceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_sector_admin_can_edit_a_group_without_breaking_existing_tickets(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $ticket = $this->ticketFor($board->id, $sector->id, $room->id, $group->id, $status->id);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('startEditingGroup', $group->id)
+            ->set('editGroupForm.name', 'Triagem N1')
+            ->set('editGroupForm.color', '#0f766e')
+            ->set('editGroupForm.is_collapsed_by_default', true)
+            ->call('updateGroup')
+            ->assertHasNoErrors();
+
+        $group->refresh();
+        $ticket->refresh();
+
+        $this->assertSame('Triagem N1', $group->name);
+        $this->assertSame('#0f766e', $group->color);
+        $this->assertTrue($group->is_collapsed_by_default);
+        $this->assertSame('aberto', $group->slug);
+        $this->assertSame($group->id, $ticket->ticket_group_id);
+    }
+
+    public function test_group_reorder_is_persisted(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $groups = $board->groups()->orderBy('sort_order')->get();
+        $firstGroup = $groups[0];
+        $secondGroup = $groups[1];
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('moveGroupDown', $firstGroup->id)
+            ->assertHasNoErrors();
+
+        $orderedIds = TicketGroup::query()
+            ->where('ticket_board_id', $board->id)
+            ->orderBy('sort_order')
+            ->pluck('id')
+            ->all();
+
+        $this->assertSame($secondGroup->id, $orderedIds[0]);
+        $this->assertSame($firstGroup->id, $orderedIds[1]);
+    }
+
+    public function test_group_deletion_requires_explicit_replacement_for_tickets_and_catalog(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $replacementGroup = $board->groups()->whereKeyNot($group->id)->firstOrFail();
+        $ticket = $this->ticketFor($board->id, $sector->id, $room->id, $group->id, $status->id);
+        $catalogItem = ServiceCatalogItem::query()->create([
+            'ticket_board_id' => $board->id,
+            'ticket_form_id' => $board->forms()->first()?->id,
+            'name' => 'Manutencao local',
+            'description' => 'Item para teste',
+            'default_ticket_group_id' => $group->id,
+            'default_priority' => TicketPriority::MEDIUM,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('confirmDeleteGroup', $group->id)
+            ->set('replacementSelection.group_ticket_group_id', (string) $replacementGroup->id)
+            ->set('replacementSelection.group_catalog_group_id', (string) $replacementGroup->id)
+            ->call('deleteGroup')
+            ->assertHasNoErrors();
+
+        $ticket->refresh();
+        $catalogItem->refresh();
+
+        $this->assertSoftDeleted('ticket_groups', ['id' => $group->id]);
+        $this->assertSame($replacementGroup->id, $ticket->ticket_group_id);
+        $this->assertSame($replacementGroup->id, $catalogItem->default_ticket_group_id);
+    }
+
+    public function test_sector_admin_can_promote_another_status_to_default(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room, 'status' => $openStatus] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $candidate = $board->statuses()->whereKeyNot($openStatus->id)->firstOrFail();
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('startEditingStatus', $candidate->id)
+            ->set('editStatusForm.is_default', true)
+            ->set('editStatusForm.is_active', true)
+            ->call('updateStatus')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_statuses', [
+            'id' => $candidate->id,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('ticket_statuses', [
+            'id' => $openStatus->id,
+            'is_default' => false,
+        ]);
+    }
+
+    public function test_default_status_cannot_be_left_without_another_active_default(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'status' => $defaultStatus] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('startEditingStatus', $defaultStatus->id)
+            ->set('editStatusForm.is_default', false)
+            ->call('updateStatus')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_statuses', [
+            'id' => $defaultStatus->id,
+            'is_default' => true,
+        ]);
+    }
+
+    public function test_status_deletion_requires_active_replacement_and_preserves_ticket_validity(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room, 'group' => $group, 'status' => $status] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $replacementStatus = $board->statuses()
+            ->whereKeyNot($status->id)
+            ->where('is_active', true)
+            ->firstOrFail();
+        $ticket = $this->ticketFor($board->id, $sector->id, $room->id, $group->id, $status->id);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('confirmDeleteStatus', $status->id)
+            ->set('replacementSelection.status_replacement_id', (string) $replacementStatus->id)
+            ->call('deleteStatus')
+            ->assertHasNoErrors();
+
+        $ticket->refresh();
+
+        $this->assertSoftDeleted('ticket_statuses', ['id' => $status->id]);
+        $this->assertSame($replacementStatus->id, $ticket->ticket_status_id);
+        $this->assertDatabaseHas('ticket_statuses', [
+            'id' => $replacementStatus->id,
+            'is_default' => true,
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_last_active_status_cannot_be_deleted(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room, 'status' => $status] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+
+        TicketStatus::query()
+            ->where('ticket_board_id', $board->id)
+            ->whereKeyNot($status->id)
+            ->update(['is_active' => false, 'is_default' => false]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('confirmDeleteStatus', $status->id)
+            ->set('replacementSelection.status_replacement_id', '')
+            ->call('deleteStatus')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_statuses', [
+            'id' => $status->id,
+            'deleted_at' => null,
+        ]);
+    }
+
+    private function maintenanceContext(): array
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Board',
+            'is_active' => true,
+        ]);
+
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Operacoes',
+            'slug' => 'operacoes',
+            'is_active' => true,
+        ]);
+
+        $room = Room::query()->create([
+            'sector_id' => $sector->id,
+            'name' => 'Sala Operacional',
+            'is_active' => true,
+        ]);
+
+        $board = app(SectorProvisioningService::class)->provision($sector);
+
+        return [
+            'company' => $company,
+            'sector' => $sector,
+            'room' => $room,
+            'board' => $board,
+            'group' => $board->groups()->firstOrFail(),
+            'status' => $board->statuses()->where('is_default', true)->firstOrFail(),
+        ];
+    }
+
+    private function sectorAdmin(Sector $sector, Room $room): User
+    {
+        return User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+    }
+
+    private function ticketFor(int $boardId, int $sectorId, int $roomId, int $groupId, int $statusId): Ticket
+    {
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sectorId,
+            'room_id' => $roomId,
+        ]);
+
+        return Ticket::query()->create([
+            'sector_id' => $sectorId,
+            'ticket_board_id' => $boardId,
+            'ticket_group_id' => $groupId,
+            'ticket_status_id' => $statusId,
+            'room_id' => $roomId,
+            'title' => 'Teste operacional',
+            'description' => 'Chamado para manutencao do board.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+    }
+}

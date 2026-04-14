@@ -7,6 +7,7 @@ use App\Modules\Companies\Models\Company;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
+use App\Modules\Users\Models\UserSectorAccess;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -46,6 +47,11 @@ class Sector extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    public function userAccesses(): HasMany
+    {
+        return $this->hasMany(UserSectorAccess::class);
     }
 
     public function board(): HasOne

@@ -39,8 +39,8 @@ class RoomController extends Controller
 
         $payload = $request->validated();
 
-        if (auth()->user()->isSectorAdmin()) {
-            $payload['sector_id'] = auth()->user()->sector_id;
+        if (! auth()->user()->isSuperAdmin()) {
+            abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
         }
 
         Room::query()->create([
@@ -67,8 +67,8 @@ class RoomController extends Controller
 
         $payload = $request->validated();
 
-        if (auth()->user()->isSectorAdmin()) {
-            $payload['sector_id'] = auth()->user()->sector_id;
+        if (! auth()->user()->isSuperAdmin()) {
+            abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
         }
 
         $room->update([
@@ -92,8 +92,8 @@ class RoomController extends Controller
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (auth()->user()->isSectorAdmin()) {
-            $query->where('id', auth()->user()->sector_id);
+        if (! auth()->user()->isSuperAdmin()) {
+            $query->whereIn('id', auth()->user()->adminSectorIds());
         }
 
         return $query->get();

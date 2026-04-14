@@ -1,5 +1,5 @@
 <div class="space-y-6">
-    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div class="space-y-2">
                 <p class="text-sm text-slate-500">
@@ -25,12 +25,12 @@
                     </label>
                 @endif
 
-                <a href="{{ route('tickets.create') }}" class="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white">
-                    Abrir chamado
+                <a href="{{ route('tickets.central') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
+                    Central de formularios
                 </a>
 
-                @if (auth()->user()->isSuperAdmin() || auth()->user()->isSectorAdmin())
-                    <a href="{{ route('tickets.settings', $board?->sector_id) }}" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">
+                @if ($board && (auth()->user()->isSuperAdmin() || auth()->user()->isSectorAdmin($board->sector_id)))
+                    <a href="{{ route('tickets.settings', $board?->sector_id) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                         Configurar quadro
                     </a>
                 @endif
@@ -44,8 +44,14 @@
         </div>
     @else
         @foreach ($groups as $group)
-            <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" wire:key="group-{{ $group->id }}">
-                <button type="button" wire:click="toggleGroup({{ $group->id }})" class="flex w-full items-center justify-between gap-4 border-b border-slate-200 px-6 py-4 text-left">
+            <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" wire:key="group-{{ $group->id }}">
+                <button
+                    type="button"
+                    wire:click="toggleGroup({{ $group->id }})"
+                    wire:loading.class="ui-loading"
+                    wire:target="toggleGroup"
+                    class="ui-row-interactive flex w-full items-center justify-between gap-4 border-b border-slate-200 px-6 py-4 text-left"
+                >
                     <div class="flex items-center gap-3">
                         <span class="size-3 rounded-full" style="background-color: {{ $group->color ?: '#2563eb' }}"></span>
                         <div>
@@ -66,6 +72,7 @@
                                     <th class="px-4 py-3 font-medium">Responsavel</th>
                                     <th class="px-4 py-3 font-medium">Prioridade</th>
                                     <th class="px-4 py-3 font-medium">Status</th>
+                                    <th class="px-4 py-3 font-medium">SLA</th>
                                     @foreach ($fields as $field)
                                         <th class="px-4 py-3 font-medium">{{ $field->name }}</th>
                                     @endforeach
@@ -74,7 +81,7 @@
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 @forelse ($ticketsByGroup->get($group->id, collect()) as $ticket)
-                                    <tr class="align-top hover:bg-slate-50" wire:key="ticket-row-{{ $ticket->id }}">
+                                    <tr class="ui-row-interactive align-top hover:bg-slate-50" wire:key="ticket-row-{{ $ticket->id }}">
                                         <td class="px-4 py-4">
                                             @if ($canUpdate)
                                                 <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="w-72 rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
@@ -127,6 +134,28 @@
                                                 </span>
                                             @endif
                                         </td>
+                                        <td class="px-4 py-4">
+                                            @php
+                                                $slaState = $ticket->overallSlaState();
+                                                $slaBadge = match ($slaState) {
+                                                    'breached' => 'bg-rose-100 text-rose-700',
+                                                    'warning' => 'bg-amber-100 text-amber-700',
+                                                    default => 'bg-emerald-100 text-emerald-700',
+                                                };
+                                                $slaLabel = match ($slaState) {
+                                                    'breached' => 'Estourado',
+                                                    'warning' => 'A vencer',
+                                                    default => 'Em dia',
+                                                };
+                                            @endphp
+                                            <div class="space-y-2">
+                                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $slaBadge }}">{{ $slaLabel }}</span>
+                                                <div class="text-xs text-slate-500">
+                                                    <div>1a resp.: {{ $ticket->first_response_due_at?->format('d/m H:i') ?? '-' }}</div>
+                                                    <div>Resol.: {{ $ticket->resolution_due_at?->format('d/m H:i') ?? '-' }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
 
                                         @foreach ($fields as $field)
                                             @php
@@ -165,12 +194,12 @@
                                         @endforeach
 
                                         <td class="px-4 py-4">
-                                            <a href="{{ route('tickets.show', $ticket) }}" class="inline-flex rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Ver</a>
+                                            <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Ver</a>
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="{{ 6 + $fields->count() }}" class="px-4 py-8 text-center text-slate-500">Nenhum chamado neste grupo ainda.</td>
+                                        <td colspan="{{ 7 + $fields->count() }}" class="px-4 py-8 text-center text-slate-500">Nenhum chamado neste grupo ainda.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -181,21 +210,32 @@
         @endforeach
 
         @if ($ungroupedTickets->isNotEmpty())
-            <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div class="border-b border-slate-200 px-6 py-4">
                     <h3 class="text-lg font-semibold text-slate-900">Sem grupo</h3>
                     <p class="text-sm text-slate-500">Chamados sem etapa definida no quadro.</p>
                 </div>
                 <div class="divide-y divide-slate-100">
                     @foreach ($ungroupedTickets as $ticket)
-                        <a href="{{ route('tickets.show', $ticket) }}" class="flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50">
+                        <a href="{{ route('tickets.show', $ticket) }}" class="ui-row-interactive flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50">
                             <div>
                                 <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
                                 <p class="text-sm text-slate-500">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
                             </div>
-                            <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?: '#64748b' }}">
-                                {{ $ticket->status?->name ?? 'Sem status' }}
-                            </span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?: '#64748b' }}">
+                                    {{ $ticket->status?->name ?? 'Sem status' }}
+                                </span>
+                                @php
+                                    $slaState = $ticket->overallSlaState();
+                                    $slaBadge = match ($slaState) {
+                                        'breached' => 'bg-rose-100 text-rose-700',
+                                        'warning' => 'bg-amber-100 text-amber-700',
+                                        default => 'bg-emerald-100 text-emerald-700',
+                                    };
+                                @endphp
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $slaBadge }}">SLA</span>
+                            </div>
                         </a>
                     @endforeach
                 </div>

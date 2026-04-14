@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Seeders;
 
+use App\Enums\GlobalUserRole;
 use App\Enums\UserRole;
 use App\Models\User;
 use Database\Seeders\SuperAdminSeeder;
@@ -27,6 +28,7 @@ class SuperAdminSeederTest extends TestCase
         $this->assertNotNull($user);
         $this->assertSame('Plantao Admin', $user->name);
         $this->assertSame(UserRole::SUPER_ADMIN, $user->role);
+        $this->assertSame(GlobalUserRole::SUPER_ADMIN, $user->global_role);
         $this->assertTrue($user->isSuperAdmin());
     }
 }

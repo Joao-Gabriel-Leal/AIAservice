@@ -2,14 +2,17 @@
 
 namespace App\Modules\Users\Http\Controllers;
 
+use App\Enums\GlobalUserRole;
+use App\Enums\SectorAccessLevel;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Users\Http\Requests\UserRequest;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
@@ -18,59 +21,67 @@ class UserController extends Controller
     {
         $this->authorize('viewAny', User::class);
 
-        $query = User::query()->with(['sector', 'room'])->latest();
+        $query = User::query()
+            ->with(['sectorAccesses.sector'])
+            ->latest();
 
-        if (auth()->user()->isSectorAdmin()) {
-            $query->where('sector_id', auth()->user()->sector_id);
+        if (! auth()->user()->isSuperAdmin()) {
+            $managedSectorIds = auth()->user()->adminSectorIds();
+
+            $query->where(function ($scopedQuery) use ($managedSectorIds) {
+                $scopedQuery
+                    ->whereKey(auth()->id())
+                    ->orWhere(fn ($userQuery) => $userQuery->withAnySectorAccess($managedSectorIds));
+            });
         }
 
-        $users = $query->paginate(15);
-
-        return view('modules.users.index', compact('users'));
+        return view('modules.users.index', [
+            'users' => $query->paginate(15),
+        ]);
     }
 
     public function create(): View
     {
         $this->authorize('create', User::class);
 
-        return view('modules.users.create', [
-            'userModel' => new User(),
-            'roles' => $this->availableRoles(),
-            'sectors' => $this->availableSectors(),
-            'rooms' => $this->availableRooms(),
-        ]);
+        return view('modules.users.create', $this->formData(new User()));
     }
 
     public function store(UserRequest $request): RedirectResponse
     {
         $this->authorize('create', User::class);
 
-        $payload = $this->resolvedPayload($request);
+        DB::transaction(function () use ($request) {
+            $resolved = $this->resolvedData($request);
 
-        User::query()->create($payload);
+            $user = User::query()->create($resolved['payload']);
 
-        return redirect()->route('users.index')->with('status', 'Usuário criado com sucesso.');
+            $this->syncSectorAccesses($user, $resolved['sector_accesses']);
+        });
+
+        return redirect()->route('users.index')->with('status', 'Usuario criado com sucesso.');
     }
 
     public function edit(User $user): View
     {
         $this->authorize('update', $user);
 
-        return view('modules.users.edit', [
-            'userModel' => $user,
-            'roles' => $this->availableRoles(),
-            'sectors' => $this->availableSectors(),
-            'rooms' => $this->availableRooms(),
-        ]);
+        return view('modules.users.edit', $this->formData($user->load('sectorAccesses.sector')));
     }
 
     public function update(UserRequest $request, User $user): RedirectResponse
     {
         $this->authorize('update', $user);
 
-        $user->update($this->resolvedPayload($request, $user));
+        DB::transaction(function () use ($request, $user) {
+            $resolved = $this->resolvedData($request, $user);
 
-        return redirect()->route('users.index')->with('status', 'Usuário atualizado com sucesso.');
+            $user->update($resolved['payload']);
+
+            $this->syncSectorAccesses($user, $resolved['sector_accesses']);
+        });
+
+        return redirect()->route('users.index')->with('status', 'Usuario atualizado com sucesso.');
     }
 
     public function destroy(User $user): RedirectResponse
@@ -79,16 +90,40 @@ class UserController extends Controller
 
         $user->delete();
 
-        return redirect()->route('users.index')->with('status', 'Usuário removido com sucesso.');
+        return redirect()->route('users.index')->with('status', 'Usuario removido com sucesso.');
     }
 
-    private function resolvedPayload(UserRequest $request, ?User $user = null): array
+    private function formData(User $user): array
     {
-        $payload = $request->safe()->except(['password', 'password_confirmation']);
+        return [
+            'userModel' => $user->loadMissing('sectorAccesses.sector'),
+            'globalRoles' => $this->availableGlobalRoles(),
+            'accessLevels' => collect(SectorAccessLevel::cases())
+                ->mapWithKeys(fn (SectorAccessLevel $level) => [$level->value => $level->label()])
+                ->all(),
+            'sectors' => $this->availableSectors(),
+        ];
+    }
 
-        if (auth()->user()->isSectorAdmin()) {
-            $payload['sector_id'] = auth()->user()->sector_id;
-        }
+    private function resolvedData(UserRequest $request, ?User $user = null): array
+    {
+        $globalRole = auth()->user()->isSuperAdmin()
+            ? GlobalUserRole::from((string) $request->input('global_role'))
+            : GlobalUserRole::COLLABORATOR;
+
+        $sectorAccesses = $globalRole === GlobalUserRole::SUPER_ADMIN
+            ? collect()
+            : $this->normalizedSectorAccesses($request);
+
+        $payload = $request->safe()->except([
+            'password',
+            'password_confirmation',
+            'sector_accesses',
+        ]);
+
+        $payload['global_role'] = $globalRole;
+        $payload['must_change_password'] = $request->boolean('must_change_password', ! $user);
+        $payload['is_active'] = $request->boolean('is_active', true);
 
         if (filled($request->input('password'))) {
             $payload['password'] = Hash::make((string) $request->input('password'));
@@ -96,22 +131,49 @@ class UserController extends Controller
             $payload['password'] = Hash::make('password');
         }
 
-        $payload['must_change_password'] = $request->boolean('must_change_password', ! $user);
-        $payload['is_active'] = $request->boolean('is_active', true);
-
-        if (($payload['role'] ?? null) === UserRole::SUPER_ADMIN->value) {
-            $payload['sector_id'] = null;
-            $payload['room_id'] = null;
-        }
-
-        return $payload;
+        return [
+            'payload' => array_merge($payload, $this->legacySnapshot($globalRole, $sectorAccesses)),
+            'sector_accesses' => $sectorAccesses,
+        ];
     }
 
-    private function availableRoles(): array
+    private function normalizedSectorAccesses(UserRequest $request): Collection
     {
-        return collect(UserRole::cases())
-            ->reject(fn (UserRole $role) => auth()->user()->isSectorAdmin() && $role === UserRole::SUPER_ADMIN)
-            ->mapWithKeys(fn (UserRole $role) => [$role->value => $role->label()])
+        return collect($request->input('sector_accesses', []))
+            ->filter(fn ($value) => filled($value))
+            ->map(fn ($accessLevel, $sectorId) => [
+                'sector_id' => (int) $sectorId,
+                'access_level' => (string) $accessLevel,
+            ])
+            ->values();
+    }
+
+    private function syncSectorAccesses(User $user, Collection $sectorAccesses): void
+    {
+        $manageableSectorIds = auth()->user()->isSuperAdmin()
+            ? null
+            : auth()->user()->adminSectorIds();
+
+        if ($manageableSectorIds === null) {
+            $user->sectorAccesses()->delete();
+            $selectedAccesses = $sectorAccesses;
+        } else {
+            $user->sectorAccesses()->whereIn('sector_id', $manageableSectorIds)->delete();
+            $selectedAccesses = $sectorAccesses->filter(
+                fn (array $access) => in_array($access['sector_id'], $manageableSectorIds, true),
+            )->values();
+        }
+
+        if ($selectedAccesses->isNotEmpty()) {
+            $user->sectorAccesses()->createMany($selectedAccesses->all());
+        }
+    }
+
+    private function availableGlobalRoles(): array
+    {
+        return collect(GlobalUserRole::cases())
+            ->reject(fn (GlobalUserRole $role) => ! auth()->user()->isSuperAdmin() && $role === GlobalUserRole::SUPER_ADMIN)
+            ->mapWithKeys(fn (GlobalUserRole $role) => [$role->value => $role->label()])
             ->all();
     }
 
@@ -119,21 +181,36 @@ class UserController extends Controller
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (auth()->user()->isSectorAdmin()) {
-            $query->where('id', auth()->user()->sector_id);
+        if (! auth()->user()->isSuperAdmin()) {
+            $query->whereIn('id', auth()->user()->adminSectorIds());
         }
 
         return $query->get();
     }
 
-    private function availableRooms()
+    private function legacySnapshot(GlobalUserRole $globalRole, Collection $sectorAccesses): array
     {
-        $query = Room::query()->with('sector')->orderBy('name');
-
-        if (auth()->user()->isSectorAdmin()) {
-            $query->where('sector_id', auth()->user()->sector_id);
+        if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
+            return [
+                'role' => UserRole::SUPER_ADMIN,
+                'sector_id' => null,
+                'room_id' => null,
+            ];
         }
 
-        return $query->get();
+        $primaryAccess = $sectorAccesses->first();
+        $accessLevels = $sectorAccesses->pluck('access_level');
+
+        $legacyRole = match (true) {
+            $accessLevels->contains(SectorAccessLevel::SECTOR_ADMIN->value) => UserRole::SECTOR_ADMIN,
+            $accessLevels->contains(SectorAccessLevel::TECHNICIAN->value) => UserRole::TECHNICIAN,
+            default => UserRole::REQUESTER,
+        };
+
+        return [
+            'role' => $legacyRole,
+            'sector_id' => $primaryAccess['sector_id'] ?? null,
+            'room_id' => null,
+        ];
     }
 }

@@ -12,6 +12,11 @@ use App\Modules\Tickets\Models\TicketStatus;
 
 class SectorProvisioningService
 {
+    public function __construct(
+        private readonly TicketSlaService $ticketSlaService,
+    ) {
+    }
+
     public function provision(Sector $sector): TicketBoard
     {
         $board = TicketBoard::query()->firstOrCreate(
@@ -62,6 +67,8 @@ class SectorProvisioningService
                 'is_active' => true,
             ],
         );
+
+        $this->ticketSlaService->ensurePolicy($board);
 
         return $board->fresh(['groups', 'statuses', 'forms', 'catalogItems']);
     }

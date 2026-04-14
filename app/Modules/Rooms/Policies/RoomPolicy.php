@@ -14,7 +14,7 @@ class RoomPolicy
 
     public function view(User $user, Room $room): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $room->sector_id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($room->sector_id);
     }
 
     public function create(User $user): bool
@@ -24,11 +24,11 @@ class RoomPolicy
 
     public function update(User $user, Room $room): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $room->sector_id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($room->sector_id);
     }
 
     public function delete(User $user, Room $room): bool
     {
-        return $user->isSuperAdmin() || ($user->isSectorAdmin() && $user->sector_id === $room->sector_id);
+        return $user->isSuperAdmin() || $user->isSectorAdmin($room->sector_id);
     }
 }
