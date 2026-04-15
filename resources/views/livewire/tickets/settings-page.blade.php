@@ -556,18 +556,79 @@
                                             <?php
                                                 $visibleFieldIds = array_map('strval', $formForm['field_ids'] ?? []);
                                                 $isVisibleInForm = in_array((string) $formField->id, $visibleFieldIds, true);
+                                                $visibilityCondition = data_get($formForm, "visibility_conditions.{$formField->id}", []);
+                                                $hasVisibilityCondition = (bool) data_get($visibilityCondition, 'enabled', false);
+                                                $selectedParentFieldId = data_get($visibilityCondition, 'parent_field_id');
+                                                $selectedParentField = $board->fields->firstWhere('id', (int) $selectedParentFieldId);
+                                                $availableParentFields = $board->fields->filter(function ($candidateField) use ($visibleFieldIds, $formField) {
+                                                    return in_array((string) $candidateField->id, $visibleFieldIds, true)
+                                                        && $candidateField->id !== $formField->id;
+                                                })->values();
                                             ?>
                                             <div class="rounded-2xl border border-slate-200 p-3">
-                                                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                                <div class="flex flex-col gap-3">
                                                     <div>
                                                         <p class="font-medium text-slate-900">{{ $formField->name }}</p>
                                                         <p class="text-xs text-slate-500">{{ $formField->type->label() }}</p>
                                                     </div>
+
                                                     <div class="flex flex-wrap gap-4">
                                                         <label class="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" value="{{ $formField->id }}" wire:model="formForm.field_ids" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Perguntar neste formulario</label>
                                                         <label class="inline-flex items-center gap-2 text-sm text-slate-600 {{ $isVisibleInForm ? '' : 'opacity-50' }}"><input type="checkbox" value="{{ $formField->id }}" wire:model="formForm.required_field_ids" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" @disabled(! $isVisibleInForm) /> Obrigatorio</label>
+                                                        <label class="inline-flex items-center gap-2 text-sm text-slate-600 {{ $isVisibleInForm ? '' : 'opacity-50' }}"><input type="checkbox" wire:model="formForm.visibility_conditions.{{ $formField->id }}.enabled" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" @disabled(! $isVisibleInForm) /> Campo inteligente</label>
                                                     </div>
                                                 </div>
+
+                                                @if ($isVisibleInForm && $hasVisibilityCondition)
+                                                    <div class="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-3">
+                                                        <label class="text-sm text-slate-600">
+                                                            <span class="mb-2 block font-medium">Campo base</span>
+                                                            <select wire:model.live="formForm.visibility_conditions.{{ $formField->id }}.parent_field_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                                                <option value="">Selecione</option>
+                                                                @foreach ($availableParentFields as $availableParentField)
+                                                                    <option value="{{ $availableParentField->id }}">{{ $availableParentField->name }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                            @error("formForm.visibility_conditions.{$formField->id}.parent_field_id") <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                                        </label>
+
+                                                        <label class="text-sm text-slate-600">
+                                                            <span class="mb-2 block font-medium">Operador</span>
+                                                            <select wire:model="formForm.visibility_conditions.{{ $formField->id }}.operator" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                                                <option value="equals">Igual a</option>
+                                                            </select>
+                                                            @error("formForm.visibility_conditions.{$formField->id}.operator") <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                                        </label>
+
+                                                        <label class="text-sm text-slate-600">
+                                                            <span class="mb-2 block font-medium">Valor esperado</span>
+                                                            @if ($selectedParentField?->type?->value === 'select' || $selectedParentField?->type?->value === 'status')
+                                                                <select wire:model="formForm.visibility_conditions.{{ $formField->id }}.expected_value" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                                                    <option value="">Selecione</option>
+                                                                    @foreach ($selectedParentField->options as $option)
+                                                                        <option value="{{ $option->value }}">{{ $option->label }}</option>
+                                                                    @endforeach
+                                                                </select>
+                                                            @elseif ($selectedParentField?->type?->value === 'checkbox')
+                                                                <select wire:model="formForm.visibility_conditions.{{ $formField->id }}.expected_value" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                                                    <option value="">Selecione</option>
+                                                                    <option value="1">Marcado</option>
+                                                                    <option value="0">Desmarcado</option>
+                                                                </select>
+                                                            @elseif ($selectedParentField?->type?->value === 'user')
+                                                                <select wire:model="formForm.visibility_conditions.{{ $formField->id }}.expected_value" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                                                    <option value="">Selecione</option>
+                                                                    @foreach ($formConditionUsers as $conditionUser)
+                                                                        <option value="{{ $conditionUser->id }}">{{ $conditionUser->name }}</option>
+                                                                    @endforeach
+                                                                </select>
+                                                            @else
+                                                                <input type="text" wire:model="formForm.visibility_conditions.{{ $formField->id }}.expected_value" placeholder="Valor que libera o campo" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" />
+                                                            @endif
+                                                            @error("formForm.visibility_conditions.{$formField->id}.expected_value") <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                                        </label>
+                                                    </div>
+                                                @endif
                                             </div>
                                         <?php endforeach; ?>
                                     @endif

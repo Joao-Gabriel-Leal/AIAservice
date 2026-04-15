@@ -15,12 +15,16 @@ class TicketFormField extends Model
         'ticket_field_id',
         'is_required',
         'sort_order',
+        'visibility_parent_field_id',
+        'visibility_operator',
+        'visibility_expected_value',
     ];
 
     protected function casts(): array
     {
         return [
             'is_required' => 'boolean',
+            'visibility_parent_field_id' => 'integer',
         ];
     }
 
@@ -32,5 +36,10 @@ class TicketFormField extends Model
     public function field(): BelongsTo
     {
         return $this->belongsTo(TicketField::class, 'ticket_field_id');
+    }
+
+    public function visibilityParentField(): BelongsTo
+    {
+        return $this->belongsTo(TicketField::class, 'visibility_parent_field_id');
     }
 }

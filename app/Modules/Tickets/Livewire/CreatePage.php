@@ -7,8 +7,10 @@ use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketBoard;
+use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Services\SectorProvisioningService;
+use App\Modules\Tickets\Services\TicketCreationSuggestionService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -38,7 +40,13 @@ class CreatePage extends Component
 
     public array $attachments = [];
 
-    public function mount(?ServiceCatalogItem $catalogItem = null, Request $request): void
+    public array $suggestions = [
+        'articles' => [],
+        'similar_tickets' => [],
+        'previous_solutions' => [],
+    ];
+
+    public function mount(Request $request, ?ServiceCatalogItem $catalogItem = null): void
     {
         if ($catalogItem) {
             $this->selectedSectorId = $catalogItem->board?->sector_id;
@@ -58,6 +66,7 @@ class CreatePage extends Component
         $this->selectedFormId = null;
         $this->dynamicValues = [];
         $this->priority = TicketPriority::MEDIUM->value;
+        $this->refreshSuggestions();
     }
 
     public function updatedSelectedFormId(): void
@@ -67,6 +76,7 @@ class CreatePage extends Component
 
         $catalog = $this->selectedCatalog();
         $this->priority = $catalog?->default_priority?->value ?? TicketPriority::MEDIUM->value;
+        $this->refreshSuggestions();
     }
 
     public function updatedSelectedCatalogId(): void
@@ -79,6 +89,25 @@ class CreatePage extends Component
         } else {
             $this->priority = TicketPriority::MEDIUM->value;
         }
+
+        $this->refreshSuggestions();
+    }
+
+    public function updatedTitle(): void
+    {
+        $this->refreshSuggestions();
+    }
+
+    public function updatedDescription(): void
+    {
+        $this->refreshSuggestions();
+    }
+
+    public function updatedDynamicValues($value, $key): void
+    {
+        unset($value, $key);
+
+        $this->sanitizeDynamicValuesForVisibility();
     }
 
     public function submit(TicketWorkflowService $workflowService)
@@ -86,10 +115,13 @@ class CreatePage extends Component
         $catalog = $this->selectedCatalog();
         $board = $this->board();
         $form = $this->selectedForm();
+        $allFields = $form?->fields ?? collect();
+        $visibleFields = $this->visibleFormFields($allFields);
 
         abort_unless($form && $board, 404);
 
-        $validated = $this->validate($this->rules($form?->fields ?? collect()));
+        $this->sanitizeDynamicValuesForVisibility($allFields);
+        $validated = $this->validate($this->rules($visibleFields));
         $groupId = $catalog->default_ticket_group_id
             ?? $board->defaultGroup()?->id;
         $legacyStatusId = $this->legacyStatusIdForGroup($board, $groupId);
@@ -105,7 +137,7 @@ class CreatePage extends Component
             'description' => $validated['description'] ?? null,
             'requester_id' => auth()->id(),
             'priority' => $validated['priority'],
-        ], $this->dynamicValues, $this->attachments);
+        ], $this->visibleDynamicValues($visibleFields), $this->attachments);
 
         return redirect()->route('tickets.show', $ticket)->with('status', 'Chamado criado com sucesso.');
     }
@@ -114,7 +146,9 @@ class CreatePage extends Component
     {
         $catalog = $this->selectedCatalog();
         $form = $this->selectedForm();
-        $formFields = $form?->fields?->sortBy('pivot.sort_order')->values() ?? collect();
+        $allFormFields = $form?->fields?->sortBy('pivot.sort_order')->values() ?? collect();
+        $this->sanitizeDynamicValuesForVisibility($allFormFields);
+        $formFields = $this->visibleFormFields($allFormFields);
         $sectorOptions = $this->availableSectors();
         $selectedSector = $sectorOptions->firstWhere('id', $this->selectedSectorId);
 
@@ -127,6 +161,7 @@ class CreatePage extends Component
             'selectedSector' => $selectedSector,
             'selectedForm' => $form,
             'selectedCatalog' => $catalog,
+            'suggestions' => $this->suggestions,
         ])->layout('layouts.portal', [
             'title' => 'Abrir chamado',
             'subtitle' => 'Preencha o formulario guiado para abrir o chamado certo com menos atrito.',
@@ -317,5 +352,114 @@ class CreatePage extends Component
         return $board->statuses->firstWhere('sort_order', $group->sort_order)?->id
             ?? $board->statuses->firstWhere('is_closed', $group->is_closed)?->id
             ?? $board->statuses->first()?->id;
+    }
+
+    private function refreshSuggestions(): void
+    {
+        /** @var TicketCreationSuggestionService $service */
+        $service = app(TicketCreationSuggestionService::class);
+
+        $this->suggestions = $service->suggest(
+            auth()->user(),
+            $this->selectedSectorId,
+            $this->title,
+            $this->description,
+        );
+    }
+
+    private function visibleFormFields(Collection $fields): Collection
+    {
+        return $fields
+            ->sortBy('pivot.sort_order')
+            ->values()
+            ->filter(fn (TicketField $field) => $this->isFieldVisible($field, $fields))
+            ->values();
+    }
+
+    private function isFieldVisible(TicketField $field, Collection $fields, array $visited = []): bool
+    {
+        $parentFieldId = $field->pivot?->visibility_parent_field_id;
+
+        if (! $parentFieldId) {
+            return true;
+        }
+
+        if (in_array($field->id, $visited, true)) {
+            return false;
+        }
+
+        /** @var TicketField|null $parentField */
+        $parentField = $fields->firstWhere('id', $parentFieldId);
+
+        if (! $parentField) {
+            return false;
+        }
+
+        if (! $this->isFieldVisible($parentField, $fields, [...$visited, $field->id])) {
+            return false;
+        }
+
+        return $this->fieldMatchesVisibilityCondition(
+            $parentField,
+            $field->pivot?->visibility_operator,
+            $field->pivot?->visibility_expected_value,
+            $this->dynamicValues[$parentFieldId] ?? null,
+        );
+    }
+
+    private function fieldMatchesVisibilityCondition(TicketField $parentField, ?string $operator, mixed $expectedValue, mixed $actualValue): bool
+    {
+        if ($operator !== 'equals') {
+            return true;
+        }
+
+        return $this->normalizeVisibilityComparableValue($parentField, $actualValue)
+            === $this->normalizeVisibilityComparableValue($parentField, $expectedValue);
+    }
+
+    private function normalizeVisibilityComparableValue(TicketField $field, mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($field->type->value === 'checkbox') {
+            if (is_bool($value)) {
+                return $value ? '1' : '0';
+            }
+
+            return in_array((string) $value, ['1', 'true', 'on', 'yes'], true) ? '1' : '0';
+        }
+
+        $normalized = $field->normalizeMaskedValue($value);
+
+        return is_scalar($normalized) ? (string) $normalized : null;
+    }
+
+    private function sanitizeDynamicValuesForVisibility(?Collection $fields = null): void
+    {
+        $fields ??= $this->selectedForm()?->fields ?? collect();
+
+        if ($fields->isEmpty()) {
+            return;
+        }
+
+        $visibleFieldIds = $this->visibleFormFields($fields)->pluck('id')->all();
+        $hiddenFieldIds = $fields->pluck('id')->reject(fn (int $fieldId) => in_array($fieldId, $visibleFieldIds, true));
+
+        foreach ($hiddenFieldIds as $fieldId) {
+            if (array_key_exists($fieldId, $this->dynamicValues)) {
+                unset($this->dynamicValues[$fieldId]);
+            }
+
+            $this->resetValidation("dynamicValues.{$fieldId}");
+        }
+    }
+
+    private function visibleDynamicValues(Collection $visibleFields): array
+    {
+        return collect($this->dynamicValues)
+            ->only($visibleFields->pluck('id')->map(fn (int $fieldId) => (string) $fieldId)->all())
+            ->all();
     }
 }

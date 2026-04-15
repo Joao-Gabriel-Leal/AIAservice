@@ -450,70 +450,63 @@
         x-data="ticketConversation({{ $ticket->id }})"
         x-init="boot()"
     >
-        <div class="ticket-panel-heading ticket-panel-heading-spread">
-            <div>
-                <p class="ticket-panel-kicker">Fluxo de conversa</p>
-                <h3 class="ticket-panel-title">Chat interno</h3>
-                <p class="ticket-panel-copy">Conversa entre solicitante, tecnico e administradores do setor, agora com mais area de leitura e escrita.</p>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2">
-                <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
-                <span class="portal-chip">Chamado #{{ $ticket->id }}</span>
-                @if ($latestMessage?->created_at)
-                    <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
-                @endif
-            </div>
-        </div>
-
-        <div class="ticket-conversation-surface mt-5">
-            <div class="grid gap-3 md:grid-cols-3">
-                <div class="portal-surface-subtle p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Canal</p>
-                    <p class="mt-2 text-sm font-medium text-slate-900">Conversa interna do chamado</p>
+        <div class="ticket-conversation-surface">
+            <div class="ticket-chat-header">
+                <div>
+                    <p class="ticket-panel-kicker">Fluxo de conversa</p>
+                    <h3 class="ticket-panel-title ticket-chat-title">Conversa</h3>
+                    <p class="ticket-panel-copy">Mensagens do atendimento em tempo real, com foco em leitura e resposta rapida.</p>
                 </div>
-                <div class="portal-surface-subtle p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Etapa atual</p>
-                    <p class="mt-2 text-sm font-medium text-slate-900">{{ $ticket->group?->name ?? 'Sem etapa definida' }}</p>
-                </div>
-                <div class="portal-surface-subtle p-4">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Visibilidade</p>
-                    <p class="mt-2 text-sm font-medium text-slate-900">Solicitante, tecnico e admins do setor</p>
+
+                <div class="ticket-chat-chip-group">
+                    <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
+                    <span class="portal-chip">Chamado #{{ $ticket->id }}</span>
+                    @if ($latestMessage?->created_at)
+                        <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
+                    @endif
                 </div>
             </div>
 
-            <div x-ref="messageList" class="ticket-chat-list mt-5">
+            <div x-ref="messageList" class="ticket-chat-list">
                 @forelse ($messages as $ticketMessage)
-                    <div class="flex {{ $ticketMessage->user_id === auth()->id() ? 'justify-end' : 'justify-start' }}">
-                        <article class="ticket-chat-bubble {{ $ticketMessage->user_id === auth()->id() ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
-                            <div class="ticket-chat-meta {{ $ticketMessage->user_id === auth()->id() ? 'ticket-chat-meta-self' : '' }}">
-                                <span>{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
-                                <span>{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
+                    @php
+                        $isOwnMessage = $ticketMessage->user_id === auth()->id();
+                    @endphp
+                    <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
+                        <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
+                            <div class="ticket-chat-meta {{ $isOwnMessage ? 'ticket-chat-meta-self' : '' }}">
+                                <div class="ticket-chat-author-row">
+                                    <span class="ticket-chat-author">{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
+                                    @if ($isOwnMessage)
+                                        <span class="ticket-chat-author-pill">Voce</span>
+                                    @endif
+                                </div>
+                                <span class="ticket-chat-time">{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
                             </div>
-                            <p class="mt-3 whitespace-pre-line text-sm leading-6">{{ $ticketMessage->message }}</p>
+                            <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
                         </article>
                     </div>
                 @empty
                     <div class="ticket-chat-empty">
-                        <p class="text-base font-medium text-slate-900">Nenhuma mensagem ainda.</p>
-                        <p class="mt-2 text-sm text-slate-500">Use esse espaco para alinhar contexto, avisar o solicitante e registrar combinados do atendimento.</p>
+                        <p class="text-base font-medium text-slate-900">Nenhuma mensagem por aqui ainda.</p>
+                        <p class="mt-2 text-sm text-slate-500">Quando a conversa comecar, as atualizacoes do atendimento vao aparecer aqui.</p>
                     </div>
                 @endforelse
             </div>
 
-            <form wire:submit="sendMessage" class="ticket-chat-composer mt-5">
+            <form wire:submit="sendMessage" class="ticket-chat-composer">
                 <div class="ticket-chat-composer-header">
                     <div>
-                        <p class="text-sm font-semibold text-slate-900">Responder ao time</p>
-                        <p class="mt-1 text-sm text-slate-500">A mensagem entra no fluxo do chamado e fica visivel para quem participa desta conversa.</p>
+                        <p class="text-sm font-semibold text-slate-900">Responder</p>
+                        <p class="mt-1 text-sm text-slate-500">Sua mensagem fica registrada no atendimento para quem participa desta conversa.</p>
                     </div>
                 </div>
 
-                <textarea wire:model="message" rows="5" class="ui-input ticket-chat-input w-full" placeholder="Escreva uma mensagem clara para o time ou para o solicitante"></textarea>
+                <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
                 @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
 
-                <div class="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-xs text-slate-500">A conversa atualiza em tempo real sempre que uma nova mensagem chega.</p>
+                <div class="ticket-chat-composer-footer">
+                    <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
 
                     <button
                         type="submit"
@@ -608,6 +601,72 @@
             @endforelse
         </div>
     </section>
+
+    @if ($ticket->isClosed() && ($canCreateKnowledgeArticle || $knowledgeArticle || $helpfulKnowledgeArticles->isNotEmpty()))
+        <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="ticket-panel-heading">
+                <p class="ticket-panel-kicker">Base de conhecimento viva</p>
+                <h3 class="ticket-panel-title">Aproveitar a solucao deste chamado</h3>
+                <p class="ticket-panel-copy">Transforme o encerramento em artigo ou vincule um artigo util a este chamado resolvido.</p>
+            </div>
+
+            <div class="mt-5 space-y-4">
+                @if ($knowledgeArticle)
+                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                        <p class="text-sm font-semibold text-emerald-800">Este chamado ja originou um artigo</p>
+                        <p class="mt-2 text-sm text-emerald-700">{{ $knowledgeArticle->title }}</p>
+                        <div class="mt-4 flex flex-wrap gap-3">
+                            <a href="{{ route('knowledge-base.show', $knowledgeArticle) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">Abrir artigo</a>
+                            @can('update', $knowledgeArticle)
+                                <a href="{{ route('knowledge-base.edit', $knowledgeArticle) }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium">Revisar artigo</a>
+                            @endcan
+                        </div>
+                    </div>
+                @elseif ($canCreateKnowledgeArticle)
+                    <div class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                        <p class="text-sm font-semibold text-sky-900">Sugerir artigo a partir da solucao</p>
+                        <p class="mt-2 text-sm text-sky-800">O sistema abre um formulario pre-preenchido com contexto, diagnostico e passos da resolucao.</p>
+                        <div class="mt-4">
+                            <a href="{{ route('knowledge-base.from-ticket.create', $ticket) }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium">Transformar em artigo</a>
+                        </div>
+                    </div>
+                @endif
+
+                @if ($helpfulKnowledgeArticles->isNotEmpty())
+                    <div class="grid gap-4 xl:grid-cols-2">
+                        @foreach ($helpfulKnowledgeArticles as $helpfulArticle)
+                            <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-semibold text-slate-900">{{ $helpfulArticle->title }}</p>
+                                        <p class="mt-2 text-sm text-slate-600">{{ $helpfulArticle->summary }}</p>
+                                        <p class="mt-3 text-xs text-slate-500">
+                                            {{ $helpfulArticle->helpful_feedback_count ?? 0 }} voto(s) util(eis)
+                                            • {{ $helpfulArticle->ticket_usages_count ?? 0 }} uso(s)
+                                        </p>
+                                    </div>
+                                    <a href="{{ route('knowledge-base.show', $helpfulArticle) }}" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700">Abrir</a>
+                                </div>
+
+                                <div class="mt-4">
+                                    @if (in_array($helpfulArticle->id, $knowledgeArticleIdsUsed, true))
+                                        <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">Ja vinculado a este chamado</span>
+                                    @else
+                                        <form method="POST" action="{{ route('knowledge-base.tickets.usage', [$helpfulArticle, $ticket]) }}">
+                                            @csrf
+                                            <button type="submit" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">
+                                                Vincular ao chamado
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </section>
+    @endif
 
     <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="ticket-panel-heading">

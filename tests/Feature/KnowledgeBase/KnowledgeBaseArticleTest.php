@@ -3,13 +3,18 @@
 namespace Tests\Feature\KnowledgeBase;
 
 use App\Enums\GlobalUserRole;
+use App\Enums\KnowledgeBaseArticleStatus;
 use App\Enums\KnowledgeBaseVisibility;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseAttachment;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleFeedback;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleTicketUsage;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -346,6 +351,219 @@ class KnowledgeBaseArticleTest extends TestCase
         ]);
     }
 
+    public function test_technician_can_create_draft_article_from_closed_ticket(): void
+    {
+        [$sectorA] = $this->seedSectors();
+        $technician = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $ticket = $this->closedTicketForSector($sectorA, $technician);
+
+        $this->actingAs($technician)
+            ->post(route('knowledge-base.from-ticket.store', $ticket), [
+                'sector_id' => $sectorA->id,
+                'generated_from_ticket_id' => $ticket->id,
+                'title' => 'Solucao VPN',
+                'summary' => 'Resumo da correcao aplicada',
+                'content' => 'Passo a passo da solucao.',
+                'visibility' => KnowledgeBaseVisibility::PRIVATE->value,
+                'editorial_status' => KnowledgeBaseArticleStatus::DRAFT->value,
+            ])
+            ->assertRedirect(route('tickets.show', $ticket, absolute: false));
+
+        $article = KnowledgeBaseArticle::query()->firstOrFail();
+
+        $this->assertSame($ticket->id, $article->generated_from_ticket_id);
+        $this->assertSame($sectorA->id, $article->sector_id);
+        $this->assertSame($technician->id, $article->created_by);
+        $this->assertSame(KnowledgeBaseArticleStatus::DRAFT, $article->editorial_status);
+        $this->assertFalse($article->is_active);
+        $this->assertDatabaseHas('knowledge_base_article_ticket_usages', [
+            'knowledge_base_article_id' => $article->id,
+            'ticket_id' => $ticket->id,
+            'used_by_id' => $technician->id,
+        ]);
+    }
+
+    public function test_sector_admin_can_publish_draft_created_from_ticket(): void
+    {
+        [$sectorA] = $this->seedSectors();
+        $sectorAdmin = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $ticket = $this->closedTicketForSector($sectorA, $technician);
+
+        $article = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => $technician->id,
+            'generated_from_ticket_id' => $ticket->id,
+            'title' => 'Rascunho VPN',
+            'summary' => 'Resumo inicial',
+            'content' => 'Conteudo inicial',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::DRAFT,
+            'is_active' => false,
+        ]);
+
+        $this->actingAs($sectorAdmin)
+            ->put(route('knowledge-base.update', $article), [
+                'sector_id' => $sectorA->id,
+                'generated_from_ticket_id' => $ticket->id,
+                'title' => 'Runbook VPN publicado',
+                'summary' => 'Resumo final revisado',
+                'content' => 'Conteudo final revisado',
+                'visibility' => KnowledgeBaseVisibility::PRIVATE->value,
+                'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED->value,
+                'is_active' => '1',
+            ])
+            ->assertRedirect(route('knowledge-base.manage', absolute: false));
+
+        $article->refresh();
+
+        $this->assertSame(KnowledgeBaseArticleStatus::PUBLISHED, $article->editorial_status);
+        $this->assertTrue($article->is_active);
+        $this->assertSame('Runbook VPN publicado', $article->title);
+    }
+
+    public function test_feedback_is_upserted_per_user_and_article(): void
+    {
+        [$sectorA] = $this->seedSectors();
+        $user = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $article = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'title' => 'Guia de acesso remoto',
+            'summary' => 'Resumo do guia',
+            'content' => 'Conteudo do guia',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('knowledge-base.feedback', $article), ['is_helpful' => '1'])
+            ->assertRedirect();
+
+        $this->actingAs($user)
+            ->post(route('knowledge-base.feedback', $article), ['is_helpful' => '0'])
+            ->assertRedirect();
+
+        $this->assertSame(1, KnowledgeBaseArticleFeedback::query()->count());
+        $this->assertDatabaseHas('knowledge_base_article_feedback', [
+            'knowledge_base_article_id' => $article->id,
+            'user_id' => $user->id,
+            'is_helpful' => false,
+        ]);
+    }
+
+    public function test_visible_query_ranks_articles_by_feedback_and_ticket_usage(): void
+    {
+        [$sectorA] = $this->seedSectors();
+        $technician = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $topArticle = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'title' => 'VPN confiavel',
+            'summary' => 'Solucao validada',
+            'content' => 'Conteudo A',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+            'updated_at' => now()->subHour(),
+        ]);
+
+        $middleArticle = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'title' => 'Email alternativo',
+            'summary' => 'Solucao secundaria',
+            'content' => 'Conteudo B',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+            'updated_at' => now()->subMinutes(30),
+        ]);
+
+        $lowArticle = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'title' => 'Manual antigo',
+            'summary' => 'Pouco util',
+            'content' => 'Conteudo C',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+            'updated_at' => now(),
+        ]);
+
+        foreach (User::factory()->count(3)->create() as $user) {
+            KnowledgeBaseArticleFeedback::query()->create([
+                'knowledge_base_article_id' => $topArticle->id,
+                'user_id' => $user->id,
+                'is_helpful' => true,
+            ]);
+        }
+
+        foreach (User::factory()->count(2)->create() as $user) {
+            KnowledgeBaseArticleFeedback::query()->create([
+                'knowledge_base_article_id' => $middleArticle->id,
+                'user_id' => $user->id,
+                'is_helpful' => true,
+            ]);
+        }
+
+        KnowledgeBaseArticleFeedback::query()->create([
+            'knowledge_base_article_id' => $lowArticle->id,
+            'user_id' => User::factory()->create()->id,
+            'is_helpful' => false,
+        ]);
+
+        $ticketA = $this->closedTicketForSector($sectorA, $technician);
+        $ticketB = $this->closedTicketForSector($sectorA, $technician, 'Chamado B');
+
+        KnowledgeBaseArticleTicketUsage::query()->create([
+            'knowledge_base_article_id' => $topArticle->id,
+            'ticket_id' => $ticketA->id,
+            'used_by_id' => $technician->id,
+        ]);
+        KnowledgeBaseArticleTicketUsage::query()->create([
+            'knowledge_base_article_id' => $middleArticle->id,
+            'ticket_id' => $ticketB->id,
+            'used_by_id' => $technician->id,
+        ]);
+
+        $this->actingAs($technician)
+            ->get(route('knowledge-base.index'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'VPN confiavel',
+                'Email alternativo',
+                'Manual antigo',
+            ]);
+    }
+
     private function seedSectors(): array
     {
         $company = Company::query()->create([
@@ -368,5 +586,25 @@ class KnowledgeBaseArticleTest extends TestCase
         ]);
 
         return [$sectorA, $sectorB];
+    }
+
+    private function closedTicketForSector(Sector $sector, User $requester, string $title = 'Chamado encerrado'): Ticket
+    {
+        $board = app(SectorProvisioningService::class)->provision($sector);
+        $closedGroup = $board->groups()->where('is_closed', true)->firstOrFail();
+        $closedStatus = $board->statuses()->where('is_closed', true)->firstOrFail();
+
+        return Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'title' => $title,
+            'description' => 'Descricao do chamado encerrado.',
+            'requester_id' => $requester->id,
+            'assignee_id' => $requester->id,
+            'resolved_at' => now(),
+            'last_activity_at' => now(),
+        ]);
     }
 }

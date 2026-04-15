@@ -2,6 +2,7 @@
 
 namespace App\Modules\Tickets\Livewire;
 
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Enums\TicketPriority;
 use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
@@ -16,6 +17,10 @@ use Livewire\Component;
 class ShowPage extends Component
 {
     use AuthorizesRequests;
+
+    private const HELPFUL_FEEDBACK_COUNT_SQL = "(select count(*) from knowledge_base_article_feedback where knowledge_base_articles.id = knowledge_base_article_feedback.knowledge_base_article_id and is_helpful = true)";
+
+    private const NOT_HELPFUL_FEEDBACK_COUNT_SQL = "(select count(*) from knowledge_base_article_feedback where knowledge_base_articles.id = knowledge_base_article_feedback.knowledge_base_article_id and is_helpful = false)";
 
     public int $ticketId;
 
@@ -216,6 +221,26 @@ class ShowPage extends Component
         $timeTrackingRenderKey = $canViewTimeTracking
             ? $this->timeTrackingRenderKey($ticket)
             : null;
+        $canCreateKnowledgeArticle = auth()->user()->can('createFromTicket', [KnowledgeBaseArticle::class, $ticket]);
+        $knowledgeArticle = $ticket->generatedKnowledgeBaseArticle;
+        $knowledgeArticleIdsUsed = $ticket->knowledgeBaseUsages->pluck('knowledge_base_article_id')->all();
+        $helpfulKnowledgeArticles = $ticket->isClosed() && auth()->user()->hasOperationalAccess($ticket->sector_id)
+            ? KnowledgeBaseArticle::query()
+                ->withCount([
+                    'feedback as helpful_feedback_count' => fn ($query) => $query->where('is_helpful', true),
+                    'feedback as not_helpful_feedback_count' => fn ($query) => $query->where('is_helpful', false),
+                    'ticketUsages',
+                ])
+                ->where('sector_id', $ticket->sector_id)
+                ->where('is_active', true)
+                ->published()
+                ->when($knowledgeArticle, fn ($query) => $query->where('id', '!=', $knowledgeArticle->id))
+                ->orderByRaw('('.self::HELPFUL_FEEDBACK_COUNT_SQL.' - '.self::NOT_HELPFUL_FEEDBACK_COUNT_SQL.') desc')
+                ->orderByDesc('ticket_usages_count')
+                ->latest('updated_at')
+                ->limit(4)
+                ->get()
+            : collect();
 
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
@@ -241,6 +266,10 @@ class ShowPage extends Component
             'timeEntriesByUser' => $timeEntriesByUser,
             'timeTrackingPayload' => $timeTrackingPayload,
             'timeTrackingRenderKey' => $timeTrackingRenderKey,
+            'canCreateKnowledgeArticle' => $canCreateKnowledgeArticle,
+            'knowledgeArticle' => $knowledgeArticle,
+            'knowledgeArticleIdsUsed' => $knowledgeArticleIdsUsed,
+            'helpfulKnowledgeArticles' => $helpfulKnowledgeArticles,
         ])->layout('layouts.portal', [
             'title' => "Chamado #{$ticket->id}",
             'subtitle' => 'Detalhes, historico e conversa do chamado.',
@@ -293,6 +322,8 @@ class ShowPage extends Component
                 'attachments.uploader',
                 'activityLogs.causer',
                 'rating.user',
+                'generatedKnowledgeBaseArticle',
+                'knowledgeBaseUsages',
             ])
             ->findOrFail($this->ticketId);
 

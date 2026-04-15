@@ -3,6 +3,8 @@
 namespace App\Modules\Tickets\Services;
 
 use App\Enums\TicketPriority;
+use App\Modules\SectorTemplates\Models\SectorTemplate;
+use App\Modules\SectorTemplates\Services\SectorTemplateApplierService;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketBoard;
@@ -14,10 +16,11 @@ class SectorProvisioningService
 {
     public function __construct(
         private readonly TicketSlaService $ticketSlaService,
+        private readonly SectorTemplateApplierService $sectorTemplateApplierService,
     ) {
     }
 
-    public function provision(Sector $sector): TicketBoard
+    public function provision(Sector $sector, ?SectorTemplate $template = null): TicketBoard
     {
         $board = TicketBoard::query()->firstOrCreate(
             ['sector_id' => $sector->id],
@@ -54,6 +57,22 @@ class SectorProvisioningService
                 'is_active' => true,
             ],
         ));
+
+        if ($template && $board->wasRecentlyCreated) {
+            return $this->sectorTemplateApplierService->apply($template->loadMissing([
+                'fields',
+                'catalogItems',
+                'automationRules.conditions',
+                'automationRules.actions',
+                'slaPolicy.targets',
+            ]), $board->fresh(['groups', 'statuses']));
+        }
+
+        if (! $board->wasRecentlyCreated && ($board->forms()->exists() || $board->catalogItems()->exists() || $board->automationRules()->exists())) {
+            $this->ticketSlaService->ensurePolicy($board);
+
+            return $board->fresh(['groups', 'statuses', 'forms', 'catalogItems', 'automationRules', 'slaPolicy.targets']);
+        }
 
         $defaultForm = TicketForm::query()->firstOrCreate(
             ['ticket_board_id' => $board->id, 'name' => 'Abertura padrao'],

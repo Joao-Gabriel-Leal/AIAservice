@@ -1,8 +1,8 @@
 <x-layouts.portal title="Editar artigo">
     <div class="space-y-6">
-        <form method="POST" action="{{ route('knowledge-base.update', $article) }}" enctype="multipart/form-data" class="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form method="POST" action="{{ $formAction ?? route('knowledge-base.update', $article) }}" enctype="multipart/form-data" class="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             @csrf
-            @method('PUT')
+            @method($formMethod ?? 'PUT')
 
             @include('modules.knowledge-base.form')
 

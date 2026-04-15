@@ -4,6 +4,8 @@ namespace App\Modules\Tickets\Models;
 
 use App\Enums\TicketPriority;
 use App\Models\User;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleTicketUsage;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
@@ -145,6 +147,16 @@ class Ticket extends Model
     public function rating(): HasOne
     {
         return $this->hasOne(TicketRating::class);
+    }
+
+    public function generatedKnowledgeBaseArticle(): HasOne
+    {
+        return $this->hasOne(KnowledgeBaseArticle::class, 'generated_from_ticket_id');
+    }
+
+    public function knowledgeBaseUsages(): HasMany
+    {
+        return $this->hasMany(KnowledgeBaseArticleTicketUsage::class);
     }
 
     public function hasRating(): bool

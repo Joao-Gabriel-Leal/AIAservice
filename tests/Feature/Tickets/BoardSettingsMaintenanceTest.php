@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tickets;
 
+use App\Enums\TicketFieldType;
 use App\Enums\TicketPriority;
 use App\Enums\UserRole;
 use App\Models\User;
@@ -10,6 +11,7 @@ use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Livewire\SettingsPage;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
+use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketStatus;
@@ -202,6 +204,138 @@ class BoardSettingsMaintenanceTest extends TestCase
             'id' => $status->id,
             'deleted_at' => null,
         ]);
+    }
+
+    public function test_sector_admin_can_save_a_form_field_visibility_condition(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $triggerField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Categoria',
+            'slug' => 'categoria',
+            'type' => TicketFieldType::SELECT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 1,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+        $conditionalField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Patrimonio',
+            'slug' => 'patrimonio',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 2,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->set('formForm.name', 'Chamado condicional')
+            ->set('formForm.description', 'Formulario com campo inteligente')
+            ->set('formForm.field_ids', [$triggerField->id, $conditionalField->id])
+            ->set('formForm.required_field_ids', [$conditionalField->id])
+            ->set("formForm.visibility_conditions.{$conditionalField->id}.enabled", true)
+            ->set("formForm.visibility_conditions.{$conditionalField->id}.parent_field_id", (string) $triggerField->id)
+            ->set("formForm.visibility_conditions.{$conditionalField->id}.operator", 'equals')
+            ->set("formForm.visibility_conditions.{$conditionalField->id}.expected_value", 'hardware')
+            ->call('saveForm')
+            ->assertHasNoErrors();
+
+        $form = $board->forms()->where('name', 'Chamado condicional')->firstOrFail();
+
+        $this->assertDatabaseHas('ticket_form_fields', [
+            'ticket_form_id' => $form->id,
+            'ticket_field_id' => $conditionalField->id,
+            'is_required' => true,
+            'visibility_parent_field_id' => $triggerField->id,
+            'visibility_operator' => 'equals',
+            'visibility_expected_value' => 'hardware',
+        ]);
+    }
+
+    public function test_form_visibility_condition_requires_parent_field_inside_the_same_form(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $visibleField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Categoria',
+            'slug' => 'categoria',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 1,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+        $outsideField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Base externa',
+            'slug' => 'base-externa',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 2,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->set('formForm.name', 'Formulario invalido')
+            ->set('formForm.field_ids', [$visibleField->id])
+            ->set("formForm.visibility_conditions.{$visibleField->id}.enabled", true)
+            ->set("formForm.visibility_conditions.{$visibleField->id}.parent_field_id", (string) $outsideField->id)
+            ->set("formForm.visibility_conditions.{$visibleField->id}.operator", 'equals')
+            ->set("formForm.visibility_conditions.{$visibleField->id}.expected_value", 'x')
+            ->call('saveForm')
+            ->assertHasErrors(["formForm.visibility_conditions.{$visibleField->id}.parent_field_id"]);
+    }
+
+    public function test_form_visibility_condition_cannot_reference_the_same_field(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $field = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Categoria',
+            'slug' => 'categoria',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 1,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->set('formForm.name', 'Formulario invalido')
+            ->set('formForm.field_ids', [$field->id])
+            ->set("formForm.visibility_conditions.{$field->id}.enabled", true)
+            ->set("formForm.visibility_conditions.{$field->id}.parent_field_id", (string) $field->id)
+            ->set("formForm.visibility_conditions.{$field->id}.operator", 'equals')
+            ->set("formForm.visibility_conditions.{$field->id}.expected_value", 'x')
+            ->call('saveForm')
+            ->assertHasErrors(["formForm.visibility_conditions.{$field->id}.parent_field_id"]);
     }
 
     private function maintenanceContext(): array

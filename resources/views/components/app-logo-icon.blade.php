@@ -1,1 +1,1 @@
-<x-brand-image :alt="config('app.name', 'AIA Service')" {{ $attributes }} />
+<x-brand-mark :alt="config('app.name', 'AIA Service')" {{ $attributes }} />

@@ -7,6 +7,7 @@ use App\Modules\Assets\Models\Asset;
 use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Rooms\Models\Room;
+use App\Modules\SectorTemplates\Models\SectorTemplate;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Users\Models\UserSectorAccess;
@@ -23,6 +24,7 @@ class Sector extends Model
 
     protected $fillable = [
         'company_id',
+        'sector_template_id',
         'name',
         'slug',
         'color',
@@ -40,6 +42,11 @@ class Sector extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(SectorTemplate::class, 'sector_template_id');
     }
 
     public function rooms(): HasMany

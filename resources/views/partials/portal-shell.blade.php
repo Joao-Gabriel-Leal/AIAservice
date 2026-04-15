@@ -43,6 +43,7 @@
                         <p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400/72">Geral</p>
                         <div class="space-y-2">
                             <a href="{{ route('dashboard') }}" class="portal-nav-link {{ request()->routeIs('dashboard') ? 'portal-nav-link-active' : '' }}">Dashboard</a>
+                            <a href="{{ route('search') }}" class="portal-nav-link {{ request()->routeIs('search') ? 'portal-nav-link-active' : '' }}">Busca global</a>
                             <a href="{{ route('tickets.central') }}" class="portal-nav-link {{ request()->routeIs('tickets.central', 'tickets.create') ? 'portal-nav-link-active' : '' }}">Central de formularios</a>
                             <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Chamados</a>
                             <a href="{{ route('knowledge-base.index') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.index', 'knowledge-base.show') ? 'portal-nav-link-active' : '' }}">Base de conhecimento</a>
@@ -67,6 +68,7 @@
                                 @if ($user->isSuperAdmin())
                                     <a href="{{ route('companies.index') }}" class="portal-nav-link {{ request()->routeIs('companies.*') ? 'portal-nav-link-active' : '' }}">Empresas</a>
                                     <a href="{{ route('sectors.index') }}" class="portal-nav-link {{ request()->routeIs('sectors.*') ? 'portal-nav-link-active' : '' }}">Setores</a>
+                                    <a href="{{ route('sector-templates.index') }}" class="portal-nav-link {{ request()->routeIs('sector-templates.*') ? 'portal-nav-link-active' : '' }}">Templates de setor</a>
                                     <a href="{{ route('users.index') }}" class="portal-nav-link {{ request()->routeIs('users.*') ? 'portal-nav-link-active' : '' }}">Usuarios</a>
                                     <a href="{{ route('assets.index') }}" class="portal-nav-link {{ request()->routeIs('assets.*') ? 'portal-nav-link-active' : '' }}">Patrimonios</a>
                                 @endif

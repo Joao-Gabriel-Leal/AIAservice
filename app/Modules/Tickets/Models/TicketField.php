@@ -58,7 +58,13 @@ class TicketField extends Model
     public function forms(): BelongsToMany
     {
         return $this->belongsToMany(TicketForm::class, 'ticket_form_fields')
-            ->withPivot(['is_required', 'sort_order'])
+            ->withPivot([
+                'is_required',
+                'sort_order',
+                'visibility_parent_field_id',
+                'visibility_operator',
+                'visibility_expected_value',
+            ])
             ->withTimestamps();
     }
 

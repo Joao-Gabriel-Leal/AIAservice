@@ -1,8 +1,0 @@
-[Tue Apr 14 19:49:59 2026] PHP 8.3.30 Development Server (http://127.0.0.1:8004) started
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64186 Accepted
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64366 Accepted
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64186 Invalid request (Foi forçado o cancelamento de uma conexão existente pelo host remoto)
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64186 Closing
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64367 Accepted
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64366 Closing
-[Tue Apr 14 19:56:47 2026] 127.0.0.1:64367 Closing

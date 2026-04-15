@@ -3,21 +3,26 @@
 namespace Tests\Feature\Tickets;
 
 use App\Enums\TicketFieldType;
+use App\Enums\KnowledgeBaseArticleStatus;
+use App\Enums\KnowledgeBaseVisibility;
 use App\Enums\TicketPriority;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Livewire\BoardPage;
 use App\Modules\Tickets\Livewire\CreatePage;
 use App\Modules\Tickets\Livewire\IndexPage;
 use App\Modules\Tickets\Livewire\ShowPage;
+use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAttachment;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketFieldValue;
+use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Notifications\TicketCreatedNotification;
 use App\Modules\Tickets\Notifications\TicketMessageNotification;
@@ -71,6 +76,205 @@ class TicketFlowTest extends TestCase
                 && in_array('mail', $channels, true)
                 && data_get($notification->toArray($requester), 'title') === 'Novo chamado criado'
         );
+    }
+
+    public function test_create_page_suggests_articles_similar_tickets_and_previous_solutions(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'catalog' => $catalog, 'group' => $group, 'status' => $status, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
+
+        $otherSector = Sector::query()->create([
+            'company_id' => $sector->company_id,
+            'name' => 'Financeiro',
+            'slug' => 'financeiro',
+            'is_active' => true,
+        ]);
+
+        $otherBoard = app(SectorProvisioningService::class)->provision($otherSector);
+        $otherGroup = $otherBoard->groups()->firstOrFail();
+        $otherStatus = $otherBoard->statuses()->where('is_closed', false)->firstOrFail();
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sector->id,
+            'created_by' => $technician->id,
+            'title' => 'Reset de senha VPN',
+            'summary' => 'Procedimento para credenciais expiradas',
+            'content' => 'Abra o portal de identidade e atualize a senha da VPN.',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'is_active' => true,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $otherSector->id,
+            'created_by' => User::factory()->create([
+                'role' => UserRole::TECHNICIAN,
+                'sector_id' => $otherSector->id,
+            ])->id,
+            'title' => 'Guia financeiro oculto',
+            'summary' => 'Nao deve aparecer',
+            'content' => 'Conteudo privado de outro setor.',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'is_active' => true,
+        ]);
+
+        $visibleTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'title' => 'Erro de senha na VPN',
+            'description' => 'Colaborador nao consegue autenticar na VPN.',
+            'requester_id' => User::factory()->create([
+                'role' => UserRole::REQUESTER,
+                'sector_id' => $sector->id,
+            ])->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::HIGH,
+            'last_activity_at' => now()->subMinutes(5),
+        ]);
+
+        $hiddenTicket = Ticket::query()->create([
+            'sector_id' => $otherSector->id,
+            'ticket_board_id' => $otherBoard->id,
+            'ticket_group_id' => $otherGroup->id,
+            'ticket_status_id' => $otherStatus->id,
+            'title' => 'Erro de senha na VPN do financeiro',
+            'description' => 'Nao deveria aparecer para outro setor.',
+            'requester_id' => User::factory()->create([
+                'role' => UserRole::REQUESTER,
+                'sector_id' => $otherSector->id,
+            ])->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now()->subMinutes(3),
+        ]);
+
+        $closedSolvedTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'title' => 'VPN bloqueada por senha expirada',
+            'description' => 'A senha expirou e o acesso remoto parou.',
+            'requester_id' => User::factory()->create([
+                'role' => UserRole::REQUESTER,
+                'sector_id' => $sector->id,
+            ])->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::HIGH,
+            'resolved_at' => now()->subHour(),
+            'last_activity_at' => now()->subHour(),
+        ]);
+
+        TicketMessage::query()->create([
+            'ticket_id' => $closedSolvedTicket->id,
+            'user_id' => $technician->id,
+            'message' => 'Solucao aplicada: reset da senha da VPN e sincronizacao das credenciais.',
+            'is_system' => false,
+        ]);
+
+        $closedWithoutMessage = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'title' => 'Senha VPN sem retorno final',
+            'description' => 'Chamado parecido encerrado sem anotacao final.',
+            'requester_id' => User::factory()->create([
+                'role' => UserRole::REQUESTER,
+                'sector_id' => $sector->id,
+            ])->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => now()->subMinutes(90),
+            'last_activity_at' => now()->subMinutes(90),
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedCatalogId', $catalog->id)
+            ->set('title', 'Erro senha VPN')
+            ->assertSee('Reset de senha VPN')
+            ->assertDontSee('Guia financeiro oculto')
+            ->assertSee($visibleTicket->title)
+            ->assertDontSee($hiddenTicket->title)
+            ->assertSee($closedSolvedTicket->title)
+            ->assertSee('Solucao aplicada: reset da senha da VPN')
+            ->assertSee($closedWithoutMessage->title);
+    }
+
+    public function test_create_page_clears_suggestions_when_input_becomes_too_short(): void
+    {
+        ['sector' => $sector, 'catalog' => $catalog] = $this->ticketContext();
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sector->id,
+            'created_by' => $technician->id,
+            'title' => 'Reset de senha VPN',
+            'summary' => 'Procedimento relacionado',
+            'content' => 'Atualize a senha do acesso remoto.',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedCatalogId', $catalog->id)
+            ->set('title', 'Senha VPN')
+            ->assertSee('Reset de senha VPN')
+            ->set('title', 'abc')
+            ->assertDontSee('Reset de senha VPN')
+            ->assertSet('suggestions.articles', [])
+            ->assertSet('suggestions.similar_tickets', [])
+            ->assertSet('suggestions.previous_solutions', []);
+    }
+
+    public function test_requester_can_submit_ticket_even_when_suggestions_are_visible(): void
+    {
+        Notification::fake();
+
+        ['sector' => $sector, 'catalog' => $catalog] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sector->id,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'title' => 'Erro no acesso financeiro',
+            'summary' => 'Artigo para reaproveitar antes de abrir chamado',
+            'content' => 'Confira as credenciais e tente novamente.',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($requester)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedCatalogId', $catalog->id)
+            ->set('title', 'Erro no acesso financeiro')
+            ->assertSee('Erro no acesso financeiro')
+            ->set('description', 'Nao consigo entrar no sistema financeiro.')
+            ->call('submit')
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('tickets', [
+            'title' => 'Erro no acesso financeiro',
+            'requester_id' => $requester->id,
+            'sector_id' => $sector->id,
+        ]);
     }
 
     public function test_ticket_index_can_filter_by_fixed_columns_and_dynamic_fields(): void
@@ -297,6 +501,46 @@ class TicketFlowTest extends TestCase
             'user_id' => $technician->id,
             'message' => 'Estou assumindo este atendimento.',
         ]);
+    }
+
+    public function test_show_page_renders_the_redesigned_chat_copy(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Tela de conversa',
+            'description' => 'Validando o novo bloco do chat.',
+            'requester_id' => $requester->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->assertSee('Conversa')
+            ->assertSee('Responder')
+            ->assertSee('Escreva sua mensagem')
+            ->assertSee('Nenhuma mensagem por aqui ainda.')
+            ->assertDontSee('Chat interno')
+            ->assertDontSee('Canal')
+            ->assertDontSee('Visibilidade')
+            ->assertDontSee('Responder ao time');
     }
 
     public function test_board_keeps_ticket_order_stable_when_updating_a_dynamic_field(): void
@@ -618,6 +862,105 @@ class TicketFlowTest extends TestCase
         $this->assertSame('NF.pdf', $attachment->original_name);
         $this->assertSame(strlen($attachmentContent), $attachment->size);
         $this->assertSame($attachmentContent, $attachment->binaryContent());
+    }
+
+    public function test_conditional_field_stays_hidden_until_parent_value_matches(): void
+    {
+        ['sector' => $sector, 'board' => $board] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        ['form' => $form, 'triggerField' => $triggerField, 'conditionalField' => $conditionalField] = $this->conditionalFormContext($board);
+
+        Livewire::actingAs($requester)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedFormId', $form->id)
+            ->assertSee($triggerField->name)
+            ->assertDontSee($conditionalField->name)
+            ->set("dynamicValues.{$triggerField->id}", 'hardware')
+            ->assertSee($conditionalField->name);
+    }
+
+    public function test_conditional_required_field_is_only_validated_when_visible(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        ['form' => $form, 'triggerField' => $triggerField, 'conditionalField' => $conditionalField] = $this->conditionalFormContext($board);
+
+        Livewire::actingAs($requester)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedFormId', $form->id)
+            ->set('title', 'Chamado sem patrimonio')
+            ->set('description', 'Campo condicional segue oculto.')
+            ->set('priority', TicketPriority::MEDIUM->value)
+            ->set("dynamicValues.{$triggerField->id}", 'software')
+            ->call('submit')
+            ->assertHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('tickets', [
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'title' => 'Chamado sem patrimonio',
+        ]);
+
+        Livewire::actingAs($requester)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedFormId', $form->id)
+            ->set('title', 'Chamado com patrimonio faltando')
+            ->set('description', 'Campo agora fica visivel.')
+            ->set('priority', TicketPriority::MEDIUM->value)
+            ->set("dynamicValues.{$triggerField->id}", 'hardware')
+            ->call('submit')
+            ->assertHasErrors(["dynamicValues.{$conditionalField->id}"]);
+    }
+
+    public function test_hidden_conditional_field_value_is_not_persisted(): void
+    {
+        ['sector' => $sector, 'board' => $board] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        ['form' => $form, 'triggerField' => $triggerField, 'conditionalField' => $conditionalField] = $this->conditionalFormContext($board);
+
+        Livewire::actingAs($requester)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedFormId', $form->id)
+            ->set('title', 'Chamado com valor oculto')
+            ->set('description', 'O valor escondido nao deve ser salvo.')
+            ->set('priority', TicketPriority::MEDIUM->value)
+            ->set("dynamicValues.{$triggerField->id}", 'software')
+            ->set("dynamicValues.{$conditionalField->id}", 'P-001')
+            ->call('submit')
+            ->assertHasNoErrors()
+            ->assertRedirect();
+
+        $ticket = Ticket::query()->where('title', 'Chamado com valor oculto')->firstOrFail();
+        $triggerValue = TicketFieldValue::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('ticket_field_id', $triggerField->id)
+            ->firstOrFail();
+
+        $this->assertSame('software', $triggerValue->primitive_value);
+        $this->assertDatabaseMissing('ticket_field_values', [
+            'ticket_id' => $ticket->id,
+            'ticket_field_id' => $conditionalField->id,
+        ]);
     }
 
     public function test_operational_user_can_track_time_without_being_the_assignee(): void
@@ -1401,6 +1744,78 @@ class TicketFlowTest extends TestCase
         Notification::assertNotSentTo($technician, TicketMessageNotification::class);
     }
 
+    public function test_closed_ticket_suggests_creating_article_when_none_exists(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Encerrar com artigo',
+            'description' => 'Chamado pronto para virar artigo.',
+            'requester_id' => $technician->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->assertSee('Transformar em artigo')
+            ->assertDontSee('Este chamado ja originou um artigo');
+    }
+
+    public function test_closed_ticket_hides_creation_cta_when_article_already_exists(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Chamado com artigo',
+            'description' => 'Chamado encerrado com artigo existente.',
+            'requester_id' => $technician->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sector->id,
+            'created_by' => $technician->id,
+            'generated_from_ticket_id' => $ticket->id,
+            'title' => 'Artigo ja gerado',
+            'summary' => 'Resumo do artigo',
+            'content' => 'Conteudo do artigo',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::DRAFT,
+            'is_active' => false,
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->assertDontSee('Transformar em artigo')
+            ->assertSee('Este chamado ja originou um artigo');
+    }
+
     private function ticketContext(): array
     {
         $company = Company::query()->create([
@@ -1433,6 +1848,85 @@ class TicketFlowTest extends TestCase
             'status' => $board->statuses()->where('is_closed', false)->firstOrFail(),
             'closedStatus' => $board->statuses()->where('is_closed', true)->firstOrFail(),
             'catalog' => $board->catalogItems()->firstOrFail(),
+        ];
+    }
+
+    private function conditionalFormContext($board): array
+    {
+        $triggerField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Categoria',
+            'slug' => 'categoria',
+            'type' => TicketFieldType::SELECT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => [],
+            'sort_order' => 1,
+            'is_required' => true,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+
+        TicketFieldOption::query()->create([
+            'ticket_field_id' => $triggerField->id,
+            'label' => 'Hardware',
+            'value' => 'hardware',
+            'color' => null,
+            'sort_order' => 1,
+            'is_default' => false,
+        ]);
+        TicketFieldOption::query()->create([
+            'ticket_field_id' => $triggerField->id,
+            'label' => 'Software',
+            'value' => 'software',
+            'color' => null,
+            'sort_order' => 2,
+            'is_default' => false,
+        ]);
+
+        $conditionalField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Patrimonio',
+            'slug' => 'patrimonio',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => 'Numero do patrimonio',
+            'help_text' => null,
+            'settings' => [],
+            'sort_order' => 2,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+
+        $form = TicketForm::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Abertura condicional',
+            'description' => 'Formulario com visibilidade condicional.',
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+
+        $form->fields()->sync([
+            $triggerField->id => [
+                'is_required' => true,
+                'sort_order' => 1,
+                'visibility_parent_field_id' => null,
+                'visibility_operator' => null,
+                'visibility_expected_value' => null,
+            ],
+            $conditionalField->id => [
+                'is_required' => true,
+                'sort_order' => 2,
+                'visibility_parent_field_id' => $triggerField->id,
+                'visibility_operator' => 'equals',
+                'visibility_expected_value' => 'hardware',
+            ],
+        ]);
+
+        return [
+            'form' => $form,
+            'triggerField' => $triggerField,
+            'conditionalField' => $conditionalField,
         ];
     }
 

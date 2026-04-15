@@ -6,6 +6,7 @@
                     <div class="flex flex-wrap items-center gap-2 text-xs">
                         <x-sector-badge :sector="$article->sector" mode="chip" />
                         <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{{ $article->visibility->label() }}</span>
+                        <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{{ $article->editorial_status->label() }}</span>
                         @if ($article->author)
                             <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">Criado por {{ $article->author->name }}</span>
                         @endif
@@ -17,6 +18,25 @@
                     <div class="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Resumo</p>
                         <p class="mt-2 text-sm leading-7 text-slate-700">{{ $article->summary }}</p>
+                    </div>
+
+                    <div class="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Utilidade</p>
+                        <p class="mt-2 text-sm leading-7 text-slate-700">
+                            {{ $article->helpful_feedback_count ?? 0 }} voto(s) util(eis),
+                            {{ $article->not_helpful_feedback_count ?? 0 }} voto(s) nao util(eis)
+                            e {{ $article->ticket_usages_count ?? 0 }} uso(s) em chamados.
+                        </p>
+
+                        <form method="POST" action="{{ route('knowledge-base.feedback', $article) }}" class="mt-4 flex flex-wrap gap-3">
+                            @csrf
+                            <button type="submit" name="is_helpful" value="1" class="rounded-xl border px-4 py-2 text-sm font-medium {{ ($userFeedback?->is_helpful ?? null) === true ? 'border-emerald-300 bg-white text-emerald-700' : 'border-slate-300 bg-white text-slate-700' }}">
+                                Foi util
+                            </button>
+                            <button type="submit" name="is_helpful" value="0" class="rounded-xl border px-4 py-2 text-sm font-medium {{ ($userFeedback && $userFeedback->is_helpful === false) ? 'border-rose-300 bg-white text-rose-700' : 'border-slate-300 bg-white text-slate-700' }}">
+                                Nao ajudou
+                            </button>
+                        </form>
                     </div>
 
                     <div class="prose prose-slate mt-6 max-w-none whitespace-pre-line text-sm leading-7">
@@ -70,6 +90,18 @@
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Criado em</p>
                             <p class="mt-1 text-slate-800">{{ $article->created_at?->format('d/m/Y H:i') }}</p>
                         </div>
+                        @if ($article->sourceTicket)
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Chamado de origem</p>
+                                <p class="mt-1 text-slate-800">
+                                    @can('view', $article->sourceTicket)
+                                        <a href="{{ route('tickets.show', $article->sourceTicket) }}" class="text-sky-700 hover:text-sky-800">#{{ $article->sourceTicket->id }} - {{ $article->sourceTicket->title }}</a>
+                                    @else
+                                        #{{ $article->sourceTicket->id }}
+                                    @endcan
+                                </p>
+                            </div>
+                        @endif
                         <div>
                             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Atualizado em</p>
                             <p class="mt-1 text-slate-800">{{ $article->updated_at?->format('d/m/Y H:i') }}</p>

@@ -31,6 +31,7 @@
                         <th class="px-6 py-3 font-medium">Artigo</th>
                         <th class="px-6 py-3 font-medium">Setor</th>
                         <th class="px-6 py-3 font-medium">Visibilidade</th>
+                        <th class="px-6 py-3 font-medium">Editorial</th>
                         <th class="px-6 py-3 font-medium">Anexos</th>
                         <th class="px-6 py-3 font-medium">Status</th>
                         <th class="px-6 py-3 font-medium"></th>
@@ -48,6 +49,12 @@
                                 <p class="text-xs text-slate-500">{{ $article->sector?->company?->name }}</p>
                             </td>
                             <td class="px-6 py-4 text-slate-600">{{ $article->visibility->label() }}</td>
+                            <td class="px-6 py-4 text-slate-600">
+                                {{ $article->editorial_status->label() }}
+                                @if ($article->sourceTicket)
+                                    <p class="text-xs text-sky-700">Chamado #{{ $article->sourceTicket->id }}</p>
+                                @endif
+                            </td>
                             <td class="px-6 py-4 text-slate-600">{{ $article->attachments_count ?? 0 }}</td>
                             <td class="px-6 py-4">
                                 <span class="rounded-full px-3 py-1 text-xs font-medium {{ $article->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600' }}">
@@ -68,7 +75,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-6 py-10 text-center text-slate-500">Nenhum artigo encontrado.</td>
+                            <td colspan="7" class="px-6 py-10 text-center text-slate-500">Nenhum artigo encontrado.</td>
                         </tr>
                     @endforelse
                 </tbody>

@@ -6,10 +6,14 @@
 /storage/*.key
 /storage/pail
 /vendor
-/tools
 .env
 .env.backup
 .env.production
+/.local/handle-request.out
+/.local/postgres-data/
+/.local/postgres-data.broken-*/
+/.local/run/
+/tools/php/php.ini
 .phpactor.json
 .phpunit.result.cache
 Homestead.json

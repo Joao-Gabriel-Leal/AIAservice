@@ -11,6 +11,8 @@ use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\KnowledgeBase\Policies\KnowledgeBaseArticlePolicy;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Rooms\Policies\RoomPolicy;
+use App\Modules\SectorTemplates\Models\SectorTemplate;
+use App\Modules\SectorTemplates\Policies\SectorTemplatePolicy;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Sectors\Policies\SectorPolicy;
 use App\Modules\Tickets\Models\Ticket;
@@ -37,6 +39,7 @@ class ModulesServiceProvider extends ServiceProvider
         Gate::policy(Asset::class, AssetPolicy::class);
         Gate::policy(Company::class, CompanyPolicy::class);
         Gate::policy(KnowledgeBaseArticle::class, KnowledgeBaseArticlePolicy::class);
+        Gate::policy(SectorTemplate::class, SectorTemplatePolicy::class);
         Gate::policy(Sector::class, SectorPolicy::class);
         Gate::policy(Room::class, RoomPolicy::class);
         Gate::policy(User::class, UserPolicy::class);

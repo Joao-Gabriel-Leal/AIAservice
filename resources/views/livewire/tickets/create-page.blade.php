@@ -97,7 +97,7 @@
                     </span>
                     <input
                         type="text"
-                        wire:model.live.debounce.250ms="title"
+                        wire:model.live.debounce.500ms="title"
                         maxlength="160"
                         class="ui-input h-14 w-full rounded-2xl border-slate-200 text-[0.96rem] text-slate-800"
                         placeholder="Ex.: Erro ao acessar o sistema financeiro"
@@ -111,7 +111,7 @@
                         <span class="text-xs font-medium text-slate-400">{{ mb_strlen($description) }}/2000</span>
                     </span>
                     <textarea
-                        wire:model.live.debounce.300ms="description"
+                        wire:model.live.debounce.500ms="description"
                         rows="7"
                         maxlength="2000"
                         class="ui-input min-h-[180px] w-full rounded-2xl border-slate-200 px-4 py-4 text-[0.96rem] leading-6 text-slate-800"
@@ -130,6 +130,98 @@
                     @error('priority') <span class="mt-2 block text-xs font-medium text-rose-600">{{ $message }}</span> @enderror
                 </label>
             </section>
+
+            @php($hasSuggestions = collect($suggestions)->contains(fn ($items) => filled($items)))
+
+            @if ($selectedSectorId && ($hasSuggestions || filled($title) || filled($description)))
+                <section class="space-y-5 border-t border-slate-200/90 pt-8">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[#4966d6]">Sugestoes</p>
+                            <h3 class="mt-2 text-[1.35rem] font-semibold tracking-[-0.02em] text-slate-900">Veja antes de enviar</h3>
+                            <p class="mt-1.5 text-sm leading-6 text-slate-500">Enquanto voce descreve o problema, buscamos referencias para evitar chamados repetidos.</p>
+                        </div>
+
+                        <div wire:loading.flex wire:target="title,description,selectedSectorId" class="hidden items-center gap-2 rounded-full bg-[#eef2ff] px-3 py-1.5 text-xs font-medium text-[#31428c]">
+                            <span class="size-2 animate-pulse rounded-full bg-[#4966d6]"></span>
+                            Atualizando sugestoes...
+                        </div>
+                    </div>
+
+                    @if ($hasSuggestions)
+                        <div class="grid gap-4 xl:grid-cols-3">
+                            <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-5">
+                                <p class="text-sm font-semibold text-slate-900">Artigos da base</p>
+                                <div class="mt-4 space-y-3">
+                                    @forelse ($suggestions['articles'] as $article)
+                                        <a href="{{ $article['url'] }}" class="block rounded-2xl border border-white bg-white p-4 transition hover:border-[#cfd8ff] hover:shadow-sm">
+                                            <p class="text-sm font-semibold text-slate-900">{{ $article['title'] }}</p>
+                                            @if ($article['sector_name'])
+                                                <p class="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{{ $article['sector_name'] }}</p>
+                                            @endif
+                                            @if ($article['matched_excerpt'])
+                                                <p class="mt-2 text-sm leading-6 text-slate-500">{{ $article['matched_excerpt'] }}</p>
+                                            @endif
+                                        </a>
+                                    @empty
+                                        <p class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm leading-6 text-slate-500">Nenhum artigo relacionado encontrado ainda.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+
+                            <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-5">
+                                <p class="text-sm font-semibold text-slate-900">Chamados parecidos</p>
+                                <div class="mt-4 space-y-3">
+                                    @forelse ($suggestions['similar_tickets'] as $ticketSuggestion)
+                                        <a href="{{ $ticketSuggestion['url'] }}" class="block rounded-2xl border border-white bg-white p-4 transition hover:border-[#cfd8ff] hover:shadow-sm">
+                                            <p class="text-sm font-semibold text-slate-900">{{ $ticketSuggestion['title'] }}</p>
+                                            <p class="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                                                {{ $ticketSuggestion['sector_name'] ?? 'Sem setor' }}
+                                                @if ($ticketSuggestion['resolved_at'])
+                                                    · Resolvido em {{ $ticketSuggestion['resolved_at'] }}
+                                                @endif
+                                            </p>
+                                            @if ($ticketSuggestion['matched_excerpt'])
+                                                <p class="mt-2 text-sm leading-6 text-slate-500">{{ $ticketSuggestion['matched_excerpt'] }}</p>
+                                            @endif
+                                        </a>
+                                    @empty
+                                        <p class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm leading-6 text-slate-500">Nenhum chamado parecido apareceu com o texto atual.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+
+                            <div class="rounded-[1.5rem] border border-slate-200 bg-slate-50/70 p-5">
+                                <p class="text-sm font-semibold text-slate-900">Solucoes anteriores</p>
+                                <div class="mt-4 space-y-3">
+                                    @forelse ($suggestions['previous_solutions'] as $solutionSuggestion)
+                                        <a href="{{ $solutionSuggestion['url'] }}" class="block rounded-2xl border border-white bg-white p-4 transition hover:border-[#cfd8ff] hover:shadow-sm">
+                                            <p class="text-sm font-semibold text-slate-900">{{ $solutionSuggestion['title'] }}</p>
+                                            <p class="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                                                {{ $solutionSuggestion['sector_name'] ?? 'Sem setor' }}
+                                                @if ($solutionSuggestion['resolved_at'])
+                                                    · Encerrado em {{ $solutionSuggestion['resolved_at'] }}
+                                                @endif
+                                            </p>
+                                            @if ($solutionSuggestion['solution_excerpt'])
+                                                <p class="mt-2 rounded-xl bg-[#f8faff] px-3 py-3 text-sm leading-6 text-slate-600">{{ $solutionSuggestion['solution_excerpt'] }}</p>
+                                            @elseif ($solutionSuggestion['matched_excerpt'])
+                                                <p class="mt-2 text-sm leading-6 text-slate-500">{{ $solutionSuggestion['matched_excerpt'] }}</p>
+                                            @else
+                                                <p class="mt-2 text-sm leading-6 text-slate-500">Chamado encerrado semelhante sem resumo de resolucao disponivel.</p>
+                                            @endif
+                                        </a>
+                                    @empty
+                                        <p class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm leading-6 text-slate-500">Ainda nao encontramos solucoes anteriores para esse contexto.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                    @elseif ($selectedSectorId && mb_strlen((string) preg_replace('/[^\pL\pN]+/u', '', $title.' '.$description)) >= 4)
+                        <p class="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50/80 px-5 py-4 text-sm leading-6 text-slate-500">Nenhuma sugestao apareceu para o texto atual, mas voce pode seguir com a abertura normalmente.</p>
+                    @endif
+                </section>
+            @endif
 
             @if ($formFields->isNotEmpty())
                 <section class="space-y-5 border-t border-slate-200/90 pt-8">

@@ -35,7 +35,7 @@ class SettingsPage extends Component
     use AuthorizesRequests;
 
     public ?int $selectedSectorId = null;
-    public string $openSection = 'groups';
+    public ?string $openSection = 'groups';
     public string $boardName = '';
     public string $boardDescription = '';
     public bool $slaIsActive = true;
@@ -87,6 +87,7 @@ class SettingsPage extends Component
         'description' => '',
         'field_ids' => [],
         'required_field_ids' => [],
+        'visibility_conditions' => [],
         'is_default' => false,
         'is_active' => true,
     ];
@@ -149,7 +150,7 @@ class SettingsPage extends Component
     public function setOpenSection(string $section): void
     {
         if (in_array($section, ['board', 'groups', 'statuses', 'sla', 'automations', 'fields', 'forms'], true)) {
-            $this->openSection = $section;
+            $this->openSection = $this->openSection === $section ? null : $section;
         }
     }
 
@@ -681,6 +682,14 @@ class SettingsPage extends Component
             'description' => $form->description ?? '',
             'field_ids' => $form->fields->sortBy('pivot.sort_order')->pluck('id')->all(),
             'required_field_ids' => $form->fields->filter(fn (TicketField $field) => (bool) $field->pivot?->is_required)->pluck('id')->all(),
+            'visibility_conditions' => $form->fields->mapWithKeys(fn (TicketField $field) => [
+                $field->id => [
+                    'enabled' => (bool) $field->pivot?->visibility_parent_field_id,
+                    'parent_field_id' => $field->pivot?->visibility_parent_field_id ? (string) $field->pivot->visibility_parent_field_id : '',
+                    'operator' => $field->pivot?->visibility_operator ?: 'equals',
+                    'expected_value' => $field->pivot?->visibility_expected_value ?? '',
+                ],
+            ])->all(),
             'is_default' => $form->is_default,
             'is_active' => $form->is_active,
         ];
@@ -705,6 +714,7 @@ class SettingsPage extends Component
             'formForm.field_ids.*' => ['integer', 'exists:ticket_fields,id'],
             'formForm.required_field_ids' => ['array'],
             'formForm.required_field_ids.*' => ['integer', 'exists:ticket_fields,id'],
+            'formForm.visibility_conditions' => ['array'],
             'formForm.is_default' => ['boolean'],
             'formForm.is_active' => ['boolean'],
         ]);
@@ -715,6 +725,7 @@ class SettingsPage extends Component
         $fieldIds = array_values(array_unique(array_map('intval', $validated['formForm']['field_ids'] ?? [])));
         $requiredIds = array_values(array_intersect(array_map('intval', $validated['formForm']['required_field_ids'] ?? []), $fieldIds));
         $form = $this->editingFormId ? $this->formForBoard($this->editingFormId) : new TicketForm();
+        $visibilityConditions = $this->normalizedVisibilityConditions($fieldIds, $validated['formForm']['visibility_conditions'] ?? []);
 
         if ($validated['formForm']['is_default']) {
             $board->forms()->whereKeyNot($form->id)->update(['is_default' => false]);
@@ -730,7 +741,14 @@ class SettingsPage extends Component
         $form->save();
 
         $syncPayload = collect($fieldIds)->mapWithKeys(fn (int $fieldId, int $index) => [
-            $fieldId => ['is_required' => in_array($fieldId, $requiredIds, true), 'sort_order' => $index + 1],
+            $fieldId => array_merge([
+                'is_required' => in_array($fieldId, $requiredIds, true),
+                'sort_order' => $index + 1,
+            ], $visibilityConditions[$fieldId] ?? [
+                'visibility_parent_field_id' => null,
+                'visibility_operator' => null,
+                'visibility_expected_value' => null,
+            ]),
         ])->all();
 
         $form->fields()->sync($syncPayload);
@@ -1341,6 +1359,7 @@ class SettingsPage extends Component
             'sectorOptions' => $this->availableSectors(),
             'fieldTypes' => TicketFieldType::cases(),
             'priorities' => TicketPriority::cases(),
+            'formConditionUsers' => $this->formConditionUsers(),
             'groupImpacts' => $board ? $board->groups->mapWithKeys(fn (TicketGroup $group) => [$group->id => $this->groupImpact($group)])->all() : [],
             'automationTriggers' => TicketAutomationTrigger::cases(),
             'automationConditionFields' => $this->supportedAutomationConditionFields(),
@@ -1393,7 +1412,7 @@ class SettingsPage extends Component
             'groups',
             'statuses',
             'fields.options',
-            'forms.fields',
+            'forms.fields.options',
             'catalogItems.form',
             'catalogItems.defaultGroup',
             'slaPolicy.targets',
@@ -1412,7 +1431,7 @@ class SettingsPage extends Component
             'groups',
             'statuses',
             'fields.options',
-            'forms.fields',
+            'forms.fields.options',
             'catalogItems.form',
             'catalogItems.defaultGroup',
             'slaPolicy.targets',
@@ -1438,6 +1457,19 @@ class SettingsPage extends Component
         }
 
         return User::query()->withSectorAccess($this->selectedSectorId, ['sector_admin', 'technician'])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function formConditionUsers(): Collection
+    {
+        if (! $this->selectedSectorId) {
+            return collect();
+        }
+
+        return User::query()
+            ->withSectorAccess($this->selectedSectorId)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
@@ -1469,7 +1501,7 @@ class SettingsPage extends Component
 
     private function formForBoard(int $formId): TicketForm
     {
-        $form = TicketForm::query()->with('fields')->findOrFail($formId);
+        $form = TicketForm::query()->with('fields.options')->findOrFail($formId);
         $this->authorize('update', $form->board);
         abort_unless($form->ticket_board_id === $this->board()?->id, 404);
         return $form;
@@ -1670,7 +1702,103 @@ class SettingsPage extends Component
 
     private function emptyFormForm(): array
     {
-        return ['name' => '', 'description' => '', 'field_ids' => [], 'required_field_ids' => [], 'is_default' => false, 'is_active' => true];
+        return [
+            'name' => '',
+            'description' => '',
+            'field_ids' => [],
+            'required_field_ids' => [],
+            'visibility_conditions' => [],
+            'is_default' => false,
+            'is_active' => true,
+        ];
+    }
+
+    private function normalizedVisibilityConditions(array $fieldIds, array $submittedConditions): array
+    {
+        $fieldIds = array_values(array_unique(array_map('intval', $fieldIds)));
+        $fieldsById = $this->board()?->fields?->keyBy('id') ?? collect();
+        $errors = [];
+        $normalized = [];
+
+        foreach ($fieldIds as $fieldId) {
+            $condition = data_get($submittedConditions, (string) $fieldId, data_get($submittedConditions, $fieldId, []));
+            $isEnabled = (bool) data_get($condition, 'enabled', false);
+
+            if (! $isEnabled) {
+                $normalized[$fieldId] = [
+                    'visibility_parent_field_id' => null,
+                    'visibility_operator' => null,
+                    'visibility_expected_value' => null,
+                ];
+
+                continue;
+            }
+
+            $parentFieldId = (int) data_get($condition, 'parent_field_id');
+            $operator = (string) data_get($condition, 'operator', '');
+            $expectedValue = data_get($condition, 'expected_value');
+            $expectedValue = is_string($expectedValue) ? trim($expectedValue) : $expectedValue;
+
+            if (! in_array($parentFieldId, $fieldIds, true)) {
+                $errors["formForm.visibility_conditions.{$fieldId}.parent_field_id"] = 'O campo base precisa estar incluido no mesmo formulario.';
+                continue;
+            }
+
+            if ($parentFieldId === $fieldId) {
+                $errors["formForm.visibility_conditions.{$fieldId}.parent_field_id"] = 'Um campo nao pode depender dele mesmo.';
+                continue;
+            }
+
+            if ($operator !== 'equals') {
+                $errors["formForm.visibility_conditions.{$fieldId}.operator"] = 'O operador informado nao e suportado.';
+                continue;
+            }
+
+            if ($expectedValue === null || $expectedValue === '') {
+                $errors["formForm.visibility_conditions.{$fieldId}.expected_value"] = 'Informe o valor esperado para ativar o campo inteligente.';
+                continue;
+            }
+
+            /** @var TicketField|null $parentField */
+            $parentField = $fieldsById->get($parentFieldId);
+
+            if (! $parentField) {
+                $errors["formForm.visibility_conditions.{$fieldId}.parent_field_id"] = 'O campo base informado nao existe neste quadro.';
+                continue;
+            }
+
+            $normalized[$fieldId] = [
+                'visibility_parent_field_id' => $parentFieldId,
+                'visibility_operator' => 'equals',
+                'visibility_expected_value' => $this->normalizeVisibilityExpectedValue($parentField, $expectedValue),
+            ];
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeVisibilityExpectedValue(TicketField $field, mixed $expectedValue): string
+    {
+        if ($field->type === TicketFieldType::CHECKBOX) {
+            return $this->normalizeCheckboxVisibilityValue($expectedValue);
+        }
+
+        $normalized = $field->normalizeMaskedValue($expectedValue);
+
+        return is_scalar($normalized) ? (string) $normalized : '';
+    }
+
+    private function normalizeCheckboxVisibilityValue(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return in_array((string) $value, ['1', 'true', 'on', 'yes'], true) ? '1' : '0';
     }
 
     private function emptyCatalogForm(?TicketBoard $board): array

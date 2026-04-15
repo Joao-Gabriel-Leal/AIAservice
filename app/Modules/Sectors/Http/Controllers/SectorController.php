@@ -4,6 +4,7 @@ namespace App\Modules\Sectors\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Companies\Models\Company;
+use App\Modules\SectorTemplates\Models\SectorTemplate;
 use App\Modules\Sectors\Exports\SectorsExport;
 use App\Modules\Sectors\Http\Requests\SectorRequest;
 use App\Modules\Sectors\Models\Sector;
@@ -56,6 +57,7 @@ class SectorController extends Controller
         return view('modules.sectors.create', [
             'sector' => new Sector(),
             'companies' => Company::query()->orderBy('name')->get(),
+            'templates' => SectorTemplate::query()->where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 
@@ -70,7 +72,7 @@ class SectorController extends Controller
             'is_active' => $request->boolean('is_active', true),
         ]);
 
-        $this->sectorProvisioningService->provision($sector);
+        $this->sectorProvisioningService->provision($sector, $sector->template);
 
         return redirect()->route('sectors.index')->with('status', 'Setor criado com sucesso.');
     }
@@ -82,6 +84,7 @@ class SectorController extends Controller
         return view('modules.sectors.edit', [
             'sector' => $sector,
             'companies' => Company::query()->orderBy('name')->get(),
+            'templates' => SectorTemplate::query()->where('is_active', true)->orderBy('name')->get(),
         ]);
     }
 

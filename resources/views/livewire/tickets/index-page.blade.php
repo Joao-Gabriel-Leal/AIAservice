@@ -11,6 +11,9 @@
         description="Veja seus chamados e, quando tiver atuacao operacional, acompanhe tambem os setores em que voce trabalha."
     >
         <x-slot:actions>
+            <a href="{{ route('search') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                Buscar em tudo
+            </a>
             <a href="{{ route('tickets.central') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
                 Central de formularios
             </a>

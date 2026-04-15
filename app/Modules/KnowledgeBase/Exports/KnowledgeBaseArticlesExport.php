@@ -47,7 +47,7 @@ class KnowledgeBaseArticlesExport
 
                     if ($this->includeAdminColumns) {
                         $row[] = (int) ($article->attachments_count ?? 0);
-                        $row[] = $article->is_active ? 'Ativo' : 'Inativo';
+                        $row[] = $article->editorial_status?->label().' / '.($article->is_active ? 'Ativo' : 'Inativo');
                     }
 
                     return $row;

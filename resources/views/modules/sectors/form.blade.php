@@ -16,6 +16,28 @@
         @error('name') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
     </label>
 
+    @if (! $sector->exists)
+        <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Template do setor</span>
+            <select name="sector_template_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
+                <option value="">Provisionamento padrao</option>
+                @foreach ($templates as $template)
+                    <option value="{{ $template->id }}" @selected((string) old('sector_template_id', $sector->sector_template_id) === (string) $template->id)>{{ $template->name }}</option>
+                @endforeach
+            </select>
+            <p class="mt-1 text-xs text-slate-500">O template aplica formulario, catalogo, automacoes e SLA na criacao do setor.</p>
+            @error('sector_template_id') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+        </label>
+    @elseif ($sector->template)
+        <div class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-700">Template vinculado</span>
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                {{ $sector->template->name }}
+                <p class="mt-1 text-xs text-slate-500">A troca de template nao reaplica o onboarding em setores existentes.</p>
+            </div>
+        </div>
+    @endif
+
     <label class="block">
         <span class="mb-2 block text-sm font-medium text-slate-700">Cor do setor</span>
         <div class="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
