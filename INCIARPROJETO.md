@@ -2,6 +2,20 @@
 
 Guia rapido para subir o AIA Service localmente com PostgreSQL real, sem SQLite, sem mock e sem storage de arquivos em disco para avatar/anexos.
 
+## Atalho de amanha
+
+Se o objetivo for so subir o projeto no PC do trabalho com o dump da demo:
+
+1. Instale PHP 8.3, Node.js, PostgreSQL 18 e Git.
+2. Rode `powershell.exe -ExecutionPolicy Bypass -File .\tools\php\generate-php-ini.ps1`
+3. Rode `composer install` e `npm install`
+4. Crie o banco local `aiaservice`
+5. Restaure o dump da demo nesse banco
+6. Rode `php artisan migrate --force` usando `tools/php`
+7. Suba tudo com `powershell.exe -ExecutionPolicy Bypass -File .\tools\start-local.ps1`
+
+Se quiser o passo a passo completo com restore do dump e validacoes, leia tambem `docs/HANDOFF-2026-04-15.md`.
+
 ## Como este projeto roda hoje
 
 - Aplicacao web: `http://127.0.0.1:8004/login`
@@ -125,6 +139,12 @@ $php = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.3_Microsoft.Winget
 & $php -c "C:\Users\joaog\AIAservice\tools\php" "C:\Users\joaog\AIAservice\tools\composer\composer.phar" install
 ```
 
+Antes dos comandos PHP no Windows, gere o `php.ini` local do projeto:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\tools\php\generate-php-ini.ps1
+```
+
 ## Passo 7: gerar chave e subir migrations no PostgreSQL
 
 ```powershell
@@ -140,6 +160,17 @@ Se quiser recriar tudo do zero:
 ```powershell
 & $php -c $ini artisan migrate:fresh --seed --force
 ```
+
+Se voce restaurar o dump da demo no banco local, rode primeiro o restore e depois execute apenas:
+
+```powershell
+& $php -c $ini artisan migrate --force
+```
+
+O login principal da demo restaurada fica:
+
+- email: `admin@anadem.com.br`
+- senha: `Anadem@2026!`
 
 ## Passo 8: build do frontend
 
@@ -247,3 +278,21 @@ Remove-Item .local\postgres-data -Recurse -Force
 ```
 
 Depois repita os passos de criacao do PostgreSQL local, banco e migrations.
+
+## Importacao patrimonial
+
+Se precisar refazer a importacao da planilha patrimonial no ambiente restaurado:
+
+```powershell
+$php = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\php.exe"
+$ini = "C:\Users\joaog\AIAservice\tools\php"
+
+& $php -c $ini artisan assets:import-anadem "C:\caminho\GESTÃO PATRIMONIAL 1.xlsx"
+```
+
+O resultado esperado da carga real da aba `Anadem` e:
+
+- 2.000 linhas na staging
+- 1.050 ativos promovidos
+- 950 linhas pendentes de saneamento
+- 0 erros

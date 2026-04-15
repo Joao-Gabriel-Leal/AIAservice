@@ -315,11 +315,39 @@ class AssetManagementTest extends TestCase
             ->get(route('assets.show', $asset))
             ->assertOk()
             ->assertSee($asset->asset_code)
-            ->assertSee($asset->detailUrl(), false);
+            ->assertSee($asset->qrCodeUrl(), false);
 
         $this->actingAs($context['collaboratorB'])
             ->get(route('assets.show', $asset))
             ->assertForbidden();
+    }
+
+    public function test_guest_can_open_public_asset_qr_page_with_main_data(): void
+    {
+        $context = $this->assetContext();
+        $admin = User::factory()->superAdmin()->create();
+        $service = app(AssetMovementService::class);
+
+        $asset = $service->register([
+            'name' => 'Notebook de campo',
+            'description' => 'Uso em visitas externas',
+            'serial_number' => 'QR-100',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad',
+            'status' => AssetStatus::EM_USO->value,
+            'current_sector_id' => $context['sectorA']->id,
+            'current_room_id' => $context['roomA']->id,
+            'current_user_id' => $context['collaborator']->id,
+        ], $admin);
+
+        $this->get(route('assets.public.show', $asset))
+            ->assertOk()
+            ->assertSee('Dados principais do patrimonio')
+            ->assertSee($asset->asset_code)
+            ->assertSee($asset->name)
+            ->assertSee($context['sectorA']->name)
+            ->assertSee($context['roomA']->name)
+            ->assertSee($context['collaborator']->name);
     }
 
     public function test_profile_shows_only_assets_assigned_to_authenticated_user(): void
@@ -357,7 +385,7 @@ class AssetManagementTest extends TestCase
             ->assertOk()
             ->assertSee('Patrimonios vinculados')
             ->assertSee($ownedAsset->asset_code)
-            ->assertSee($ownedAsset->detailUrl(), false)
+            ->assertSee($ownedAsset->qrCodeUrl(), false)
             ->assertDontSee($otherAsset->asset_code);
     }
 

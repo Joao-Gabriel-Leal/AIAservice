@@ -315,7 +315,7 @@ new #[Title('Meu perfil')] class extends Component {
                             </div>
                         </div>
 
-                        <a href="{{ route('assets.show', $assignedAsset) }}" class="block self-start rounded-3xl border border-slate-200 bg-white p-3 text-center" data-qr-target="{{ $assignedAsset->detailUrl() }}">
+                        <a href="{{ $assignedAsset->qrCodeUrl() }}" class="block self-start rounded-3xl border border-slate-200 bg-white p-3 text-center" data-qr-target="{{ $assignedAsset->qrCodeUrl() }}">
                             {!! $assignedAsset->qrCodeSvg(88) !!}
                             <span class="mt-2 block text-xs text-slate-500">QR do patrimonio</span>
                         </a>

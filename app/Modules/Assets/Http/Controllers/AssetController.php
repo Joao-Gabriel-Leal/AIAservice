@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assets\Http\Controllers;
 
+use App\Enums\AssetAllocationStatus;
 use App\Enums\AssetStatus;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -9,6 +10,7 @@ use App\Modules\Assets\Exports\AssetsExport;
 use App\Modules\Assets\Http\Requests\AssetMovementRequest;
 use App\Modules\Assets\Http\Requests\AssetRequest;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Assets\Models\AssetImportBatch;
 use App\Modules\Assets\Services\AssetMovementService;
 use App\Modules\Assets\Support\AssetIndexQuery;
 use App\Modules\Rooms\Models\Room;
@@ -17,6 +19,7 @@ use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class AssetController extends Controller
@@ -25,8 +28,7 @@ class AssetController extends Controller
         private readonly AssetMovementService $assetMovementService,
         private readonly AssetIndexQuery $assetIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -39,10 +41,13 @@ class AssetController extends Controller
             ->paginate(12)
             ->withQueryString();
 
+        ['latestImportBatch' => $latestImportBatch, 'latestImportPendingRows' => $latestImportPendingRows] = $this->legacyImportSummary();
+
         return view('modules.assets.index', [
             'assets' => $assets,
             'filters' => $filters,
             'statuses' => AssetStatus::cases(),
+            'allocationStatuses' => AssetAllocationStatus::cases(),
             'sectors' => Sector::query()->orderBy('name')->get(),
             'rooms' => Room::query()->with('sector')->orderBy('name')->get(),
             'collaborators' => User::query()
@@ -50,6 +55,8 @@ class AssetController extends Controller
                 ->where('global_role', 'collaborator')
                 ->orderBy('name')
                 ->get(),
+            'latestImportBatch' => $latestImportBatch,
+            'latestImportPendingRows' => $latestImportPendingRows,
         ]);
     }
 
@@ -68,7 +75,7 @@ class AssetController extends Controller
         $this->authorize('create', Asset::class);
 
         return view('modules.assets.create', [
-            'asset' => new Asset(),
+            'asset' => new Asset,
             ...$this->formData(),
         ]);
     }
@@ -86,19 +93,42 @@ class AssetController extends Controller
     {
         $this->authorize('view', $asset);
 
+        $relations = [
+            'currentSector',
+            'currentRoom',
+            'currentUser',
+            'creator',
+            'movements.fromSector',
+            'movements.fromRoom',
+            'movements.fromUser',
+            'movements.toSector',
+            'movements.toRoom',
+            'movements.toUser',
+            'movements.movedBy',
+        ];
+
+        if ($this->hasTable('asset_financial_profiles')) {
+            $relations[] = 'financialProfile';
+        }
+
+        $asset->load($relations);
+
+        if (! $this->hasTable('asset_financial_profiles')) {
+            $asset->setRelation('financialProfile', null);
+        }
+
         return view('modules.assets.show', [
+            'asset' => $asset,
+        ]);
+    }
+
+    public function publicShow(Asset $asset): View
+    {
+        return view('modules.assets.public-show', [
             'asset' => $asset->load([
-                'currentSector',
+                'currentSector.company',
                 'currentRoom',
                 'currentUser',
-                'creator',
-                'movements.fromSector',
-                'movements.fromRoom',
-                'movements.fromUser',
-                'movements.toSector',
-                'movements.toRoom',
-                'movements.toUser',
-                'movements.movedBy',
             ]),
         ]);
     }
@@ -153,5 +183,31 @@ class AssetController extends Controller
                 ->orderBy('name')
                 ->get(),
         ];
+    }
+
+    private function legacyImportSummary(): array
+    {
+        if (! $this->hasTable('asset_import_batches') || ! $this->hasTable('asset_import_rows')) {
+            return [
+                'latestImportBatch' => null,
+                'latestImportPendingRows' => collect(),
+            ];
+        }
+
+        $latestImportBatch = AssetImportBatch::query()->latest('id')->first();
+
+        return [
+            'latestImportBatch' => $latestImportBatch,
+            'latestImportPendingRows' => $latestImportBatch?->rows()
+                ->where('processing_status', 'pending_review')
+                ->orderBy('source_row')
+                ->limit(8)
+                ->get() ?? collect(),
+        ];
+    }
+
+    private function hasTable(string $table): bool
+    {
+        return Schema::hasTable($table);
     }
 }

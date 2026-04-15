@@ -16,7 +16,7 @@
 
                 <a href="{{ route('dashboard') }}" class="portal-brand-link">
                     <div class="portal-brand-mark">
-                        <x-app-logo-icon class="size-9" />
+                        <x-app-logo-icon class="h-full w-full" />
                     </div>
 
                     <div>

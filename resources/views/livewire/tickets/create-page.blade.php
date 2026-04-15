@@ -1,8 +1,8 @@
 <div class="mx-auto max-w-[820px]">
     <form wire:submit="submit" class="overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_40px_120px_-56px_rgba(15,23,42,0.45)]">
         <div class="border-b border-slate-200/80 px-6 py-8 text-center sm:px-10 sm:py-10">
-            <div class="mx-auto flex size-14 items-center justify-center rounded-2xl shadow-[0_18px_36px_-28px_rgba(47,51,214,0.55)]" style="background-color: {{ $selectedSector?->softColor() ?? '#EEF2FF' }};">
-                <x-app-logo-icon class="size-9" />
+            <div class="mx-auto flex h-14 w-[8rem] items-center justify-center overflow-hidden rounded-[1.15rem] border border-slate-200/80 bg-white px-2 shadow-[0_18px_36px_-28px_rgba(47,51,214,0.4)]">
+                <x-app-logo-icon class="h-full w-full" />
             </div>
 
             <h2 class="mt-6 text-[2rem] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[2.35rem]">

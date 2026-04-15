@@ -13,6 +13,7 @@ class AssetIndexQuery
         return [
             'search' => trim((string) $request->string('search')),
             'status' => trim((string) $request->string('status')),
+            'allocation_status' => trim((string) $request->string('allocation_status')),
             'sector_id' => $request->integer('sector_id') ?: null,
             'room_id' => $request->integer('room_id') ?: null,
             'user_id' => $request->integer('user_id') ?: null,
@@ -32,6 +33,7 @@ class AssetIndexQuery
                 });
             })
             ->when($filters['status'] !== '', fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when($filters['allocation_status'] !== '', fn (Builder $query) => $query->where('allocation_status', $filters['allocation_status']))
             ->when($filters['sector_id'], fn (Builder $query, int $sectorId) => $query->where('current_sector_id', $sectorId))
             ->when($filters['room_id'], fn (Builder $query, int $roomId) => $query->where('current_room_id', $roomId))
             ->when($filters['user_id'], fn (Builder $query, int $userId) => $query->where('current_user_id', $userId))

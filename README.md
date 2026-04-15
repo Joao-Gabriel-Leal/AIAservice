@@ -56,6 +56,30 @@ npm run build
 php artisan serve
 ```
 
+## Setup para amanha
+
+- O roteiro mais completo para subir no PC do trabalho esta em `docs/HANDOFF-2026-04-15.md`.
+- O guia rapido operacional esta em `INCIARPROJETO.md`.
+- Antes de rodar qualquer comando PHP no Windows, gere o `tools/php/php.ini` local:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\tools\php\generate-php-ini.ps1
+```
+
+- Se voce for restaurar o dump da demo, use o banco `aiaservice` e depois rode:
+
+```powershell
+$php = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\php.exe"
+& $php -c .\tools\php artisan migrate --force
+```
+
+- A importacao patrimonial da aba `Anadem` pode ser refeita com:
+
+```powershell
+$php = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\PHP.PHP.8.3_Microsoft.Winget.Source_8wekyb3d8bbwe\php.exe"
+& $php -c .\tools\php artisan assets:import-anadem "C:\caminho\GESTÃO PATRIMONIAL 1.xlsx"
+```
+
 ## Variaveis importantes
 
 - `DB_*`: conexao PostgreSQL

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assets\Models;
 
+use App\Enums\AssetAllocationStatus;
 use App\Enums\AssetStatus;
 use App\Models\User;
 use App\Modules\Assets\Services\AssetQrCodeService;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Asset extends Model
@@ -27,6 +29,9 @@ class Asset extends Model
         'brand',
         'model',
         'status',
+        'allocation_status',
+        'legacy_source_sheet',
+        'legacy_source_row',
         'current_sector_id',
         'current_room_id',
         'current_user_id',
@@ -37,6 +42,7 @@ class Asset extends Model
     {
         return [
             'status' => AssetStatus::class,
+            'allocation_status' => AssetAllocationStatus::class,
         ];
     }
 
@@ -65,6 +71,16 @@ class Asset extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function financialProfile(): HasOne
+    {
+        return $this->hasOne(AssetFinancialProfile::class);
+    }
+
+    public function importRows(): HasMany
+    {
+        return $this->hasMany(AssetImportRow::class);
+    }
+
     public function movements(): HasMany
     {
         return $this->hasMany(AssetMovement::class)->orderByDesc('moved_at')->orderByDesc('id');
@@ -80,9 +96,17 @@ class Asset extends Model
         return route('assets.show', $this);
     }
 
+    public function qrCodeUrl(): string
+    {
+        $baseUrl = rtrim((string) config('app.asset_qr_base_url'), '/');
+        $path = route('assets.public.show', $this, absolute: false);
+
+        return $baseUrl.$path;
+    }
+
     public function qrCodeSvg(int $size = 180): string
     {
-        return app(AssetQrCodeService::class)->svg($this->detailUrl(), $size);
+        return app(AssetQrCodeService::class)->svg($this->qrCodeUrl(), $size);
     }
 
     public function statusLabel(): string
@@ -90,8 +114,17 @@ class Asset extends Model
         return $this->status?->label() ?? 'Sem status';
     }
 
+    public function allocationStatusLabel(): string
+    {
+        return $this->allocation_status?->label() ?? 'Alocacao indefinida';
+    }
+
     public function operationalStateLabel(): string
     {
+        if ($this->allocation_status === AssetAllocationStatus::PENDING_REVIEW) {
+            return 'Aguardando saneamento patrimonial';
+        }
+
         return match ($this->status) {
             AssetStatus::EM_USO => $this->currentUser ? 'Em uso com colaborador' : 'Em uso sem colaborador',
             AssetStatus::MANUTENCAO => 'Em manutencao',
@@ -99,5 +132,10 @@ class Asset extends Model
             AssetStatus::EXTRAVIADO => 'Item extraviado',
             default => $this->currentUser ? 'Disponivel com responsavel' : 'Disponivel no setor',
         };
+    }
+
+    public function importedFromLegacy(): bool
+    {
+        return filled($this->legacy_source_sheet) || filled($this->legacy_source_row);
     }
 }

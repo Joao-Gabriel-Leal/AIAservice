@@ -3,13 +3,13 @@
         <x-portal.section-hero
             eyebrow="Patrimonio operacional"
             title="Busca e controle do parque"
-            description="Barra rapida para codigo, status, local e responsavel com acesso direto ao cadastro."
+            description="Barra rapida para codigo, status, saneamento patrimonial, local e responsavel com acesso direto ao cadastro."
         >
             <form method="GET" action="{{ route('assets.index') }}" class="space-y-3" data-asset-filter-form>
                 <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                         <p class="text-sm font-semibold text-slate-900">Filtros operacionais</p>
-                        <p class="mt-1 text-xs text-slate-500">Refine por codigo, status, local ou responsavel sem perder a visao do parque.</p>
+                        <p class="mt-1 text-xs text-slate-500">Refine por codigo, status, saneamento, local ou responsavel sem perder a visao do parque.</p>
                     </div>
 
                     <div class="flex flex-wrap gap-2">
@@ -20,7 +20,7 @@
                     </div>
                 </div>
 
-                <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.8fr)_repeat(4,minmax(110px,0.56fr))]">
+                <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.8fr)_repeat(5,minmax(110px,0.56fr))]">
                     <label class="block">
                         <span class="sr-only">Busca</span>
                         <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por codigo, nome ou serial" class="ui-input h-11 w-full px-3">
@@ -32,6 +32,16 @@
                             <option value="">Status</option>
                             @foreach ($statuses as $statusOption)
                                 <option value="{{ $statusOption->value }}" @selected($filters['status'] === $statusOption->value)>{{ $statusOption->label() }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+
+                    <label class="block">
+                        <span class="sr-only">Saneamento</span>
+                        <select name="allocation_status" class="ui-native-select h-11 w-full text-sm text-slate-700">
+                            <option value="">Saneamento</option>
+                            @foreach ($allocationStatuses as $allocationStatus)
+                                <option value="{{ $allocationStatus->value }}" @selected($filters['allocation_status'] === $allocationStatus->value)>{{ $allocationStatus->label() }}</option>
                             @endforeach
                         </select>
                     </label>
@@ -69,6 +79,74 @@
             </form>
         </x-portal.section-hero>
 
+        @if ($latestImportBatch)
+            <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Ultima importacao patrimonial</p>
+                        <h2 class="mt-2 text-xl font-semibold text-slate-900">Aba {{ $latestImportBatch->source_sheet }} processada</h2>
+                        <p class="mt-2 text-sm text-slate-500">
+                            Batch #{{ $latestImportBatch->id }} em {{ $latestImportBatch->finished_at?->format('d/m/Y H:i') ?? 'processamento em aberto' }}.
+                            {{ $latestImportBatch->promoted_rows }} item(ns) promovido(s) para o parque e {{ $latestImportBatch->pending_review_rows }} linha(s) ficaram pendentes para saneamento.
+                        </p>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                        <article class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Linhas</p>
+                            <p class="mt-1 text-lg font-semibold text-slate-900">{{ $latestImportBatch->total_rows }}</p>
+                        </article>
+                        <article class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Ready</p>
+                            <p class="mt-1 text-lg font-semibold text-emerald-900">{{ $latestImportBatch->ready_rows }}</p>
+                        </article>
+                        <article class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">Pendentes</p>
+                            <p class="mt-1 text-lg font-semibold text-amber-900">{{ $latestImportBatch->pending_review_rows }}</p>
+                        </article>
+                        <article class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-700">Erros</p>
+                            <p class="mt-1 text-lg font-semibold text-rose-900">{{ $latestImportBatch->error_rows }}</p>
+                        </article>
+                        <article class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">Promovidos</p>
+                            <p class="mt-1 text-lg font-semibold text-sky-900">{{ $latestImportBatch->promoted_rows }}</p>
+                        </article>
+                    </div>
+                </div>
+
+                @if ($latestImportPendingRows->isNotEmpty())
+                    <div class="mt-5 rounded-3xl border border-amber-200 bg-amber-50/70 p-4">
+                        <div class="border-b border-amber-200 pb-3">
+                            <p class="text-sm font-semibold text-amber-900">Linhas pendentes de saneamento</p>
+                            <p class="mt-1 text-sm text-amber-800">Esses registros ficaram na staging porque o legado nao trouxe status confiavel para promover direto ao parque operacional.</p>
+                        </div>
+
+                        <div class="mt-4 space-y-3">
+                            @foreach ($latestImportPendingRows as $pendingRow)
+                                @php($normalizedPayload = $pendingRow->normalized_payload ?? [])
+                                <article class="rounded-2xl border border-amber-200 bg-white px-4 py-3">
+                                    <div class="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                                        <div>
+                                            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+                                                Linha {{ $pendingRow->source_row }}{{ $pendingRow->asset_code ? ' - '.$pendingRow->asset_code : '' }}
+                                            </p>
+                                            <p class="mt-1 font-medium text-slate-900">{{ $pendingRow->item_name ?? 'Item sem nome identificado' }}</p>
+                                            <p class="mt-1 text-sm text-slate-600">{{ $pendingRow->pending_reason ?? 'Pendente de revisao.' }}</p>
+                                        </div>
+                                        <div class="text-sm text-slate-500">
+                                            <p>{{ $normalizedPayload['legacy_position_text'] ?? 'Sem setor legado' }}</p>
+                                            <p>{{ $normalizedPayload['legacy_collaborator_name'] ?? 'Sem colaborador legado' }}</p>
+                                        </div>
+                                    </div>
+                                </article>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </section>
+        @endif
+
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="portal-table-head text-left text-slate-500">
@@ -88,21 +166,30 @@
                                 <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{{ $asset->asset_code }}</p>
                                 <p class="mt-1 font-medium text-slate-900">{{ $asset->name }}</p>
                                 <p class="text-xs text-slate-500">{{ $asset->serial_number ? 'Serial '.$asset->serial_number : 'Sem serial informado' }}</p>
+                                @if ($asset->importedFromLegacy())
+                                    <p class="mt-2 text-xs text-slate-500">Origem legado: {{ $asset->legacy_source_sheet }} linha {{ $asset->legacy_source_row }}</p>
+                                @endif
                             </td>
                             <td class="px-6 py-4">
                                 <span class="rounded-full px-3 py-1 text-xs font-medium {{ $asset->status?->badgeClasses() }}">
                                     {{ $asset->statusLabel() }}
+                                </span>
+                                <span class="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $asset->allocation_status?->badgeClasses() }}">
+                                    {{ $asset->allocationStatusLabel() }}
                                 </span>
                                 <p class="mt-2 text-xs text-slate-500">{{ $asset->operationalStateLabel() }}</p>
                             </td>
                             <td class="px-6 py-4 text-slate-600">
                                 <x-sector-badge :sector="$asset->currentSector" mode="dot" />
                                 <p class="text-xs text-slate-500">{{ $asset->currentRoom?->name ?? 'Sem sala' }}</p>
+                                @if ($asset->allocation_status?->value === 'pending_review')
+                                    <p class="mt-2 text-xs font-medium text-amber-700">Aguardando saneamento de alocacao.</p>
+                                @endif
                             </td>
                             <td class="px-6 py-4 text-slate-600">{{ $asset->currentUser?->name ?? 'Nao vinculado' }}</td>
                             <td class="px-6 py-4">
-                                <a href="{{ route('assets.show', $asset) }}" class="block w-fit" title="Abrir detalhe do patrimonio">
-                                    <div class="rounded-xl border border-slate-200 bg-white p-1.5" data-qr-target="{{ $asset->detailUrl() }}">
+                                <a href="{{ $asset->qrCodeUrl() }}" class="block w-fit" title="Abrir pagina publica do QR code">
+                                    <div class="rounded-xl border border-slate-200 bg-white p-1.5" data-qr-target="{{ $asset->qrCodeUrl() }}">
                                         {!! $asset->qrCodeSvg(56) !!}
                                     </div>
                                 </a>

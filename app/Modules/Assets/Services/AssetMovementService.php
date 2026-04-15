@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assets\Services;
 
+use App\Enums\AssetAllocationStatus;
 use App\Enums\AssetMovementType;
 use App\Enums\AssetStatus;
 use App\Models\User;
@@ -17,8 +18,7 @@ class AssetMovementService
 {
     public function __construct(
         private readonly ActivityLogService $activityLogService,
-    ) {
-    }
+    ) {}
 
     public function register(array $data, User $actor): Asset
     {
@@ -35,6 +35,7 @@ class AssetMovementService
                 'brand' => $data['brand'] ?? null,
                 'model' => $data['model'] ?? null,
                 'status' => AssetStatus::from((string) $data['status']),
+                'allocation_status' => AssetAllocationStatus::ALLOCATED,
                 'current_sector_id' => (int) $data['current_sector_id'],
                 'current_room_id' => (int) $data['current_room_id'],
                 'current_user_id' => filled($data['current_user_id'] ?? null) ? (int) $data['current_user_id'] : null,
@@ -117,6 +118,7 @@ class AssetMovementService
 
             $asset->update([
                 'status' => $targetStatus,
+                'allocation_status' => AssetAllocationStatus::ALLOCATED,
                 'current_sector_id' => $targetSectorId,
                 'current_room_id' => $targetRoomId,
                 'current_user_id' => $targetUserId,
