@@ -12,5 +12,11 @@
 <link rel="preconnect" href="https://fonts.bunny.net">
 <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
+@php($preferredAppearance = auth()->check() ? auth()->user()->preferredTheme() : 'light')
+
+<script>
+    window.localStorage.setItem('flux.appearance', @js($preferredAppearance));
+</script>
+
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 @fluxAppearance

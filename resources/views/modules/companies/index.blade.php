@@ -1,12 +1,31 @@
-<x-layouts.portal title="Empresas">
+<x-layouts.portal title="Empresas" :show-header="false">
     <div class="space-y-6">
-        <div class="flex justify-end">
-            <a href="{{ route('companies.create') }}" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">Nova empresa</a>
-        </div>
+        <x-portal.section-hero
+            compact
+            eyebrow="Administracao"
+            title="Empresas"
+            description="Gerencie a estrutura juridica e operacional que organiza os setores do portal."
+        >
+            <x-slot:actions>
+                <a href="{{ route('companies.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova empresa</a>
+                <a href="{{ route('companies.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+            </x-slot:actions>
 
-        <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <form method="GET" action="{{ route('companies.index') }}" class="grid gap-2 md:grid-cols-[minmax(260px,1.5fr)_180px_auto_auto]">
+                <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por nome, documento ou email" class="ui-input w-full">
+                <select name="status" class="ui-native-select w-full text-sm text-slate-700">
+                    <option value="">Status</option>
+                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativa</option>
+                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativa</option>
+                </select>
+                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
+                <a href="{{ route('companies.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
+            </form>
+        </x-portal.section-hero>
+
+        <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-slate-50 text-left text-slate-500">
+                <thead class="portal-table-head text-left text-slate-500">
                     <tr>
                         <th class="px-6 py-3 font-medium">Nome</th>
                         <th class="px-6 py-3 font-medium">Documento</th>

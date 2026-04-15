@@ -4,33 +4,49 @@ namespace App\Modules\Sectors\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Companies\Models\Company;
+use App\Modules\Sectors\Exports\SectorsExport;
 use App\Modules\Sectors\Http\Requests\SectorRequest;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Sectors\Support\SectorIndexQuery;
 use App\Modules\Tickets\Services\SectorProvisioningService;
+use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SectorController extends Controller
 {
     public function __construct(
         private readonly SectorProvisioningService $sectorProvisioningService,
+        private readonly SectorIndexQuery $sectorIndexQuery,
+        private readonly SpreadsheetExporter $spreadsheetExporter,
     ) {
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Sector::class);
 
-        $query = Sector::query()->with('company')->latest();
+        $filters = $this->sectorIndexQuery->filters($request);
+        $sectors = $this->sectorIndexQuery->build(auth()->user(), $filters)->paginate(12)->withQueryString();
 
-        if (auth()->user()->isSectorAdmin()) {
-            $query->whereIn('id', auth()->user()->adminSectorIds());
-        }
+        return view('modules.sectors.index', [
+            'sectors' => $sectors,
+            'filters' => $filters,
+            'companies' => Company::query()->orderBy('name')->get(),
+        ]);
+    }
 
-        $sectors = $query->paginate(12);
+    public function export(Request $request): BinaryFileResponse
+    {
+        $this->authorize('viewAny', Sector::class);
 
-        return view('modules.sectors.index', compact('sectors'));
+        $filters = $this->sectorIndexQuery->filters($request);
+        $export = new SectorsExport($this->sectorIndexQuery->build(auth()->user(), $filters)->get());
+
+        return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
 
     public function create(): View
@@ -50,6 +66,7 @@ class SectorController extends Controller
         $sector = Sector::query()->create([
             ...$request->validated(),
             'slug' => Str::slug($request->string('name')),
+            'color' => $request->string('color')->toString() ?: '#3D567B',
             'is_active' => $request->boolean('is_active', true),
         ]);
 
@@ -75,6 +92,7 @@ class SectorController extends Controller
         $sector->update([
             ...$request->validated(),
             'slug' => Str::slug($request->string('name')),
+            'color' => $request->string('color')->toString() ?: '#3D567B',
             'is_active' => $request->boolean('is_active', false),
         ]);
 

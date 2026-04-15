@@ -35,7 +35,13 @@ class TicketFieldValue extends Model
 
     public function getPrimitiveValueAttribute(): mixed
     {
-        return $this->value['value'] ?? null;
+        $value = $this->value['value'] ?? null;
+
+        if ($this->relationLoaded('field') && $this->field) {
+            return $this->field->formatMaskedValue($value);
+        }
+
+        return $value;
     }
 
     public function storePrimitiveValue(mixed $value): void

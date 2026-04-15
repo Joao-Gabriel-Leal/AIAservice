@@ -1,12 +1,37 @@
-<x-layouts.portal title="Salas">
+<x-layouts.portal title="Salas" :show-header="false">
     <div class="space-y-6">
-        <div class="flex justify-end">
-            <a href="{{ route('rooms.create') }}" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">Nova sala</a>
-        </div>
+        <x-portal.section-hero
+            compact
+            eyebrow="Administracao"
+            title="Salas"
+            description="Mantenha os ambientes fisicos vinculados aos setores para organizar patrimonio e fluxo operacional."
+        >
+            <x-slot:actions>
+                <a href="{{ route('rooms.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova sala</a>
+                <a href="{{ route('rooms.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+            </x-slot:actions>
 
-        <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <form method="GET" action="{{ route('rooms.index') }}" class="grid gap-2 md:grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_180px_auto_auto]">
+                <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por sala ou descricao" class="ui-input w-full">
+                <select name="sector_id" class="ui-native-select w-full text-sm text-slate-700">
+                    <option value="">Setor</option>
+                    @foreach ($sectors as $sector)
+                        <option value="{{ $sector->id }}" @selected((string) ($filters['sector_id'] ?? '') === (string) $sector->id)>{{ $sector->name }}</option>
+                    @endforeach
+                </select>
+                <select name="status" class="ui-native-select w-full text-sm text-slate-700">
+                    <option value="">Status</option>
+                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativa</option>
+                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativa</option>
+                </select>
+                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
+                <a href="{{ route('rooms.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
+            </form>
+        </x-portal.section-hero>
+
+        <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-slate-50 text-left text-slate-500">
+                <thead class="portal-table-head text-left text-slate-500">
                     <tr>
                         <th class="px-6 py-3 font-medium">Sala</th>
                         <th class="px-6 py-3 font-medium">Setor</th>
@@ -21,7 +46,9 @@
                                 <p class="font-medium text-slate-900">{{ $room->name }}</p>
                                 <p class="text-xs text-slate-500">{{ $room->description ?: 'Sem descrição' }}</p>
                             </td>
-                            <td class="px-6 py-4 text-slate-600">{{ $room->sector?->name }}</td>
+                            <td class="px-6 py-4 text-slate-600">
+                                <x-sector-badge :sector="$room->sector" mode="dot" />
+                            </td>
                             <td class="px-6 py-4">
                                 <span class="rounded-full px-3 py-1 text-xs font-medium {{ $room->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600' }}">
                                     {{ $room->is_active ? 'Ativa' : 'Inativa' }}

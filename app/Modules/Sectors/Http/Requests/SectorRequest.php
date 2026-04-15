@@ -17,6 +17,7 @@ class SectorRequest extends FormRequest
         return [
             'company_id' => ['required', 'exists:companies,id'],
             'name' => ['required', 'string', 'max:120'],
+            'color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ];

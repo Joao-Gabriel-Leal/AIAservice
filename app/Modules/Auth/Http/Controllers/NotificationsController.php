@@ -41,6 +41,15 @@ class NotificationsController extends Controller
         return back()->with('status', 'Notificacao marcada como lida.');
     }
 
+    public function markAllAsRead(): RedirectResponse
+    {
+        auth()->user()
+            ->unreadNotifications
+            ->markAsRead();
+
+        return back()->with('status', 'Todas as notificacoes foram marcadas como lidas.');
+    }
+
     public function open(string $notification): RedirectResponse
     {
         $notification = $this->notificationForCurrentUser($notification);

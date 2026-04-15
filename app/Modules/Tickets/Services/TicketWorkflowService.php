@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Services;
 
 use App\Enums\TicketAutomationTrigger;
+use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
 use App\Modules\Shared\Services\ActivityLogService;
 use App\Modules\Tickets\Events\TicketMessageCreated;
@@ -14,11 +15,20 @@ use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketStatus;
-use App\Modules\Tickets\Notifications\TicketActivityNotification;
+use App\Modules\Tickets\Models\TicketTimeEntry;
+use App\Modules\Tickets\Notifications\TicketCreatedNotification;
+use App\Modules\Tickets\Notifications\TicketMessageNotification;
+use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
+use App\Modules\Tickets\Notifications\TicketUpdateNotification;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TicketWorkflowService
@@ -27,8 +37,7 @@ class TicketWorkflowService
         private readonly ActivityLogService $activityLogService,
         private readonly TicketSlaService $ticketSlaService,
         private readonly TicketAutomationEngine $ticketAutomationEngine,
-    ) {
-    }
+    ) {}
 
     public function createTicket(User $actor, array $attributes, array $dynamicValues = [], array $attachments = [], array $context = []): Ticket
     {
@@ -48,7 +57,10 @@ class TicketWorkflowService
         $this->activityLogService->log($actor, $ticket, 'ticket.created', 'Chamado criado.', [
             'sector_id' => $ticket->sector_id,
         ]);
-        $this->notifyUsers($ticket, 'Novo chamado criado', "O chamado #{$ticket->id} foi criado.");
+        $this->notifyUsers(
+            $ticket,
+            new TicketCreatedNotification($ticket, 'Novo chamado criado', "O chamado #{$ticket->id} foi criado."),
+        );
 
         $ticket = $ticket->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee']);
 
@@ -65,6 +77,12 @@ class TicketWorkflowService
     public function updateTicket(User $actor, Ticket $ticket, array $attributes, array $context = []): Ticket
     {
         $wasClosed = $ticket->isClosed();
+        $original = [
+            'assignee_id' => $ticket->assignee_id,
+            'ticket_group_id' => $ticket->ticket_group_id,
+            'ticket_status_id' => $ticket->ticket_status_id,
+            'priority' => $ticket->priority?->value,
+        ];
 
         $ticket->fill($attributes);
 
@@ -90,6 +108,10 @@ class TicketWorkflowService
             $ticket = $this->ticketSlaService->applyPolicy($ticket);
         }
 
+        if (! $wasClosed && $ticket->isClosed()) {
+            $this->closeOpenTimeEntries($actor, $ticket, $ticket->resolved_at ?? now());
+        }
+
         $this->ticketSlaService->captureFirstResponse($actor, $ticket);
         $this->ticketSlaService->evaluateTicket($ticket);
 
@@ -97,13 +119,18 @@ class TicketWorkflowService
             'changes' => $attributes,
             'sector_id' => $ticket->sector_id,
         ]);
-        $this->notifyUsers($ticket, 'Chamado atualizado', "O chamado #{$ticket->id} recebeu uma atualizacao.");
+
+        $ticket = $ticket->fresh(['group', 'status', 'requester', 'assignee']);
+
+        $updateNotification = $this->updateNotificationFor($ticket, $original, $wasClosed);
+
+        if ($updateNotification !== null) {
+            $this->notifyUsers($ticket, $updateNotification, [$actor->id]);
+        }
 
         if (! $wasClosed && $ticket->isClosed()) {
             $this->notifyRequesterToRate($ticket);
         }
-
-        $ticket = $ticket->fresh(['group', 'status', 'requester', 'assignee']);
 
         $this->ticketAutomationEngine->handleEvent($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
             ...$context,
@@ -115,6 +142,162 @@ class TicketWorkflowService
         return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
     }
 
+    public function startTimeEntry(User $actor, Ticket $ticket): TicketTimeEntry
+    {
+        Gate::forUser($actor)->authorize('trackTime', $ticket);
+
+        if ($ticket->isClosed()) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'Nao e possivel iniciar o cronometro em um chamado encerrado.',
+            ]);
+        }
+
+        if ($ticket->activeTimeEntryForUser($actor)) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'Voce ja possui um cronometro em andamento neste chamado.',
+            ]);
+        }
+
+        /** @var TicketTimeEntry $timeEntry */
+        $timeEntry = DB::transaction(function () use ($actor, $ticket) {
+            /** @var TicketTimeEntry $createdTimeEntry */
+            $createdTimeEntry = $ticket->timeEntries()->create([
+                'user_id' => $actor->id,
+                'source' => TicketTimeEntrySource::TIMER,
+                'started_at' => now(),
+                'ended_at' => null,
+                'duration_seconds' => null,
+            ]);
+
+            $ticket->updateQuietly(['last_activity_at' => now()]);
+
+            $this->activityLogService->log($actor, $ticket, 'ticket.time_entry.started', 'Cronometro iniciado no chamado.', [
+                'time_entry_id' => $createdTimeEntry->id,
+                'user_id' => $actor->id,
+                'source' => $createdTimeEntry->source?->value,
+                'started_at' => $createdTimeEntry->started_at?->toIso8601String(),
+                'sector_id' => $ticket->sector_id,
+            ]);
+
+            return $createdTimeEntry;
+        });
+
+        return $timeEntry->load('user');
+    }
+
+    public function stopTimeEntry(User $actor, TicketTimeEntry $timeEntry): TicketTimeEntry
+    {
+        Gate::forUser($actor)->authorize('update', $timeEntry);
+
+        if (! $timeEntry->isRunning()) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'Esta sessao ja foi encerrada.',
+            ]);
+        }
+
+        $this->finalizeTimeEntry($actor, $timeEntry, now(), 'ticket.time_entry.stopped', 'Cronometro encerrado.');
+
+        return $timeEntry->fresh(['user', 'ticket']);
+    }
+
+    public function createManualTimeEntry(User $actor, Ticket $ticket, array $data): TicketTimeEntry
+    {
+        Gate::forUser($actor)->authorize('trackTime', $ticket);
+
+        $timestamps = $this->normalizeTimeEntryTimestamps($data);
+
+        /** @var TicketTimeEntry $timeEntry */
+        $timeEntry = DB::transaction(function () use ($actor, $ticket, $timestamps) {
+            /** @var TicketTimeEntry $createdTimeEntry */
+            $createdTimeEntry = $ticket->timeEntries()->create([
+                'user_id' => $actor->id,
+                'source' => TicketTimeEntrySource::MANUAL,
+                'started_at' => $timestamps['started_at'],
+                'ended_at' => $timestamps['ended_at'],
+                'duration_seconds' => $timestamps['duration_seconds'],
+            ]);
+
+            $ticket->updateQuietly(['last_activity_at' => now()]);
+
+            $this->activityLogService->log($actor, $ticket, 'ticket.time_entry.manual_created', 'Sessao manual registrada no chamado.', [
+                'time_entry_id' => $createdTimeEntry->id,
+                'user_id' => $actor->id,
+                'source' => $createdTimeEntry->source?->value,
+                'started_at' => $createdTimeEntry->started_at?->toIso8601String(),
+                'ended_at' => $createdTimeEntry->ended_at?->toIso8601String(),
+                'duration_seconds' => $createdTimeEntry->duration_seconds,
+                'sector_id' => $ticket->sector_id,
+            ]);
+
+            return $createdTimeEntry;
+        });
+
+        return $timeEntry->load('user');
+    }
+
+    public function updateTimeEntry(User $actor, TicketTimeEntry $timeEntry, array $data): TicketTimeEntry
+    {
+        Gate::forUser($actor)->authorize('update', $timeEntry);
+
+        $timestamps = $this->normalizeTimeEntryTimestamps($data);
+        $ticket = $timeEntry->ticket;
+
+        DB::transaction(function () use ($actor, $timeEntry, $timestamps, $ticket) {
+            $originalStartedAt = $timeEntry->started_at?->toIso8601String();
+            $originalEndedAt = $timeEntry->ended_at?->toIso8601String();
+            $originalDuration = $timeEntry->duration_seconds;
+
+            $timeEntry->forceFill([
+                'started_at' => $timestamps['started_at'],
+                'ended_at' => $timestamps['ended_at'],
+                'duration_seconds' => $timestamps['duration_seconds'],
+            ])->save();
+
+            $ticket->updateQuietly(['last_activity_at' => now()]);
+
+            $this->activityLogService->log($actor, $ticket, 'ticket.time_entry.updated', 'Sessao de tempo atualizada.', [
+                'time_entry_id' => $timeEntry->id,
+                'user_id' => $timeEntry->user_id,
+                'source' => $timeEntry->source?->value,
+                'before' => [
+                    'started_at' => $originalStartedAt,
+                    'ended_at' => $originalEndedAt,
+                    'duration_seconds' => $originalDuration,
+                ],
+                'after' => [
+                    'started_at' => $timeEntry->started_at?->toIso8601String(),
+                    'ended_at' => $timeEntry->ended_at?->toIso8601String(),
+                    'duration_seconds' => $timeEntry->duration_seconds,
+                ],
+                'sector_id' => $ticket->sector_id,
+            ]);
+        });
+
+        return $timeEntry->fresh(['user', 'ticket']);
+    }
+
+    public function deleteTimeEntry(User $actor, TicketTimeEntry $timeEntry): void
+    {
+        Gate::forUser($actor)->authorize('delete', $timeEntry);
+
+        DB::transaction(function () use ($actor, $timeEntry) {
+            $ticket = $timeEntry->ticket;
+
+            $timeEntry->delete();
+            $ticket->updateQuietly(['last_activity_at' => now()]);
+
+            $this->activityLogService->log($actor, $ticket, 'ticket.time_entry.deleted', 'Sessao de tempo removida.', [
+                'time_entry_id' => $timeEntry->id,
+                'user_id' => $timeEntry->user_id,
+                'source' => $timeEntry->source?->value,
+                'started_at' => $timeEntry->started_at?->toIso8601String(),
+                'ended_at' => $timeEntry->ended_at?->toIso8601String(),
+                'duration_seconds' => $timeEntry->duration_seconds,
+                'sector_id' => $ticket->sector_id,
+            ]);
+        });
+    }
+
     public function updateField(User $actor, Ticket $ticket, TicketField $field, mixed $value, array $context = []): TicketFieldValue
     {
         $fieldValue = TicketFieldValue::query()->firstOrNew([
@@ -122,14 +305,16 @@ class TicketWorkflowService
             'ticket_field_id' => $field->id,
         ]);
 
-        $fieldValue->storePrimitiveValue($value);
+        $normalizedValue = $field->normalizeMaskedValue($value);
+
+        $fieldValue->storePrimitiveValue($normalizedValue);
         $fieldValue->save();
 
         $ticket->updateQuietly(['last_activity_at' => now()]);
 
         $this->activityLogService->log($actor, $ticket, 'ticket.field.updated', "Campo {$field->name} atualizado.", [
             'field_id' => $field->id,
-            'value' => $value,
+            'value' => $normalizedValue,
             'sector_id' => $ticket->sector_id,
         ]);
 
@@ -137,7 +322,7 @@ class TicketWorkflowService
             ...$context,
             'event' => [
                 'dynamic_field_id' => $field->id,
-                'value' => $value,
+                'value' => $normalizedValue,
             ],
         ]);
 
@@ -160,7 +345,11 @@ class TicketWorkflowService
             'message_id' => $ticketMessage->id,
             'sector_id' => $ticket->sector_id,
         ]);
-        $this->notifyUsers($ticket, 'Nova mensagem no chamado', "Ha uma nova mensagem no chamado #{$ticket->id}.");
+        $this->notifyUsers(
+            $ticket,
+            new TicketMessageNotification($ticket, 'Nova mensagem no chamado', "Ha uma nova mensagem no chamado #{$ticket->id}."),
+            [$actor->id],
+        );
 
         $ticketMessage->load('user');
 
@@ -222,7 +411,7 @@ class TicketWorkflowService
 
                 return $rating->load('user');
             });
-        } catch (\Illuminate\Database\QueryException $exception) {
+        } catch (QueryException $exception) {
             if ((string) $exception->getCode() === '23000') {
                 throw ValidationException::withMessages([
                     'ratingValue' => 'Este chamado ja foi avaliado.',
@@ -236,12 +425,14 @@ class TicketWorkflowService
     public function syncDynamicFields(Ticket $ticket, array $dynamicValues): void
     {
         foreach ($dynamicValues as $fieldId => $value) {
+            $field = TicketField::query()->find((int) $fieldId);
+
             $fieldValue = TicketFieldValue::query()->firstOrNew([
                 'ticket_id' => $ticket->id,
                 'ticket_field_id' => (int) $fieldId,
             ]);
 
-            $fieldValue->storePrimitiveValue($value);
+            $fieldValue->storePrimitiveValue($field?->normalizeMaskedValue($value) ?? $value);
             $fieldValue->save();
         }
     }
@@ -251,23 +442,56 @@ class TicketWorkflowService
         return collect($attachments)
             ->filter(fn ($file) => $file instanceof UploadedFile)
             ->map(function (UploadedFile $file) use ($ticket, $actor) {
-                $path = $file->store("tickets/{$ticket->id}", 'local');
+                $content = file_get_contents($file->getRealPath());
+
+                if ($content === false) {
+                    throw new \RuntimeException("Nao foi possivel ler o anexo {$file->getClientOriginalName()}.");
+                }
+
+                $extension = $file->extension() ?: $file->getClientOriginalExtension() ?: 'bin';
+                $path = "tickets/{$ticket->id}/".Str::uuid().".{$extension}";
+                $attachment = new TicketAttachment;
 
                 return TicketAttachment::query()->create([
                     'ticket_id' => $ticket->id,
                     'uploaded_by_id' => $actor->id,
-                    'disk' => 'local',
+                    'disk' => 'database',
                     'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
                     'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
+                    'size' => $file->getSize() ?: strlen($content),
+                    'content' => $attachment->encodeContentForStorage($content),
                 ]);
             });
     }
 
-    private function notifyUsers(Ticket $ticket, string $title, string $message): void
+    private function notifyUsers(Ticket $ticket, object $notification, array $exceptUserIds = []): void
     {
-        $recipients = collect([
+        $recipients = $this->ticketRecipients($ticket, $exceptUserIds);
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, $notification);
+    }
+
+    private function notifyRequesterToRate(Ticket $ticket): void
+    {
+        if (! $ticket->requester) {
+            return;
+        }
+
+        $ticket->requester->notify(new TicketRatingRequestNotification(
+            $ticket,
+            'Chamado encerrado',
+            "O chamado #{$ticket->id} foi encerrado. Avalie o atendimento quando puder.",
+        ));
+    }
+
+    private function ticketRecipients(Ticket $ticket, array $exceptUserIds = []): Collection
+    {
+        return collect([
             $ticket->requester,
             $ticket->assignee,
             ...User::query()
@@ -280,22 +504,54 @@ class TicketWorkflowService
                 })
                 ->get()
                 ->all(),
-        ])->filter()->unique('id');
-
-        Notification::send($recipients, new TicketActivityNotification($ticket, $title, $message));
+        ])
+            ->filter()
+            ->reject(fn (User $user) => in_array($user->id, $exceptUserIds, true))
+            ->unique('id')
+            ->values();
     }
 
-    private function notifyRequesterToRate(Ticket $ticket): void
+    private function updateNotificationFor(Ticket $ticket, array $original, bool $wasClosed): ?TicketUpdateNotification
     {
-        if (! $ticket->requester) {
-            return;
+        if (! $wasClosed && $ticket->isClosed()) {
+            return null;
         }
 
-        $ticket->requester->notify(new TicketActivityNotification(
-            $ticket,
-            'Chamado encerrado',
-            "O chamado #{$ticket->id} foi encerrado. Avalie o atendimento quando puder.",
-        ));
+        if ($wasClosed && ! $ticket->isClosed()) {
+            return new TicketUpdateNotification(
+                $ticket,
+                'Chamado reaberto',
+                "O chamado #{$ticket->id} foi reaberto e voltou para atendimento.",
+            );
+        }
+
+        if (($original['assignee_id'] ?? null) !== $ticket->assignee_id) {
+            $message = $ticket->assignee
+                ? "O chamado #{$ticket->id} agora esta atribuido para {$ticket->assignee->name}."
+                : "O chamado #{$ticket->id} ficou sem responsavel definido.";
+
+            return new TicketUpdateNotification($ticket, 'Responsavel do chamado atualizado', $message);
+        }
+
+        if (($original['ticket_group_id'] ?? null) !== $ticket->ticket_group_id || ($original['ticket_status_id'] ?? null) !== $ticket->ticket_status_id) {
+            $target = $ticket->group?->name ?? $ticket->status?->name ?? 'nova etapa';
+
+            return new TicketUpdateNotification(
+                $ticket,
+                'Etapa do chamado atualizada',
+                "O chamado #{$ticket->id} foi movido para {$target}.",
+            );
+        }
+
+        if (($original['priority'] ?? null) !== $ticket->priority?->value) {
+            return new TicketUpdateNotification(
+                $ticket,
+                'Prioridade do chamado atualizada',
+                "O chamado #{$ticket->id} agora esta com prioridade {$ticket->priority?->label()}.",
+            );
+        }
+
+        return null;
     }
 
     private function normalizeLifecycleAttributes(array $attributes): array
@@ -355,5 +611,93 @@ class TicketWorkflowService
                 ->where('is_closed', $group->is_closed)
                 ->when($group->is_closed, fn ($query) => $query->orderByDesc('sort_order'), fn ($query) => $query->orderBy('sort_order'))
                 ->first();
+    }
+
+    private function normalizeTimeEntryTimestamps(array $data): array
+    {
+        $startedAt = data_get($data, 'started_at');
+        $endedAt = data_get($data, 'ended_at');
+
+        if (! is_string($startedAt) || ! is_string($endedAt)) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'Informe inicio e fim validos para a sessao.',
+            ]);
+        }
+
+        try {
+            $startedAt = Carbon::parse($startedAt);
+            $endedAt = Carbon::parse($endedAt);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'Informe inicio e fim validos para a sessao.',
+            ]);
+        }
+
+        if ($endedAt->lessThanOrEqualTo($startedAt)) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'O horario final precisa ser maior que o horario inicial.',
+            ]);
+        }
+
+        return [
+            'started_at' => $startedAt,
+            'ended_at' => $endedAt,
+            'duration_seconds' => $this->secondsBetween($startedAt, $endedAt),
+        ];
+    }
+
+    private function closeOpenTimeEntries(User $actor, Ticket $ticket, CarbonInterface $endedAt): void
+    {
+        $ticket->timeEntries()
+            ->whereNull('ended_at')
+            ->get()
+            ->each(function (TicketTimeEntry $timeEntry) use ($actor, $endedAt) {
+                $this->finalizeTimeEntry(
+                    $actor,
+                    $timeEntry,
+                    $endedAt,
+                    'ticket.time_entry.auto_closed',
+                    'Sessao de tempo encerrada automaticamente com o fechamento do chamado.',
+                );
+            });
+    }
+
+    private function finalizeTimeEntry(
+        User $actor,
+        TicketTimeEntry $timeEntry,
+        CarbonInterface $endedAt,
+        string $event,
+        string $description,
+    ): void {
+        DB::transaction(function () use ($actor, $timeEntry, $endedAt, $event, $description) {
+            $ticket = $timeEntry->ticket()->firstOrFail();
+            $effectiveEndedAt = $endedAt->lessThan($timeEntry->started_at)
+                ? $timeEntry->started_at
+                : $endedAt;
+
+            $timeEntry->forceFill([
+                'ended_at' => $effectiveEndedAt,
+                'duration_seconds' => $this->secondsBetween($timeEntry->started_at, $effectiveEndedAt),
+            ])->save();
+
+            if ($event !== 'ticket.time_entry.auto_closed') {
+                $ticket->updateQuietly(['last_activity_at' => now()]);
+            }
+
+            $this->activityLogService->log($actor, $ticket, $event, $description, [
+                'time_entry_id' => $timeEntry->id,
+                'user_id' => $timeEntry->user_id,
+                'source' => $timeEntry->source?->value,
+                'started_at' => $timeEntry->started_at?->toIso8601String(),
+                'ended_at' => $timeEntry->ended_at?->toIso8601String(),
+                'duration_seconds' => $timeEntry->duration_seconds,
+                'sector_id' => $ticket->sector_id,
+            ]);
+        });
+    }
+
+    private function secondsBetween(CarbonInterface $startedAt, CarbonInterface $endedAt): int
+    {
+        return max(0, $endedAt->getTimestamp() - $startedAt->getTimestamp());
     }
 }

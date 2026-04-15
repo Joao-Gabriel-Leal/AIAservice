@@ -3,24 +3,47 @@
 namespace App\Modules\Rooms\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Rooms\Exports\RoomsExport;
 use App\Modules\Rooms\Http\Requests\RoomRequest;
 use App\Modules\Rooms\Models\Room;
+use App\Modules\Rooms\Support\RoomIndexQuery;
 use App\Modules\Sectors\Models\Sector;
-use App\Modules\Shared\Support\AccessScope;
+use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class RoomController extends Controller
 {
-    public function index(): View
+    public function __construct(
+        private readonly RoomIndexQuery $roomIndexQuery,
+        private readonly SpreadsheetExporter $spreadsheetExporter,
+    ) {
+    }
+
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Room::class);
 
-        $rooms = AccessScope::applySectorScope(Room::query()->with('sector'), auth()->user())
-            ->latest()
-            ->paginate(12);
+        $filters = $this->roomIndexQuery->filters($request);
+        $rooms = $this->roomIndexQuery->build(auth()->user(), $filters)->paginate(12)->withQueryString();
 
-        return view('modules.rooms.index', compact('rooms'));
+        return view('modules.rooms.index', [
+            'rooms' => $rooms,
+            'filters' => $filters,
+            'sectors' => $this->availableSectors(),
+        ]);
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        $this->authorize('viewAny', Room::class);
+
+        $filters = $this->roomIndexQuery->filters($request);
+        $export = new RoomsExport($this->roomIndexQuery->build(auth()->user(), $filters)->get());
+
+        return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
 
     public function create(): View

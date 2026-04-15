@@ -6,7 +6,6 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -21,17 +20,36 @@ class ProfileUpdateTest extends TestCase
         $this->get(route('profile.edit'))
             ->assertOk()
             ->assertSee('Foto de perfil')
+            ->assertSee('Patrimonios vinculados')
             ->assertSee('Seguranca da conta')
             ->assertSee('Conta administrada pela equipe')
             ->assertDontSee('Laravel Starter Kit');
     }
 
-    public function test_appearance_route_redirects_to_profile_anchor(): void
+    public function test_appearance_page_is_displayed(): void
     {
         $this->actingAs(User::factory()->create());
 
         $this->get(route('appearance.edit'))
-            ->assertRedirect(route('profile.edit'));
+            ->assertOk()
+            ->assertSee('Tema do sistema')
+            ->assertSee('Modo claro')
+            ->assertSee('Modo escuro');
+    }
+
+    public function test_user_can_update_theme_preference_from_appearance_page(): void
+    {
+        $user = User::factory()->create([
+            'theme_preference' => 'light',
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test('pages::settings.appearance')
+            ->set('themePreference', 'dark')
+            ->assertSet('themePreference', 'dark');
+
+        $this->assertSame('dark', $user->refresh()->theme_preference);
     }
 
     public function test_profile_page_hides_admin_managed_fields(): void
@@ -48,8 +66,6 @@ class ProfileUpdateTest extends TestCase
 
     public function test_profile_photo_can_be_uploaded(): void
     {
-        Storage::fake('public');
-
         $user = User::factory()->create();
 
         $this->actingAs($user);
@@ -63,18 +79,21 @@ class ProfileUpdateTest extends TestCase
         $user->refresh();
 
         $this->assertNotNull($user->profile_photo_path);
-        Storage::disk('public')->assertExists($user->profile_photo_path);
+        $this->assertNotNull($user->profile_photo_content);
+        $this->assertNotNull($user->profile_photo_mime_type);
+        $this->assertGreaterThan(0, $user->profile_photo_size);
     }
 
     public function test_previous_profile_photo_is_removed_when_replaced(): void
     {
-        Storage::fake('public');
-
         $user = User::factory()->create();
-        $oldPhotoPath = "profile-photos/{$user->id}/old-avatar.png";
-
-        Storage::disk('public')->put($oldPhotoPath, 'old-photo');
-        $user->forceFill(['profile_photo_path' => $oldPhotoPath])->save();
+        $user->forceFill([
+            'profile_photo_path' => "profile-photos/{$user->id}/old-avatar.png",
+            'profile_photo_original_name' => 'old-avatar.png',
+            'profile_photo_mime_type' => 'image/png',
+            'profile_photo_size' => 8,
+            'profile_photo_content' => 'old-photo',
+        ])->save();
 
         $this->actingAs($user);
 
@@ -86,19 +105,20 @@ class ProfileUpdateTest extends TestCase
 
         $user->refresh();
 
-        Storage::disk('public')->assertMissing($oldPhotoPath);
-        Storage::disk('public')->assertExists($user->profile_photo_path);
+        $this->assertNotSame('old-photo', $user->profile_photo_content);
+        $this->assertStringContainsString("profile-photos/{$user->id}/", (string) $user->profile_photo_path);
     }
 
     public function test_profile_photo_can_be_removed(): void
     {
-        Storage::fake('public');
-
         $user = User::factory()->create();
-        $photoPath = "profile-photos/{$user->id}/avatar.png";
-
-        Storage::disk('public')->put($photoPath, 'avatar-content');
-        $user->forceFill(['profile_photo_path' => $photoPath])->save();
+        $user->forceFill([
+            'profile_photo_path' => "profile-photos/{$user->id}/avatar.png",
+            'profile_photo_original_name' => 'avatar.png',
+            'profile_photo_mime_type' => 'image/png',
+            'profile_photo_size' => 14,
+            'profile_photo_content' => 'avatar-content',
+        ])->save();
 
         $this->actingAs($user);
 
@@ -108,7 +128,9 @@ class ProfileUpdateTest extends TestCase
         $response->assertHasNoErrors();
 
         $this->assertNull($user->refresh()->profile_photo_path);
-        Storage::disk('public')->assertMissing($photoPath);
+        $this->assertNull($user->profile_photo_content);
+        $this->assertNull($user->profile_photo_mime_type);
+        $this->assertNull($user->profile_photo_size);
     }
 
     public function test_password_can_be_updated_from_profile_page(): void

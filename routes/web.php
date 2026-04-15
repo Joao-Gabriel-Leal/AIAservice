@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\UserProfilePhotoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -7,5 +8,9 @@ Route::get('/', function () {
         ? redirect()->route('dashboard')
         : redirect()->route('login');
 })->name('home');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/users/{user}/profile-photo', [UserProfilePhotoController::class, 'show'])->name('users.profile-photo.show');
+});
 
 require __DIR__.'/settings.php';

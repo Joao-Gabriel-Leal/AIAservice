@@ -38,12 +38,12 @@ class CentralPageTest extends TestCase
     {
         ['secondSector' => $secondSector] = $this->centralContext();
 
-        $secondSector->board->catalogItems()->update(['is_active' => false]);
+        $secondSector->board->forms()->update(['is_active' => false]);
 
         $this->actingAs(User::factory()->create())
             ->get(route('tickets.central', ['sector' => $secondSector->id]))
             ->assertOk()
-            ->assertSeeText('Este setor ainda nao publicou formularios ativos no catalogo.')
+            ->assertSeeText('Este setor ainda nao possui formularios ativos para abertura.')
             ->assertDontSeeText('Abrir chamado geral');
     }
 

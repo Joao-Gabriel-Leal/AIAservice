@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class Ticket extends Model
 {
@@ -136,9 +137,23 @@ class Ticket extends Model
         return $this->hasMany(TicketAttachment::class);
     }
 
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TicketTimeEntry::class)->latest('started_at');
+    }
+
     public function rating(): HasOne
     {
         return $this->hasOne(TicketRating::class);
+    }
+
+    public function hasRating(): bool
+    {
+        if ($this->relationLoaded('rating')) {
+            return $this->rating !== null;
+        }
+
+        return $this->rating()->exists();
     }
 
     public function automationExecutions(): HasMany
@@ -154,6 +169,48 @@ class Ticket extends Model
     public function isClosed(): bool
     {
         return (bool) ($this->group?->is_closed || ! is_null($this->resolved_at));
+    }
+
+    public function canBeRatedBy(User $user): bool
+    {
+        return $this->requester_id === $user->id
+            && $this->isClosed()
+            && ! $this->hasRating();
+    }
+
+    public function activeTimeEntryForUser(User $user): ?TicketTimeEntry
+    {
+        $timeEntries = $this->timeEntriesCollection();
+
+        return $timeEntries
+            ->first(fn (TicketTimeEntry $timeEntry) => $timeEntry->user_id === $user->id && $timeEntry->isRunning());
+    }
+
+    public function timeEntriesTotalSeconds(?CarbonInterface $reference = null): int
+    {
+        return $this->timeEntriesCollection()
+            ->sum(fn (TicketTimeEntry $timeEntry) => $timeEntry->elapsedSeconds($reference));
+    }
+
+    public function timeEntriesTotalByUser(?CarbonInterface $reference = null): Collection
+    {
+        return $this->timeEntriesCollection()
+            ->groupBy('user_id')
+            ->map(function (Collection $entries) use ($reference) {
+                /** @var TicketTimeEntry $firstEntry */
+                $firstEntry = $entries->first();
+                $activeEntry = $entries->first(fn (TicketTimeEntry $timeEntry) => $timeEntry->isRunning());
+
+                return [
+                    'user_id' => $firstEntry->user_id,
+                    'user' => $firstEntry->user,
+                    'total_seconds' => $entries->sum(fn (TicketTimeEntry $timeEntry) => $timeEntry->elapsedSeconds($reference)),
+                    'active_entry_id' => $activeEntry?->id,
+                    'active_started_at' => $activeEntry?->started_at,
+                ];
+            })
+            ->sortByDesc('total_seconds')
+            ->values();
     }
 
     public function firstResponseSlaState(): string
@@ -228,5 +285,14 @@ class Ticket extends Model
         }
 
         return 'ok';
+    }
+
+    private function timeEntriesCollection(): Collection
+    {
+        if ($this->relationLoaded('timeEntries')) {
+            return $this->getRelation('timeEntries');
+        }
+
+        return $this->timeEntries()->with('user')->get();
     }
 }

@@ -60,6 +60,7 @@ php artisan serve
 
 - `DB_*`: conexao PostgreSQL
 - `SESSION_DRIVER=database`
+- avatar e anexos ficam persistidos no proprio PostgreSQL
 - `SUPER_ADMIN_NAME`
 - `SUPER_ADMIN_EMAIL`
 - `SUPER_ADMIN_PASSWORD`
@@ -77,4 +78,5 @@ php artisan test
 - criar ou atualizar um setor provisiona automaticamente o board inicial de chamados;
 - usuarios usam soft delete;
 - o chat da tela do chamado usa Echo/Reverb com `wire:poll` como fallback;
+- anexos e foto de perfil nao dependem de disco local da aplicacao;
 - ha um handoff detalhado em `docs/HANDOFF-2026-04-14.md`.

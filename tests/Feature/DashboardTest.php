@@ -45,6 +45,38 @@ class DashboardTest extends TestCase
         $response->assertSee('data-chart=', false);
     }
 
+    public function test_dashboard_shows_rooms_menu_only_for_administrative_profiles(): void
+    {
+        ['sector' => $sector, 'room' => $room] = $this->ticketContext();
+
+        $superAdmin = User::factory()->superAdmin()->create();
+        $sectorAdmin = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+        $collaborator = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee(route('rooms.index', absolute: false), false);
+
+        $this->actingAs($sectorAdmin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee(route('rooms.index', absolute: false), false);
+
+        $this->actingAs($collaborator)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee(route('rooms.index', absolute: false), false);
+    }
+
     public function test_dashboard_shows_rating_summary_for_technicians(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status, 'closedStatus' => $closedStatus] = $this->ticketContext();

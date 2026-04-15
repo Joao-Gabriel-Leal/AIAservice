@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Modules\Companies\Models\Company;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Users\Notifications\AccountCreatedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AdministrationFlowTest extends TestCase
@@ -17,6 +19,8 @@ class AdministrationFlowTest extends TestCase
 
     public function test_super_admin_can_manage_core_administration_entities(): void
     {
+        Notification::fake();
+
         $admin = User::factory()->superAdmin()->create();
         $this->actingAs($admin);
 
@@ -34,12 +38,14 @@ class AdministrationFlowTest extends TestCase
         $this->post(route('sectors.store'), [
             'company_id' => $company->id,
             'name' => 'Tecnologia',
+            'color' => '#1D4ED8',
             'description' => 'Setor de TI',
             'is_active' => '1',
         ])->assertRedirect(route('sectors.index', absolute: false));
 
         $sector = Sector::query()->firstOrFail();
         $this->assertNotNull($sector->board()->first());
+        $this->assertSame('#1D4ED8', $sector->displayColor());
 
         $this->post(route('rooms.store'), [
             'sector_id' => $sector->id,
@@ -77,6 +83,14 @@ class AdministrationFlowTest extends TestCase
             'sector_id' => $sector->id,
             'access_level' => 'technician',
         ]);
+
+        Notification::assertSentTo(
+            $createdUser,
+            AccountCreatedNotification::class,
+            fn (AccountCreatedNotification $notification, array $channels) => in_array('database', $channels, true)
+                && in_array('mail', $channels, true)
+                && data_get($notification->toArray($createdUser), 'must_change_password') === true
+        );
     }
 
     public function test_sector_admin_cannot_access_other_sector_records(): void

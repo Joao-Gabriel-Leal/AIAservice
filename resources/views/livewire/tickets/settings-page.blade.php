@@ -7,38 +7,44 @@
         <div class="ui-panel rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ session('error') }}</div>
     @endif
 
-    <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div class="space-y-2">
-                <p class="text-sm text-slate-500">
+    <x-portal.section-hero
+        compact
+        eyebrow="Configuracao operacional"
+        :title="$board?->name ?? 'Configurar quadro'"
+        :description="$board?->description ?: 'Ajuste etapas, SLA, automacoes, campos e formularios do setor.'"
+        :badge="$board ? ($board->groups->count().' etapa(s)') : 'Sem setor'"
+    >
+        @if ($sectorOptions->count() > 1 || $board)
+            <div class="portal-toolbar">
+                <div>
                     @if ($board)
-                        {{ $board->sector->company?->name }} / {{ $board->sector->name }}
-                    @else
-                        Nenhum setor disponivel para configuracao.
+                        <div class="mb-2">
+                            <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
+                        </div>
                     @endif
-                </p>
-                <h2 class="text-2xl font-semibold text-slate-900">{{ $board?->name ?? 'Configurar quadro' }}</h2>
-                <p class="text-sm text-slate-500">{{ $board?->description ?: 'Ajuste etapas, SLA, automacoes, campos e formularios do setor.' }}</p>
-            </div>
+                    <p class="text-sm font-semibold text-slate-900">Escopo da configuracao</p>
+                    <p class="mt-1 text-sm text-slate-500">Mantenha a estrutura do quadro alinhada com o setor antes de publicar formularios e automacoes.</p>
+                </div>
 
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                @if ($sectorOptions->count() > 1)
-                    <label class="text-sm text-slate-600">
-                        <span class="mb-1 block font-medium">Setor</span>
-                        <select wire:model.live="selectedSectorId" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
-                            @foreach ($sectorOptions as $sectorOption)
-                                <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                @endif
+                <div class="portal-toolbar-group">
+                    @if ($sectorOptions->count() > 1)
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Setor</span>
+                            <select wire:model.live="selectedSectorId" class="ui-native-select min-w-[240px]">
+                                @foreach ($sectorOptions as $sectorOption)
+                                    <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    @endif
 
-                @if ($board)
-                    <a href="{{ route('tickets.board', $board->sector_id) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar ao quadro</a>
-                @endif
+                    @if ($board)
+                        <a href="{{ route('tickets.board', $board->sector_id) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar ao quadro</a>
+                    @endif
+                </div>
             </div>
-        </div>
-    </div>
+        @endif
+    </x-portal.section-hero>
 
     @if (! $board)
         <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
@@ -583,9 +589,10 @@
 
                         <section class="space-y-6">
                             <div class="rounded-3xl border border-slate-200 bg-white p-5">
-                                <div class="mb-4"><h4 class="text-base font-semibold text-slate-900">Formularios existentes</h4><p class="text-sm text-slate-500">Lista enxuta para editar ou remover quando necessario.</p></div>
+                                <div class="mb-4"><h4 class="text-base font-semibold text-slate-900">Formularios existentes</h4><p class="text-sm text-slate-500">Formulario ativo nao aparece na central sozinho: ele precisa estar vinculado a um item de catalogo ativo.</p></div>
                                 <div class="space-y-3">
                                     @forelse ($board->forms as $form)
+                                        @php($publishedCatalogCount = $board->catalogItems->where('ticket_form_id', $form->id)->where('is_active', true)->count())
                                         <div class="rounded-2xl border border-slate-200 p-4">
                                             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                                 <div>
@@ -595,8 +602,10 @@
                                                             <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">Padrao</span>
                                                         @endif
                                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $form->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $form->is_active ? 'Ativo' : 'Inativo' }}</span>
+                                                        <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $publishedCatalogCount > 0 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-800' }}">{{ $publishedCatalogCount > 0 ? 'Publicado na central' : 'Nao publicado na central' }}</span>
                                                     </div>
                                                     <p class="mt-2 text-sm text-slate-500">{{ $form->fields->pluck('name')->join(', ') ?: 'Sem campos vinculados' }}</p>
+                                                    <p class="mt-2 text-xs text-slate-400">{{ $publishedCatalogCount }} item(ns) de catalogo ativo(s) usando este formulario.</p>
                                                 </div>
                                                 <div class="flex flex-wrap gap-2">
                                                     <button type="button" wire:click="startEditingForm({{ $form->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Editar</button>

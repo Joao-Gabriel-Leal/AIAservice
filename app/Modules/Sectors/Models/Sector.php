@@ -3,7 +3,9 @@
 namespace App\Modules\Sectors\Models;
 
 use App\Models\User;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Companies\Models\Company;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
@@ -23,6 +25,7 @@ class Sector extends Model
         'company_id',
         'name',
         'slug',
+        'color',
         'description',
         'is_active',
     ];
@@ -62,5 +65,36 @@ class Sector extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function knowledgeBaseArticles(): HasMany
+    {
+        return $this->hasMany(KnowledgeBaseArticle::class);
+    }
+
+    public function currentAssets(): HasMany
+    {
+        return $this->hasMany(Asset::class, 'current_sector_id');
+    }
+
+    public function displayColor(): string
+    {
+        $color = (string) ($this->getAttribute('color') ?? '');
+
+        if (preg_match('/^#[0-9A-Fa-f]{6}$/', $color) !== 1) {
+            return '#3D567B';
+        }
+
+        return strtoupper($color);
+    }
+
+    public function softColor(): string
+    {
+        return $this->displayColor().'14';
+    }
+
+    public function borderColor(): string
+    {
+        return $this->displayColor().'2E';
     }
 }

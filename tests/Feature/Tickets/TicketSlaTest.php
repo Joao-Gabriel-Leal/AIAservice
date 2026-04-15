@@ -9,7 +9,7 @@ use App\Modules\Companies\Models\Company;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
-use App\Modules\Tickets\Notifications\TicketActivityNotification;
+use App\Modules\Tickets\Notifications\TicketSlaNotification;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -117,8 +117,8 @@ class TicketSlaTest extends TestCase
 
         Notification::assertSentTo(
             [$sectorAdmin, $technician],
-            TicketActivityNotification::class,
-            fn (TicketActivityNotification $notification) => str_contains((string) data_get($notification->toArray($technician), 'title'), 'primeira resposta estourado'),
+            TicketSlaNotification::class,
+            fn (TicketSlaNotification $notification) => str_contains((string) data_get($notification->toArray($technician), 'title'), 'primeira resposta estourado'),
         );
     }
 

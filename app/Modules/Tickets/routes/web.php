@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Tickets\Http\Controllers\TicketAttachmentController;
+use App\Modules\Tickets\Http\Controllers\TicketExportController;
 use App\Modules\Tickets\Livewire\BoardPage;
 use App\Modules\Tickets\Livewire\CentralPage;
 use App\Modules\Tickets\Livewire\CreatePage;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->prefix('tickets')->name('tickets.')->group(function () {
     Route::get('/', IndexPage::class)->name('index');
+    Route::get('/export', TicketExportController::class)->name('export');
     Route::get('/central', CentralPage::class)->name('central');
     Route::get('/board/{sector?}', BoardPage::class)->name('board');
     Route::get('/create/{catalogItem?}', CreatePage::class)->name('create');

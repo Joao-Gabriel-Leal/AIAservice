@@ -9,7 +9,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketSlaPolicy;
 use App\Modules\Tickets\Models\TicketSlaTarget;
-use App\Modules\Tickets\Notifications\TicketActivityNotification;
+use App\Modules\Tickets\Notifications\TicketSlaNotification;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -18,8 +18,7 @@ class TicketSlaService
 {
     public function __construct(
         private readonly ActivityLogService $activityLogService,
-    ) {
-    }
+    ) {}
 
     public function ensurePolicy(TicketBoard $board): TicketSlaPolicy
     {
@@ -250,7 +249,7 @@ class TicketSlaService
             return;
         }
 
-        Notification::send($recipients, new TicketActivityNotification($ticket, $title, $message));
+        Notification::send($recipients, new TicketSlaNotification($ticket, $title, $message));
     }
 
     private function notificationRecipients(Ticket $ticket): Collection

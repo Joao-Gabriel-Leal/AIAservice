@@ -30,12 +30,12 @@ class CentralPage extends Component
     {
         $sectors = $this->sectors();
         $selectedSector = $sectors->firstWhere('id', $this->selectedSectorId) ?? $sectors->first();
-        $catalogItems = $selectedSector?->board?->catalogItems ?? collect();
+        $forms = $selectedSector?->board?->forms ?? collect();
 
         return view('livewire.tickets.central-page', [
             'sectors' => $sectors,
             'selectedSector' => $selectedSector,
-            'catalogItems' => $catalogItems,
+            'forms' => $forms,
         ])->layout('layouts.portal', [
             'title' => 'Central de formularios',
             'subtitle' => 'Escolha o setor, veja os formularios disponiveis e abra o chamado certo com menos atrito.',
@@ -47,9 +47,12 @@ class CentralPage extends Component
         return Sector::query()
             ->with([
                 'company',
-                'board.catalogItems' => fn ($query) => $query
+                'board.forms' => fn ($query) => $query
                     ->where('is_active', true)
-                    ->with('form')
+                    ->with(['catalogItems' => fn ($catalogQuery) => $catalogQuery
+                        ->where('is_active', true)
+                        ->orderBy('name'),
+                    ])
                     ->orderBy('name'),
             ])
             ->where('is_active', true)

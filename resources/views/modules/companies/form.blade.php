@@ -13,7 +13,7 @@
 
     <label class="block">
         <span class="mb-2 block text-sm font-medium text-slate-700">Documento</span>
-        <input type="text" name="document" value="{{ old('document', $company->document) }}" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
+        <input type="text" name="document" value="{{ old('document', $company->document) }}" inputmode="numeric" maxlength="18" data-mask="cpf-cnpj" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
         @error('document') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
     </label>
 
@@ -25,7 +25,7 @@
 
     <label class="block">
         <span class="mb-2 block text-sm font-medium text-slate-700">Telefone</span>
-        <input type="text" name="phone" value="{{ old('phone', $company->phone) }}" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
+        <input type="text" name="phone" value="{{ old('phone', $company->phone) }}" inputmode="numeric" maxlength="15" data-mask="phone" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
         @error('phone') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
     </label>
 

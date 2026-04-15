@@ -5,24 +5,27 @@ namespace App\Models;
 use App\Enums\GlobalUserRole;
 use App\Enums\SectorAccessLevel;
 use App\Enums\UserRole;
+use App\Modules\Assets\Models\Asset;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketRating;
+use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Users\Models\UserSectorAccess;
+use App\Support\DatabaseBinary;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
@@ -36,6 +39,7 @@ class User extends Authenticatable
         'email',
         'password',
         'profile_photo_path',
+        'theme_preference',
         'role',
         'global_role',
         'sector_id',
@@ -49,6 +53,7 @@ class User extends Authenticatable
         'remember_token',
         'two_factor_secret',
         'two_factor_recovery_codes',
+        'profile_photo_content',
     ];
 
     protected function casts(): array
@@ -60,6 +65,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'is_active' => 'boolean',
+            'profile_photo_size' => 'integer',
+            'theme_preference' => 'string',
         ];
     }
 
@@ -118,6 +125,11 @@ class User extends Authenticatable
         return $this->hasMany(Ticket::class, 'assignee_id');
     }
 
+    public function currentAssets(): HasMany
+    {
+        return $this->hasMany(Asset::class, 'current_user_id');
+    }
+
     public function ticketMessages(): HasMany
     {
         return $this->hasMany(TicketMessage::class);
@@ -128,9 +140,19 @@ class User extends Authenticatable
         return $this->hasMany(TicketRating::class);
     }
 
+    public function ticketTimeEntries(): HasMany
+    {
+        return $this->hasMany(TicketTimeEntry::class);
+    }
+
     public function activityLogs(): HasMany
     {
         return $this->hasMany(ActivityLog::class, 'causer_id');
+    }
+
+    public function knowledgeBaseArticles(): HasMany
+    {
+        return $this->hasMany(KnowledgeBaseArticle::class, 'created_by');
     }
 
     public function isSuperAdmin(): bool
@@ -266,7 +288,7 @@ class User extends Authenticatable
 
     public function hasProfilePhoto(): bool
     {
-        return filled($this->profile_photo_path);
+        return ! is_null($this->profile_photo_content) && (int) ($this->profile_photo_size ?? 0) > 0;
     }
 
     public function profilePhotoUrl(): ?string
@@ -275,7 +297,7 @@ class User extends Authenticatable
             return null;
         }
 
-        return Storage::disk('public')->url($this->profile_photo_path);
+        return route('users.profile-photo.show', $this);
     }
 
     public function getProfilePhotoUrlAttribute(): ?string
@@ -285,16 +307,22 @@ class User extends Authenticatable
 
     public function updateProfilePhoto(UploadedFile $photo): void
     {
-        $previousPhotoPath = $this->profile_photo_path;
-        $photoPath = $photo->store("profile-photos/{$this->getKey()}", 'public');
+        $content = file_get_contents($photo->getRealPath());
+
+        if ($content === false) {
+            throw new \RuntimeException('Nao foi possivel ler a foto enviada.');
+        }
+
+        $extension = $photo->extension() ?: $photo->getClientOriginalExtension() ?: 'bin';
+        $photoPath = "profile-photos/{$this->getKey()}/".Str::uuid().".{$extension}";
 
         $this->forceFill([
             'profile_photo_path' => $photoPath,
+            'profile_photo_original_name' => $photo->getClientOriginalName(),
+            'profile_photo_mime_type' => $photo->getMimeType() ?: 'application/octet-stream',
+            'profile_photo_size' => strlen($content),
+            'profile_photo_content' => DatabaseBinary::encode($content, $this->getConnection()->getDriverName()),
         ])->save();
-
-        if ($previousPhotoPath && $previousPhotoPath !== $photoPath) {
-            Storage::disk('public')->delete($previousPhotoPath);
-        }
     }
 
     public function deleteProfilePhoto(): void
@@ -303,11 +331,32 @@ class User extends Authenticatable
             return;
         }
 
-        Storage::disk('public')->delete($this->profile_photo_path);
-
         $this->forceFill([
             'profile_photo_path' => null,
+            'profile_photo_original_name' => null,
+            'profile_photo_mime_type' => null,
+            'profile_photo_size' => null,
+            'profile_photo_content' => null,
         ])->save();
+    }
+
+    public function profilePhotoContent(): ?string
+    {
+        return $this->normalizeBinaryValue($this->profile_photo_content);
+    }
+
+    public function profilePhotoDownloadName(): string
+    {
+        return $this->profile_photo_original_name
+            ?? basename((string) $this->profile_photo_path)
+            ?: "avatar-{$this->getKey()}.bin";
+    }
+
+    public function preferredTheme(): string
+    {
+        return in_array($this->theme_preference, ['light', 'dark'], true)
+            ? $this->theme_preference
+            : 'light';
     }
 
     private function hasAnySectorAccess(array $levels = []): bool
@@ -345,5 +394,10 @@ class User extends Authenticatable
         $this->load('sectorAccesses.sector');
 
         return $this->getRelation('sectorAccesses');
+    }
+
+    private function normalizeBinaryValue(mixed $value): ?string
+    {
+        return DatabaseBinary::decode($value);
     }
 }

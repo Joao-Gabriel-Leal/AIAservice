@@ -8,56 +8,74 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Users\Exports\UsersExport;
 use App\Modules\Users\Http\Requests\UserRequest;
+use App\Modules\Users\Notifications\AccountCreatedNotification;
+use App\Modules\Users\Support\UserIndexQuery;
+use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class UserController extends Controller
 {
-    public function index(): View
+    public function __construct(
+        private readonly UserIndexQuery $userIndexQuery,
+        private readonly SpreadsheetExporter $spreadsheetExporter,
+    ) {
+    }
+
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', User::class);
 
-        $query = User::query()
-            ->with(['sectorAccesses.sector'])
-            ->latest();
-
-        if (! auth()->user()->isSuperAdmin()) {
-            $managedSectorIds = auth()->user()->adminSectorIds();
-
-            $query->where(function ($scopedQuery) use ($managedSectorIds) {
-                $scopedQuery
-                    ->whereKey(auth()->id())
-                    ->orWhere(fn ($userQuery) => $userQuery->withAnySectorAccess($managedSectorIds));
-            });
-        }
+        $filters = $this->userIndexQuery->filters($request);
+        $query = $this->userIndexQuery->build(auth()->user(), $filters);
 
         return view('modules.users.index', [
-            'users' => $query->paginate(15),
+            'users' => $query->paginate(15)->withQueryString(),
+            'filters' => $filters,
+            'globalRoles' => $this->availableGlobalRoles(),
+            'sectors' => $this->availableSectors(),
         ]);
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        $this->authorize('viewAny', User::class);
+
+        $filters = $this->userIndexQuery->filters($request);
+        $export = new UsersExport($this->userIndexQuery->build(auth()->user(), $filters)->get());
+
+        return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
 
     public function create(): View
     {
         $this->authorize('create', User::class);
 
-        return view('modules.users.create', $this->formData(new User()));
+        return view('modules.users.create', $this->formData(new User));
     }
 
     public function store(UserRequest $request): RedirectResponse
     {
         $this->authorize('create', User::class);
 
-        DB::transaction(function () use ($request) {
+        $user = DB::transaction(function () use ($request) {
             $resolved = $this->resolvedData($request);
 
             $user = User::query()->create($resolved['payload']);
 
             $this->syncSectorAccesses($user, $resolved['sector_accesses']);
+
+            return $user;
         });
+
+        $user->notify(new AccountCreatedNotification($user->email, (bool) $user->must_change_password));
 
         return redirect()->route('users.index')->with('status', 'Usuario criado com sucesso.');
     }

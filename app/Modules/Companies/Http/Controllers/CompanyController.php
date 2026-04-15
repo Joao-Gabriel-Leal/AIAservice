@@ -3,20 +3,42 @@
 namespace App\Modules\Companies\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Companies\Exports\CompaniesExport;
 use App\Modules\Companies\Http\Requests\CompanyRequest;
 use App\Modules\Companies\Models\Company;
+use App\Modules\Companies\Support\CompanyIndexQuery;
+use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CompanyController extends Controller
 {
-    public function index(): View
+    public function __construct(
+        private readonly CompanyIndexQuery $companyIndexQuery,
+        private readonly SpreadsheetExporter $spreadsheetExporter,
+    ) {
+    }
+
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Company::class);
 
-        $companies = Company::query()->latest()->paginate(12);
+        $filters = $this->companyIndexQuery->filters($request);
+        $companies = $this->companyIndexQuery->build($filters)->paginate(12)->withQueryString();
 
-        return view('modules.companies.index', compact('companies'));
+        return view('modules.companies.index', compact('companies', 'filters'));
+    }
+
+    public function export(Request $request): BinaryFileResponse
+    {
+        $this->authorize('viewAny', Company::class);
+
+        $filters = $this->companyIndexQuery->filters($request);
+        $export = new CompaniesExport($this->companyIndexQuery->build($filters)->get());
+
+        return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
 
     public function create(): View

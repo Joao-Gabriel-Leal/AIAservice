@@ -1,8 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 42" {{ $attributes }}>
-    <path 
-        fill="currentColor" 
-        fill-rule="evenodd" 
-        clip-rule="evenodd"
-        d="M17.2 5.633 8.6.855 0 5.633v26.51l16.2 9 16.2-9v-8.442l7.6-4.223V9.856l-8.6-4.777-8.6 4.777V18.3l-5.6 3.111V5.633ZM38 18.301l-5.6 3.11v-6.157l5.6-3.11V18.3Zm-1.06-7.856-5.54 3.078-5.54-3.079 5.54-3.078 5.54 3.079ZM24.8 18.3v-6.157l5.6 3.111v6.158L24.8 18.3Zm-1 1.732 5.54 3.078-13.14 7.302-5.54-3.078 13.14-7.3v-.002Zm-16.2 7.89 7.6 4.222V38.3L2 30.966V7.92l5.6 3.111v16.892ZM8.6 9.3 3.06 6.222 8.6 3.143l5.54 3.08L8.6 9.3Zm21.8 15.51-13.2 7.334V38.3l13.2-7.334v-6.156ZM9.6 11.034l5.6-3.11v14.6l-5.6 3.11v-14.6Z"
-    />
+@php($gradientId = 'brand-symbol-gradient-'.uniqid())
+@php($highlightId = 'brand-symbol-highlight-'.uniqid())
+@php($shadowId = 'brand-symbol-shadow-'.uniqid())
+
+<svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" {{ $attributes }}>
+    <defs>
+        <linearGradient id="{{ $gradientId }}" x1="28" y1="10" x2="70" y2="82" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#3FD6E0" />
+            <stop offset="0.52" stop-color="#28BAD9" />
+            <stop offset="1" stop-color="#197CC3" />
+        </linearGradient>
+        <linearGradient id="{{ $highlightId }}" x1="33" y1="15" x2="48" y2="39" gradientUnits="userSpaceOnUse">
+            <stop stop-color="white" stop-opacity="0.36" />
+            <stop offset="1" stop-color="white" stop-opacity="0" />
+        </linearGradient>
+        <filter id="{{ $shadowId }}" x="16" y="4" width="64" height="88" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+            <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#09176A" flood-opacity="0.22" />
+        </filter>
+    </defs>
+
+    <g filter="url(#{{ $shadowId }})">
+        <rect x="29" y="10" width="38" height="76" rx="19" fill="url(#{{ $gradientId }})" />
+        <rect x="29.75" y="10.75" width="36.5" height="74.5" rx="18.25" stroke="white" stroke-opacity="0.18" stroke-width="1.5" />
+        <path d="M38 16C38 13.7909 39.7909 12 42 12H54C56.2091 12 58 13.7909 58 16V39H38V16Z" fill="url(#{{ $highlightId }})" />
+    </g>
+
+    <circle cx="48" cy="31" r="13.5" fill="white" />
+    <circle cx="48" cy="59" r="4.2" fill="#2331A8" />
 </svg>

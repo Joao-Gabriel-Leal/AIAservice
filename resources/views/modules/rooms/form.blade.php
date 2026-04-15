@@ -1,3 +1,5 @@
+@php($selectedSector = $sectors->firstWhere('id', (int) old('sector_id', $room->sector_id)))
+
 <div class="grid gap-6 md:grid-cols-2">
     <label class="block">
         <span class="mb-2 block text-sm font-medium text-slate-700">Setor</span>
@@ -7,6 +9,11 @@
                 <option value="{{ $sectorOption->id }}" @selected(old('sector_id', $room->sector_id) == $sectorOption->id)>{{ $sectorOption->name }}</option>
             @endforeach
         </select>
+        @if ($selectedSector)
+            <div class="mt-2">
+                <x-sector-badge :sector="$selectedSector" mode="chip">{{ $selectedSector->company?->name }}</x-sector-badge>
+            </div>
+        @endif
         @error('sector_id') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
     </label>
 

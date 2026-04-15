@@ -3,6 +3,7 @@
 namespace App\Modules\Rooms\Models;
 
 use App\Models\User;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -42,5 +43,10 @@ class Room extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function currentAssets(): HasMany
+    {
+        return $this->hasMany(Asset::class, 'current_room_id');
     }
 }

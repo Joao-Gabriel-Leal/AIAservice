@@ -2,8 +2,10 @@
 
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\UpdatesUserPassword;
+use App\Modules\Assets\Models\Asset;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Collection;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -118,9 +120,27 @@ new #[Title('Meu perfil')] class extends Component {
 
         session()->flash('status', 'Autenticacao em dois fatores desativada com sucesso.');
     }
+
+    public function getAssignedAssetsProperty(): Collection
+    {
+        return Asset::query()
+            ->with([
+                'currentSector',
+                'currentRoom',
+                'currentUser',
+                'movements.fromSector',
+                'movements.toSector',
+                'movements.movedBy',
+            ])
+            ->where('current_user_id', Auth::id())
+            ->latest()
+            ->get();
+    }
 }; ?>
 
 <div class="mx-auto max-w-5xl space-y-6">
+    @php($assignedAssets = $this->assignedAssets)
+
     @if (session('status'))
         <div class="ui-panel rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {{ session('status') }}
@@ -210,6 +230,102 @@ new #[Title('Meu perfil')] class extends Component {
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-3 border-b border-slate-200 pb-5">
+            <h2 class="text-lg font-semibold text-slate-900">Patrimonios vinculados</h2>
+            <p class="max-w-3xl text-sm text-slate-500">
+                Aqui voce acompanha apenas os patrimonios atualmente vinculados ao seu usuario, com status, localizacao e historico recente.
+            </p>
+        </div>
+
+        <div class="space-y-4 pt-6">
+            @forelse ($assignedAssets as $assignedAsset)
+                <article class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_112px]">
+                        <div class="space-y-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-base font-semibold text-slate-900">{{ $assignedAsset->name }}</h3>
+                                    <p class="mt-1 text-sm text-slate-500">{{ $assignedAsset->asset_code }}</p>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="rounded-full px-3 py-1 text-xs font-medium {{ $assignedAsset->status?->badgeClasses() }}">
+                                        {{ $assignedAsset->statusLabel() }}
+                                    </span>
+                                    <a href="{{ route('assets.show', $assignedAsset) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">
+                                        Abrir detalhe
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-3 md:grid-cols-3">
+                                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                                    <p class="font-medium text-slate-900">Setor atual</p>
+                                    <div class="mt-1">
+                                        <x-sector-badge :sector="$assignedAsset->currentSector" mode="dot" />
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                                    <p class="font-medium text-slate-900">Sala atual</p>
+                                    <p class="mt-1">{{ $assignedAsset->currentRoom?->name ?? 'Sem sala' }}</p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                                    <p class="font-medium text-slate-900">Colaborador</p>
+                                    <p class="mt-1">{{ $assignedAsset->currentUser?->name ?? 'Nao vinculado' }}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p class="text-sm font-medium text-slate-900">Ultimas movimentacoes</p>
+                                <div class="mt-3 space-y-2">
+                                    @forelse ($assignedAsset->movements->take(3) as $movement)
+                                        <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                                <p class="font-medium text-slate-900">{{ $movement->type?->label() ?? 'Movimentacao' }}</p>
+                                                <p class="text-xs text-slate-500">{{ $movement->moved_at?->format('d/m/Y H:i') }}</p>
+                                            </div>
+                                            <div class="mt-2 flex flex-wrap items-center gap-2">
+                                                @if ($movement->fromSector)
+                                                    <x-sector-badge :sector="$movement->fromSector" mode="chip" class="text-[11px]" prefix="Origem" />
+                                                @else
+                                                    <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
+                                                        Origem inicial
+                                                    </span>
+                                                @endif
+                                                <span class="text-xs text-slate-400">-></span>
+                                                <x-sector-badge :sector="$movement->toSector" mode="chip" class="text-[11px]" prefix="Destino" />
+                                                @if ($movement->movedBy)
+                                                    <span class="text-xs text-slate-500">por {{ $movement->movedBy->name }}</span>
+                                                @endif
+                                            </div>
+                                            @if ($movement->reason)
+                                                <p class="mt-1 text-xs text-slate-500">{{ $movement->reason }}</p>
+                                            @endif
+                                        </div>
+                                    @empty
+                                        <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500">
+                                            Nenhuma movimentacao registrada ainda.
+                                        </div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+
+                        <a href="{{ route('assets.show', $assignedAsset) }}" class="block self-start rounded-3xl border border-slate-200 bg-white p-3 text-center" data-qr-target="{{ $assignedAsset->detailUrl() }}">
+                            {!! $assignedAsset->qrCodeSvg(88) !!}
+                            <span class="mt-2 block text-xs text-slate-500">QR do patrimonio</span>
+                        </a>
+                    </div>
+                </article>
+            @empty
+                <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center text-sm text-slate-500">
+                    Nenhum patrimonio esta vinculado ao seu usuario neste momento.
+                </div>
+            @endforelse
         </div>
     </section>
 

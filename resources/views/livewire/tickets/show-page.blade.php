@@ -1,174 +1,109 @@
 <div class="space-y-6">
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_420px]">
-        <div class="space-y-6">
-            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="space-y-2">
-                        <p class="text-sm text-slate-500">{{ $ticket->sector?->company?->name }} / {{ $ticket->sector?->name }}</p>
-                        <h2 class="text-2xl font-semibold text-slate-900">{{ $ticket->title }}</h2>
-                        <p class="text-sm text-slate-500">{{ $ticket->description ?: 'Sem descricao adicional.' }}</p>
-                    </div>
+    @php
+        $messages = $ticket->messages->sortBy('created_at')->values();
+        $messageCount = $messages->count();
+        $latestMessage = $messages->last();
+        $activityLogs = $ticket->activityLogs->sortByDesc('created_at')->values();
+        $activityCount = $activityLogs->count();
+        $latestActivity = $activityLogs->first();
+        $attachmentCount = $ticket->attachments->count();
+        $messageLabel = $messageCount === 1 ? 'mensagem' : 'mensagens';
+        $attachmentLabel = $attachmentCount === 1 ? 'anexo' : 'anexos';
+        $activityLabel = $activityCount === 1 ? 'evento' : 'eventos';
+        $latestActivitySummary = null;
 
-                    <div class="flex flex-wrap gap-2">
-                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">{{ $ticket->priority?->label() }}</span>
-                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
-                            {{ $ticket->group?->name ?? 'Sem etapa' }}
-                        </span>
-                    </div>
-                </div>
+        if ($latestActivity) {
+            $latestActivitySummary = $latestActivity->description ?: $latestActivity->event;
 
-                <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <div class="rounded-2xl bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Solicitante</p>
-                        <p class="mt-2 text-sm font-medium text-slate-900">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Responsavel</p>
-                        <p class="mt-2 text-sm font-medium text-slate-900">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Catalogo</p>
-                        <p class="mt-2 text-sm font-medium text-slate-900">{{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</p>
-                    </div>
-                </div>
-            </section>
+            if (strlen($latestActivitySummary) > 56) {
+                $latestActivitySummary = substr($latestActivitySummary, 0, 53).'...';
+            }
+        }
+    @endphp
 
-            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">SLA</h3>
-                    <p class="text-sm text-slate-500">Prazos de primeira resposta e resolucao calculados para este chamado.</p>
-                </div>
+    <x-portal.section-hero
+        compact
+        :eyebrow="($ticket->sector?->company?->name ?? 'Sem empresa').' / '.($ticket->sector?->name ?? 'Sem setor')"
+        :title="$ticket->title"
+        :description="$ticket->description ?: 'Sem descricao adicional.'"
+    >
+        <x-slot:actions>
+            <x-sector-badge :sector="$ticket->sector" mode="chip" />
+            <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">{{ $ticket->priority?->label() }}</span>
+            <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
+                {{ $ticket->group?->name ?? 'Sem etapa' }}
+            </span>
+        </x-slot:actions>
 
-                <div class="grid gap-4 md:grid-cols-2">
-                    @foreach ($ticket->slaSummary() as $slaItem)
-                        @php
-                            $badgeClass = match ($slaItem['state']) {
-                                'breached' => 'bg-rose-100 text-rose-700',
-                                'warning' => 'bg-amber-100 text-amber-700',
-                                'na' => 'bg-slate-100 text-slate-600',
-                                default => 'bg-emerald-100 text-emerald-700',
-                            };
-                            $badgeLabel = match ($slaItem['state']) {
-                                'breached' => 'Estourado',
-                                'warning' => 'A vencer',
-                                'na' => 'Nao configurado',
-                                default => ($slaItem['completed_at'] ? 'Cumprido' : 'Em dia'),
-                            };
-                        @endphp
-                        <div class="rounded-2xl border border-slate-200 p-4">
-                            <div class="flex items-start justify-between gap-4">
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-900">{{ $slaItem['label'] }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">Prazo: {{ $slaItem['due_at']?->format('d/m/Y H:i') ?? 'Nao definido' }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">Concluido em: {{ $slaItem['completed_at']?->format('d/m/Y H:i') ?? 'Ainda pendente' }}</p>
-                                </div>
-                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $badgeClass }}">{{ $badgeLabel }}</span>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </section>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div class="ticket-summary-card">
+                <p class="ticket-summary-label">Solicitante</p>
+                <p class="ticket-summary-value">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
+            </div>
+            <div class="ticket-summary-card">
+                <p class="ticket-summary-label">Responsavel</p>
+                <p class="ticket-summary-value">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</p>
+            </div>
+            <div class="ticket-summary-card">
+                <p class="ticket-summary-label">Catalogo</p>
+                <p class="ticket-summary-value">{{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</p>
+            </div>
+        </div>
+    </x-portal.section-hero>
 
-            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Avaliacao do atendimento</h3>
-                    <p class="text-sm text-slate-500">Coleta simples de satisfacao apos o encerramento do chamado.</p>
-                </div>
+    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="ticket-panel-heading">
+            <p class="ticket-panel-kicker">Prazos do chamado</p>
+            <h3 class="ticket-panel-title">SLA</h3>
+            <p class="ticket-panel-copy">Prazos de primeira resposta e resolucao calculados para este chamado.</p>
+        </div>
 
-                @if ($ticket->rating)
-                    <div class="space-y-4">
-                        <div class="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <p class="text-sm font-medium text-slate-900">Nota registrada</p>
-                                <p class="text-xs text-slate-500">
-                                    Enviada por {{ $ticket->rating->user?->name ?? 'Solicitante' }}
-                                    em {{ $ticket->rating->created_at?->format('d/m/Y H:i') }}
-                                </p>
-                            </div>
-                            <div class="flex items-center gap-3 rounded-full bg-amber-50 px-4 py-2">
-                                <div class="flex items-center gap-1" aria-label="Nota {{ $ticket->rating->rating }} de 5">
-                                    @for ($score = 1; $score <= 5; $score++)
-                                        <span class="text-lg leading-none {{ $score <= $ticket->rating->rating ? 'text-amber-400' : 'text-slate-300' }}">&#9733;</span>
-                                    @endfor
-                                </div>
-                                <span class="text-sm font-semibold text-amber-700">{{ $ticket->rating->rating }}/5</span>
-                            </div>
-                        </div>
-
-                        <div class="rounded-2xl bg-slate-50 p-4">
-                            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Comentario</p>
-                            <p class="mt-2 whitespace-pre-line text-sm text-slate-700">{{ $ticket->rating->comment ?: 'Nenhum comentario informado.' }}</p>
-                        </div>
-                    </div>
-                @elseif ($canRate)
-                    <form wire:submit="submitRating" class="space-y-4">
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+            @foreach ($ticket->slaSummary() as $slaItem)
+                @php
+                    $badgeClass = match ($slaItem['state']) {
+                        'breached' => 'bg-rose-100 text-rose-700',
+                        'warning' => 'bg-amber-100 text-amber-700',
+                        'na' => 'bg-slate-100 text-slate-600',
+                        default => 'bg-emerald-100 text-emerald-700',
+                    };
+                    $badgeLabel = match ($slaItem['state']) {
+                        'breached' => 'Estourado',
+                        'warning' => 'A vencer',
+                        'na' => 'Nao configurado',
+                        default => ($slaItem['completed_at'] ? 'Cumprido' : 'Em dia'),
+                    };
+                @endphp
+                <div class="rounded-2xl border border-slate-200 p-4">
+                    <div class="flex items-start justify-between gap-4">
                         <div>
-                            <p class="mb-3 text-sm font-medium text-slate-900">Como voce avalia este atendimento?</p>
-                            <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                                @for ($score = 1; $score <= 5; $score++)
-                                    <label
-                                        class="group flex cursor-pointer items-center"
-                                        title="{{ $score }} de 5"
-                                        aria-label="{{ $score }} de 5"
-                                    >
-                                        <input type="radio" wire:model.live="ratingValue" value="{{ $score }}" class="sr-only" />
-                                        <span class="text-3xl leading-none transition {{ $ratingValue !== null && $score <= $ratingValue ? 'text-amber-400' : 'text-slate-300 group-hover:text-amber-300' }}">&#9733;</span>
-                                    </label>
-                                @endfor
-
-                                <span class="ml-2 text-sm font-medium text-slate-600">
-                                    {{ $ratingValue ? "{$ratingValue}/5" : 'Selecione uma nota' }}
-                                </span>
-                            </div>
-                            @error('ratingValue') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            <p class="text-sm font-semibold text-slate-900">{{ $slaItem['label'] }}</p>
+                            <p class="mt-1 text-xs text-slate-500">Prazo: {{ $slaItem['due_at']?->format('d/m/Y H:i') ?? 'Nao definido' }}</p>
+                            <p class="mt-1 text-xs text-slate-500">Concluido em: {{ $slaItem['completed_at']?->format('d/m/Y H:i') ?? 'Ainda pendente' }}</p>
                         </div>
-
-                        <label class="block text-sm text-slate-600">
-                            <span class="mb-2 block font-medium">Comentario opcional</span>
-                            <textarea wire:model="ratingComment" rows="4" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" placeholder="Conte como foi o atendimento, se quiser."></textarea>
-                            @error('ratingComment') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <div class="flex flex-wrap items-center justify-between gap-3">
-                            <p class="text-xs text-slate-500">A avaliacao nao podera ser editada depois de enviada.</p>
-                            <button
-                                type="submit"
-                                wire:loading.attr="disabled"
-                                wire:loading.class="ui-loading"
-                                wire:target="submitRating"
-                                class="ui-action rounded-2xl bg-sky-500 px-4 py-3 text-sm font-medium text-white hover:bg-sky-400"
-                            >
-                                <span wire:loading.remove wire:target="submitRating">Enviar avaliacao</span>
-                                <span wire:loading wire:target="submitRating">Enviando...</span>
-                            </button>
-                        </div>
-                    </form>
-                @elseif ($ticket->isClosed())
-                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                        Ainda nao ha avaliacao registrada para este chamado.
+                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $badgeClass }}">{{ $badgeLabel }}</span>
                     </div>
-                @else
-                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                        A avaliacao sera liberada para o solicitante quando o chamado for encerrado.
-                    </div>
-                @endif
-            </section>
-
-            <section
-                class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-                wire:loading.class="ui-loading"
-                wire:target="updateFixedField"
-            >
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Atualizacoes operacionais</h3>
-                    <p class="text-sm text-slate-500">Tecnicos e admins de setor podem ajustar o fluxo sem sair da tela.</p>
                 </div>
+            @endforeach
+        </div>
+    </section>
 
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <section
+        class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        wire:loading.class="ui-loading"
+        wire:target="updateFixedField"
+    >
+        <div class="ticket-panel-heading">
+            <p class="ticket-panel-kicker">Fluxo operacional</p>
+            <h3 class="ticket-panel-title">Atualizacoes operacionais</h3>
+            <p class="ticket-panel-copy">Tecnicos e admins de setor podem ajustar o fluxo sem sair da tela.</p>
+        </div>
+
+        <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     <label class="text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Responsavel</span>
                         @can('update', $ticket)
-                            <select wire:change="updateFixedField('assignee_id', $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                            <select wire:change="updateFixedField('assignee_id', $event.target.value)" class="ui-native-select w-full">
                                 <option value="">Nao atribuido</option>
                                 @foreach ($assignees as $assignee)
                                     <option value="{{ $assignee->id }}" @selected($ticket->assignee_id === $assignee->id)>{{ $assignee->name }}</option>
@@ -182,7 +117,7 @@
                     <label class="text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Prioridade</span>
                         @can('update', $ticket)
-                            <select wire:change="updateFixedField('priority', $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                            <select wire:change="updateFixedField('priority', $event.target.value)" class="ui-native-select w-full">
                                 @foreach ($priorities as $priority)
                                     <option value="{{ $priority->value }}" @selected($ticket->priority === $priority)>{{ $priority->label() }}</option>
                                 @endforeach
@@ -195,7 +130,7 @@
                     <label class="text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Etapa</span>
                         @can('update', $ticket)
-                            <select wire:change="updateFixedField('ticket_group_id', $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                            <select wire:change="updateFixedField('ticket_group_id', $event.target.value)" class="ui-native-select w-full">
                                 <option value="">Sem etapa</option>
                                 @foreach ($groups as $group)
                                     <option value="{{ $group->id }}" @selected($ticket->ticket_group_id === $group->id)>{{ $group->name }}</option>
@@ -206,19 +141,20 @@
                         @endcan
                     </label>
                 </div>
-            </section>
+    </section>
 
-            <section
-                class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-                wire:loading.class="ui-loading"
-                wire:target="updateDynamicField"
-            >
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Campos do chamado</h3>
-                    <p class="text-sm text-slate-500">Informacoes extras configuradas pelo setor para este fluxo.</p>
-                </div>
+    <section
+        class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        wire:loading.class="ui-loading"
+        wire:target="updateDynamicField"
+    >
+        <div class="ticket-panel-heading">
+            <p class="ticket-panel-kicker">Detalhamento</p>
+            <h3 class="ticket-panel-title">Campos do chamado</h3>
+            <p class="ticket-panel-copy">Informacoes extras configuradas pelo setor para este fluxo.</p>
+        </div>
 
-                <div class="grid gap-4 md:grid-cols-2">
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
                     @forelse ($fields as $field)
                         @php
                             $value = $ticket->fieldValues->firstWhere('ticket_field_id', $field->id)?->primitive_value;
@@ -228,7 +164,7 @@
 
                             @can('update', $ticket)
                                 @if (in_array($field->type->value, ['select', 'status'], true))
-                                    <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                                    <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
                                         <option value="">Selecione</option>
                                         @foreach ($field->options as $option)
                                             <option value="{{ $option->value }}" @selected((string) $value === (string) $option->value)>{{ $option->label }}</option>
@@ -240,18 +176,18 @@
                                         Campo marcado
                                     </label>
                                 @elseif ($field->type->value === 'date')
-                                    <input type="date" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+                                    <input type="date" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-input w-full" />
                                 @elseif ($field->type->value === 'number')
-                                    <input type="number" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+                                    <input type="number" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-input w-full" />
                                 @elseif ($field->type->value === 'user')
-                                    <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                                    <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
                                         <option value="">Selecione</option>
                                         @foreach ($sectorUsers as $sectorUser)
                                             <option value="{{ $sectorUser->id }}" @selected((string) $value === (string) $sectorUser->id)>{{ $sectorUser->name }}</option>
                                         @endforeach
                                     </select>
                                 @else
-                                    <input type="text" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+                                    <input type="text" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" data-mask="auto" data-mask-label="{{ $field->name }}" data-mask-placeholder="{{ $field->placeholder }}" class="ui-input w-full" />
                                 @endif
                             @else
                                 <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
@@ -269,114 +205,678 @@
                         </div>
                     @endforelse
                 </div>
-            </section>
+    </section>
 
-            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Historico</h3>
-                    <p class="text-sm text-slate-500">Log de acoes relevantes para auditoria.</p>
+    @if ($canViewTimeTracking)
+        <section
+            wire:key="ticket-time-tracking-{{ $timeTrackingRenderKey }}"
+            class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+            wire:poll.15s
+            x-data="Object.assign(ticketTimeTracking(@js($timeTrackingPayload)), { detailsOpen: false })"
+            x-init="init()"
+        >
+            <div class="ticket-time-shell">
+                <div>
+                    <p class="ticket-panel-kicker">Tempo operacional</p>
+                    <h3 class="ticket-panel-title mt-2">Controle de tempo</h3>
+                    <p class="ticket-panel-copy mt-2">Resumo rapido do tempo gasto neste chamado.</p>
                 </div>
 
-                <div class="space-y-3">
-                    @forelse ($ticket->activityLogs as $log)
-                        <div class="ui-row-interactive rounded-2xl border border-slate-200 px-4 py-3">
-                            <div class="flex items-start justify-between gap-4">
-                                <div>
-                                    <p class="font-medium text-slate-900">{{ $log->description ?: $log->event }}</p>
-                                    <p class="text-xs text-slate-500">{{ $log->causer?->name ?? 'Sistema' }}</p>
+                <div class="ticket-time-actions">
+                    @if ($activeOwnTimeEntry)
+                        <button
+                            type="button"
+                            wire:click="stopTimeEntry({{ $activeOwnTimeEntry->id }})"
+                            wire:loading.attr="disabled"
+                            wire:loading.class="ui-loading"
+                            wire:target="stopTimeEntry"
+                            class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium"
+                        >
+                            Parar cronometro
+                        </button>
+                    @elseif ($canTrackTime)
+                        <button
+                            type="button"
+                            wire:click="startTimeEntry"
+                            wire:loading.attr="disabled"
+                            wire:loading.class="ui-loading"
+                            wire:target="startTimeEntry"
+                            class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium"
+                            @disabled($ticket->isClosed())
+                        >
+                            Iniciar cronometro
+                        </button>
+                    @endif
+
+                    @if ($canTrackTime)
+                        <button
+                            type="button"
+                            wire:click="openTimeEntryForm"
+                            class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium"
+                        >
+                            + Adicionar sessao manualmente
+                        </button>
+                    @endif
+                </div>
+            </div>
+
+            @error('timeTracking')
+                <div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {{ $message }}
+                </div>
+            @enderror
+
+            <div class="ticket-time-summary-card mt-5">
+                <p class="ticket-summary-label">Total do chamado</p>
+                <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <p class="ticket-time-total" x-text="formatDuration(totalSeconds())">{{ $this->formatDuration($ticket->timeEntriesTotalSeconds()) }}</p>
+                        <p class="ticket-summary-helper">{{ $timeEntries->count() }} sessao(oes) registrada(s)</p>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="ticket-time-toggle"
+                        @click="detailsOpen = ! detailsOpen"
+                        :aria-expanded="detailsOpen.toString()"
+                    >
+                        <span x-text="detailsOpen ? 'Ocultar detalhes' : 'Ver detalhes'">Ver detalhes</span>
+                        <span class="ticket-collapsible-icon size-10" :class="{ 'ticket-collapsible-icon-open': detailsOpen }" aria-hidden="true">
+                            <svg viewBox="0 0 20 20" fill="none" class="size-5">
+                                <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div x-cloak x-show="detailsOpen" x-transition.opacity.duration.200ms class="mt-4 space-y-4">
+                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+                    <div class="space-y-4">
+                        <div class="ticket-time-detail-card">
+                            <p class="ticket-summary-label">Sessao atual</p>
+                            @if ($activeOwnTimeEntry)
+                                <p
+                                    class="ticket-time-detail-value"
+                                    x-text="durationLabel(0, @js($activeOwnTimeEntry->started_at?->toIso8601String()))"
+                                >
+                                    {{ $this->formatDuration($activeOwnTimeEntry->elapsedSeconds()) }}
+                                </p>
+                                <p class="ticket-summary-helper">Iniciada em {{ $activeOwnTimeEntry->started_at?->format('d/m/Y H:i') }}</p>
+                            @else
+                                <p class="ticket-time-detail-value">Nenhum cronometro ativo</p>
+                                <p class="ticket-summary-helper">
+                                    {{ $ticket->isClosed() ? 'Chamado encerrado.' : 'Voce pode iniciar um cronometro ou lancar sessoes manuais.' }}
+                                </p>
+                            @endif
+                        </div>
+
+                        <div class="space-y-3">
+                            @forelse ($timeEntries as $timeEntry)
+                                @php
+                                    $sourcePillColor = $timeEntry->source === \App\Enums\TicketTimeEntrySource::MANUAL ? '#0f766e' : '#1d4ed8';
+                                @endphp
+                                <div class="ticket-time-entry-card">
+                                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                        <div class="min-w-0 flex-1 space-y-3">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-sm font-semibold text-slate-900">{{ $timeEntry->user?->name ?? 'Colaborador removido' }}</span>
+                                                <span class="ui-tone-chip" style="--ui-pill-color: {{ $sourcePillColor }}">
+                                                    <span class="ui-tone-dot"></span>
+                                                    {{ $this->sourceLabel($timeEntry->source) }}
+                                                </span>
+                                                @if ($timeEntry->isRunning())
+                                                    <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">Em andamento</span>
+                                                @endif
+                                            </div>
+
+                                            <div class="grid gap-3 text-sm text-slate-600 md:grid-cols-3">
+                                                <div class="ticket-time-meta-card">
+                                                    <p class="ticket-time-meta-label">Data</p>
+                                                    <p class="ticket-time-meta-value">
+                                                        {{ $timeEntry->started_at?->format('d/m/Y') ?? '-' }}
+                                                        @if ($timeEntry->ended_at && $timeEntry->started_at && ! $timeEntry->started_at->isSameDay($timeEntry->ended_at))
+                                                            ate {{ $timeEntry->ended_at->format('d/m/Y') }}
+                                                        @endif
+                                                    </p>
+                                                </div>
+                                                <div class="ticket-time-meta-card">
+                                                    <p class="ticket-time-meta-label">Horario</p>
+                                                    <p class="ticket-time-meta-value">
+                                                        {{ $timeEntry->started_at?->format('H:i') ?? '--:--' }} -
+                                                        {{ $timeEntry->ended_at?->format('H:i') ?? 'Em andamento' }}
+                                                    </p>
+                                                </div>
+                                                <div class="ticket-time-meta-card">
+                                                    <p class="ticket-time-meta-label">Duracao</p>
+                                                    <p
+                                                        class="ticket-time-meta-value"
+                                                        x-text="durationLabel({{ $timeEntry->isRunning() ? 0 : (int) ($timeEntry->duration_seconds ?? 0) }}, @js($timeEntry->isRunning() ? $timeEntry->started_at?->toIso8601String() : null))"
+                                                    >
+                                                        {{ $this->formatDuration($timeEntry->elapsedSeconds()) }}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex flex-wrap gap-2 lg:justify-end">
+                                            @if ($timeEntry->isRunning() && $this->canUpdateTimeEntry($timeEntry))
+                                                <button
+                                                    type="button"
+                                                    wire:click="stopTimeEntry({{ $timeEntry->id }})"
+                                                    wire:loading.attr="disabled"
+                                                    wire:loading.class="ui-loading"
+                                                    wire:target="stopTimeEntry"
+                                                    class="ui-action ui-action-primary rounded-xl px-3 py-2 text-sm"
+                                                >
+                                                    Parar
+                                                </button>
+                                            @endif
+
+                                            @if (! $timeEntry->isRunning() && $this->canUpdateTimeEntry($timeEntry))
+                                                <button
+                                                    type="button"
+                                                    wire:click="editTimeEntry({{ $timeEntry->id }})"
+                                                    class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm"
+                                                >
+                                                    Editar
+                                                </button>
+                                            @endif
+
+                                            @if ($this->canDeleteTimeEntry($timeEntry))
+                                                <button
+                                                    type="button"
+                                                    onclick="if (confirm('Deseja remover esta sessao de tempo?')) { $wire.deleteTimeEntry({{ $timeEntry->id }}) }"
+                                                    class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm"
+                                                >
+                                                    Excluir
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </div>
-                                <span class="text-xs text-slate-500">{{ $log->created_at?->diffForHumans() }}</span>
+                            @empty
+                                <div class="ticket-time-empty-state">
+                                    Ainda nao ha sessoes de tempo registradas neste chamado.
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    <aside class="space-y-4">
+                        <div class="ticket-time-side-card">
+                            <p class="ticket-summary-label">Horas por tecnico</p>
+                            <div class="mt-3 space-y-3">
+                                @forelse ($timeEntriesByUser as $timeEntrySummary)
+                                    @php
+                                        $summaryBaseSeconds = $timeEntrySummary['active_started_at']
+                                            ? max(0, $timeEntrySummary['total_seconds'] - max(0, now()->getTimestamp() - $timeEntrySummary['active_started_at']->getTimestamp()))
+                                            : $timeEntrySummary['total_seconds'];
+                                    @endphp
+                                    <div class="ticket-time-tech-row">
+                                        <div class="min-w-0">
+                                            <p class="truncate text-sm font-semibold text-slate-900">{{ $timeEntrySummary['user']?->name ?? 'Colaborador removido' }}</p>
+                                            <p class="ticket-summary-helper">
+                                                {{ $timeEntrySummary['active_started_at'] ? 'Cronometro em andamento' : 'Sem sessao ativa' }}
+                                            </p>
+                                        </div>
+                                        <span
+                                            class="text-sm font-semibold text-slate-900"
+                                            x-text="durationLabel({{ $summaryBaseSeconds }}, @js($timeEntrySummary['active_started_at']?->toIso8601String()))"
+                                        >
+                                            {{ $this->formatDuration($timeEntrySummary['total_seconds']) }}
+                                        </span>
+                                    </div>
+                                @empty
+                                    <div class="ticket-time-empty-state ticket-time-empty-state-soft">
+                                        Nenhum tecnico registrou tempo ainda.
+                                    </div>
+                                @endforelse
                             </div>
                         </div>
-                    @empty
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                            Ainda nao ha itens de historico registrados.
+
+                        <div class="ticket-time-note">
+                            O solicitante nao visualiza este controle. As sessoes ficam restritas ao time operacional do setor.
                         </div>
-                    @endforelse
+                    </aside>
                 </div>
-            </section>
+            </div>
+        </section>
+    @endif
+
+    <section
+        class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        wire:poll.5s
+        x-data="ticketConversation({{ $ticket->id }})"
+        x-init="boot()"
+    >
+        <div class="ticket-panel-heading ticket-panel-heading-spread">
+            <div>
+                <p class="ticket-panel-kicker">Fluxo de conversa</p>
+                <h3 class="ticket-panel-title">Chat interno</h3>
+                <p class="ticket-panel-copy">Conversa entre solicitante, tecnico e administradores do setor, agora com mais area de leitura e escrita.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
+                <span class="portal-chip">Chamado #{{ $ticket->id }}</span>
+                @if ($latestMessage?->created_at)
+                    <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
+                @endif
+            </div>
         </div>
 
-        <aside class="space-y-6">
-            <section
-                class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-                wire:poll.5s
-                x-data="{
-                    boot() {
-                        if (! window.Echo) {
-                            return;
-                        }
-
-                        window.Echo.private('tickets.{{ $ticket->id }}')
-                            .listen('.ticket.message.created', () => {
-                                $wire.$refresh();
-                            });
-                    }
-                }"
-                x-init="boot()"
-            >
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Chat interno</h3>
-                    <p class="text-sm text-slate-500">Conversa entre solicitante, tecnico e administradores do setor.</p>
+        <div class="ticket-conversation-surface mt-5">
+            <div class="grid gap-3 md:grid-cols-3">
+                <div class="portal-surface-subtle p-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Canal</p>
+                    <p class="mt-2 text-sm font-medium text-slate-900">Conversa interna do chamado</p>
                 </div>
+                <div class="portal-surface-subtle p-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Etapa atual</p>
+                    <p class="mt-2 text-sm font-medium text-slate-900">{{ $ticket->group?->name ?? 'Sem etapa definida' }}</p>
+                </div>
+                <div class="portal-surface-subtle p-4">
+                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Visibilidade</p>
+                    <p class="mt-2 text-sm font-medium text-slate-900">Solicitante, tecnico e admins do setor</p>
+                </div>
+            </div>
 
-                <div class="max-h-[480px] space-y-3 overflow-y-auto rounded-3xl bg-slate-50 p-4">
-                    @forelse ($ticket->messages as $ticketMessage)
-                        <div class="flex {{ $ticketMessage->user_id === auth()->id() ? 'justify-end' : 'justify-start' }}">
-                            <div class="max-w-[85%] rounded-3xl px-4 py-3 {{ $ticketMessage->user_id === auth()->id() ? 'bg-slate-900 text-white' : 'bg-white text-slate-900' }}">
-                                <div class="mb-1 flex items-center justify-between gap-4 text-xs {{ $ticketMessage->user_id === auth()->id() ? 'text-slate-300' : 'text-slate-500' }}">
-                                    <span>{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
-                                    <span>{{ $ticketMessage->created_at?->format('d/m H:i') }}</span>
-                                </div>
-                                <p class="whitespace-pre-line text-sm">{{ $ticketMessage->message }}</p>
+            <div x-ref="messageList" class="ticket-chat-list mt-5">
+                @forelse ($messages as $ticketMessage)
+                    <div class="flex {{ $ticketMessage->user_id === auth()->id() ? 'justify-end' : 'justify-start' }}">
+                        <article class="ticket-chat-bubble {{ $ticketMessage->user_id === auth()->id() ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
+                            <div class="ticket-chat-meta {{ $ticketMessage->user_id === auth()->id() ? 'ticket-chat-meta-self' : '' }}">
+                                <span>{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
+                                <span>{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
                             </div>
-                        </div>
-                    @empty
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
-                            Nenhuma mensagem ainda.
-                        </div>
-                    @endforelse
+                            <p class="mt-3 whitespace-pre-line text-sm leading-6">{{ $ticketMessage->message }}</p>
+                        </article>
+                    </div>
+                @empty
+                    <div class="ticket-chat-empty">
+                        <p class="text-base font-medium text-slate-900">Nenhuma mensagem ainda.</p>
+                        <p class="mt-2 text-sm text-slate-500">Use esse espaco para alinhar contexto, avisar o solicitante e registrar combinados do atendimento.</p>
+                    </div>
+                @endforelse
+            </div>
+
+            <form wire:submit="sendMessage" class="ticket-chat-composer mt-5">
+                <div class="ticket-chat-composer-header">
+                    <div>
+                        <p class="text-sm font-semibold text-slate-900">Responder ao time</p>
+                        <p class="mt-1 text-sm text-slate-500">A mensagem entra no fluxo do chamado e fica visivel para quem participa desta conversa.</p>
+                    </div>
                 </div>
 
-                <form wire:submit="sendMessage" class="mt-4 space-y-3">
-                    <textarea wire:model="message" rows="4" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" placeholder="Escreva uma mensagem para o time"></textarea>
-                    @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+                <textarea wire:model="message" rows="5" class="ui-input ticket-chat-input w-full" placeholder="Escreva uma mensagem clara para o time ou para o solicitante"></textarea>
+                @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                <div class="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-xs text-slate-500">A conversa atualiza em tempo real sempre que uma nova mensagem chega.</p>
 
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
                         wire:loading.class="ui-loading"
                         wire:target="sendMessage"
-                        class="ui-action w-full rounded-2xl bg-sky-500 px-4 py-3 text-sm font-medium text-white hover:bg-sky-400"
+                        class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
                     >
                         <span wire:loading.remove wire:target="sendMessage">Enviar mensagem</span>
                         <span wire:loading wire:target="sendMessage">Enviando...</span>
                     </button>
-                </form>
-            </section>
+                </div>
+            </form>
+        </div>
+    </section>
 
-            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Anexos</h3>
-                    <p class="text-sm text-slate-500">Arquivos enviados na abertura do chamado.</p>
+    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm {{ $attachmentCount === 0 ? 'ticket-attachments-panel-empty' : '' }}">
+        <div class="ticket-panel-heading ticket-panel-heading-spread">
+            <div>
+                <p class="ticket-panel-kicker">Arquivos do chamado</p>
+                <h3 class="ticket-panel-title">Anexos</h3>
+                <p class="ticket-panel-copy">Arquivos enviados na abertura do chamado e salvos no PostgreSQL.</p>
+            </div>
+
+            <span class="portal-chip">{{ $attachmentCount }} {{ $attachmentLabel }}</span>
+        </div>
+
+        <div class="mt-5 space-y-3">
+            @forelse ($ticket->attachments as $attachment)
+                <a href="{{ route('tickets.attachments.show', $attachment) }}" class="ui-row-interactive flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
+                    <div>
+                        <p class="font-medium text-slate-900">{{ $attachment->original_name }}</p>
+                        <p class="text-xs text-slate-500">{{ number_format(($attachment->size ?? 0) / 1024, 1) }} KB</p>
+                    </div>
+                    <span class="text-sm text-sky-700">Baixar</span>
+                </a>
+            @empty
+                <div class="ticket-attachments-empty-state">
+                    <p class="text-sm font-medium text-slate-900">Nenhum anexo neste chamado.</p>
+                    <p class="mt-1 text-sm text-slate-500">Quando houver arquivos vinculados a este atendimento, eles aparecerao aqui de forma centralizada.</p>
+                </div>
+            @endforelse
+        </div>
+    </section>
+
+    <section
+        class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+        x-data="{ historyOpen: false }"
+    >
+        <button type="button" class="ticket-collapsible-toggle" @click="historyOpen = ! historyOpen" :aria-expanded="historyOpen.toString()">
+            <div class="ticket-panel-heading ticket-panel-heading-spread">
+                <div>
+                    <p class="ticket-panel-kicker">Auditoria</p>
+                    <h3 class="ticket-panel-title">Historico</h3>
+                    <p class="ticket-panel-copy">Log de acoes relevantes para auditoria. Fica recolhido por padrao para a tela respirar melhor.</p>
                 </div>
 
-                <div class="space-y-3">
-                    @forelse ($ticket->attachments as $attachment)
-                        <a href="{{ route('tickets.attachments.show', $attachment) }}" class="ui-row-interactive flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
-                            <div>
-                                <p class="font-medium text-slate-900">{{ $attachment->original_name }}</p>
-                                <p class="text-xs text-slate-500">{{ number_format(($attachment->size ?? 0) / 1024, 1) }} KB</p>
-                            </div>
-                            <span class="text-sm text-sky-700">Baixar</span>
-                        </a>
-                    @empty
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                            Nenhum anexo neste chamado.
+                <div class="ticket-collapsible-summary">
+                    <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
+
+                    @if ($latestActivity)
+                        <div class="ticket-collapsible-highlight">
+                            <p class="ticket-collapsible-highlight-title">{{ $latestActivitySummary }}</p>
+                            <p class="ticket-collapsible-highlight-copy">{{ $latestActivity->created_at?->diffForHumans() }}</p>
                         </div>
-                    @endforelse
+                    @endif
+
+                    <span class="ticket-collapsible-icon" :class="{ 'ticket-collapsible-icon-open': historyOpen }" aria-hidden="true">
+                        <svg viewBox="0 0 20 20" fill="none" class="size-5">
+                            <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
+                        </svg>
+                    </span>
                 </div>
-            </section>
-        </aside>
-    </div>
+            </div>
+        </button>
+
+        <div x-cloak x-show="historyOpen" x-transition.opacity.duration.200ms class="mt-5 space-y-3">
+            @forelse ($activityLogs as $log)
+                <div class="ui-row-interactive rounded-2xl border border-slate-200 px-4 py-3">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="font-medium text-slate-900">{{ $log->description ?: $log->event }}</p>
+                            <p class="text-xs text-slate-500">{{ $log->causer?->name ?? 'Sistema' }}</p>
+                        </div>
+                        <span class="text-xs text-slate-500">{{ $log->created_at?->diffForHumans() }}</span>
+                    </div>
+                </div>
+            @empty
+                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                    Ainda nao ha itens de historico registrados.
+                </div>
+            @endforelse
+        </div>
+    </section>
+
+    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="ticket-panel-heading">
+            <p class="ticket-panel-kicker">Encerramento</p>
+            <h3 class="ticket-panel-title">Avaliacao do atendimento</h3>
+            <p class="ticket-panel-copy">Coleta simples de satisfacao apos o encerramento do chamado.</p>
+        </div>
+
+        <div class="mt-5">
+            @if ($ticket->rating)
+                <div class="space-y-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-medium text-slate-900">Nota registrada</p>
+                            <p class="text-xs text-slate-500">
+                                Enviada por {{ $ticket->rating->user?->name ?? 'Solicitante' }}
+                                em {{ $ticket->rating->created_at?->format('d/m/Y H:i') }}
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-3 rounded-full bg-amber-50 px-4 py-2">
+                            <div class="flex items-center gap-1" aria-label="Nota {{ $ticket->rating->rating }} de 5">
+                                @for ($score = 1; $score <= 5; $score++)
+                                    <span class="text-lg leading-none {{ $score <= $ticket->rating->rating ? 'text-amber-400' : 'text-slate-300' }}">&#9733;</span>
+                                @endfor
+                            </div>
+                            <span class="text-sm font-semibold text-amber-700">{{ $ticket->rating->rating }}/5</span>
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl bg-slate-50 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Comentario</p>
+                        <p class="mt-2 whitespace-pre-line text-sm text-slate-700">{{ $ticket->rating->comment ?: 'Nenhum comentario informado.' }}</p>
+                    </div>
+                </div>
+            @elseif ($canRate)
+                <form wire:submit="submitRating" class="space-y-4">
+                    <div>
+                        <p class="mb-3 text-sm font-medium text-slate-900">Como voce avalia este atendimento?</p>
+                        <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                            @for ($score = 1; $score <= 5; $score++)
+                                <label
+                                    class="group flex cursor-pointer items-center"
+                                    title="{{ $score }} de 5"
+                                    aria-label="{{ $score }} de 5"
+                                >
+                                    <input type="radio" wire:model.live="ratingValue" value="{{ $score }}" class="sr-only" />
+                                    <span class="text-3xl leading-none transition {{ $ratingValue !== null && $score <= $ratingValue ? 'text-amber-400' : 'text-slate-300 group-hover:text-amber-300' }}">&#9733;</span>
+                                </label>
+                            @endfor
+
+                            <span class="ml-2 text-sm font-medium text-slate-600">
+                                {{ $ratingValue ? "{$ratingValue}/5" : 'Selecione uma nota' }}
+                            </span>
+                        </div>
+                        @error('ratingValue') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    </div>
+
+                    <label class="block text-sm text-slate-600">
+                        <span class="mb-2 block font-medium">Comentario opcional</span>
+                        <textarea wire:model="ratingComment" rows="4" class="ui-input w-full" placeholder="Conte como foi o atendimento, se quiser."></textarea>
+                        @error('ratingComment') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    </label>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <p class="text-xs text-slate-500">A avaliacao nao podera ser editada depois de enviada.</p>
+                        <button
+                            type="submit"
+                            wire:loading.attr="disabled"
+                            wire:loading.class="ui-loading"
+                            wire:target="submitRating"
+                            class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium"
+                        >
+                            <span wire:loading.remove wire:target="submitRating">Enviar avaliacao</span>
+                            <span wire:loading wire:target="submitRating">Enviando...</span>
+                        </button>
+                    </div>
+                </form>
+            @elseif ($ticket->isClosed())
+                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                    Ainda nao ha avaliacao registrada para este chamado.
+                </div>
+            @else
+                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                    A avaliacao sera liberada para o solicitante quando o chamado for encerrado.
+                </div>
+            @endif
+        </div>
+    </section>
+
+    @if ($canViewTimeTracking && $showTimeEntryForm)
+        <div class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
+            <div class="ui-panel w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">
+                            {{ $editingTimeEntryId ? 'Editar sessao de tempo' : 'Adicionar sessao manualmente' }}
+                        </h3>
+                        <p class="mt-1 text-sm text-slate-500">Informe o intervalo em que voce trabalhou neste chamado.</p>
+                    </div>
+
+                    <button
+                        type="button"
+                        wire:click="cancelTimeEntryForm"
+                        class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm"
+                    >
+                        Fechar
+                    </button>
+                </div>
+
+                <form wire:submit="saveTimeEntry" class="mt-6 space-y-4">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Inicio</span>
+                            <input type="datetime-local" wire:model="timeEntryForm.started_at" class="ui-input w-full" />
+                            @error('timeEntryForm.started_at') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Fim</span>
+                            <input type="datetime-local" wire:model="timeEntryForm.ended_at" class="ui-input w-full" />
+                            @error('timeEntryForm.ended_at') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <p class="text-xs text-slate-500">Sessoes manuais aceitam intervalos atravessando a meia-noite, desde que o fim seja posterior ao inicio.</p>
+
+                        <div class="flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                wire:click="cancelTimeEntryForm"
+                                class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                type="submit"
+                                wire:loading.attr="disabled"
+                                wire:loading.class="ui-loading"
+                                wire:target="saveTimeEntry"
+                                class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium"
+                            >
+                                {{ $editingTimeEntryId ? 'Salvar alteracoes' : 'Registrar sessao' }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>
+
+@push('scripts')
+    <script>
+        if (! window.ticketConversation) {
+            window.ticketConversation = function (ticketId) {
+                return {
+                    started: false,
+                    livewireId: null,
+
+                    boot() {
+                        if (this.started) {
+                            this.scrollToLatest();
+                            return;
+                        }
+
+                        this.started = true;
+                        this.livewireId = this.$root.closest('[wire\\:id]')?.getAttribute('wire:id') ?? null;
+                        this.scrollToLatest();
+
+                        if (! window.Echo) {
+                            return;
+                        }
+
+                        window.Echo.private(`tickets.${ticketId}`)
+                            .listen('.ticket.message.created', () => {
+                                this.refreshComponent();
+                                window.setTimeout(() => this.scrollToLatest(), 80);
+                            });
+                    },
+
+                    refreshComponent() {
+                        if (! this.livewireId || ! window.Livewire) {
+                            return;
+                        }
+
+                        window.Livewire.find(this.livewireId)?.$refresh();
+                    },
+
+                    scrollToLatest() {
+                        this.$nextTick(() => {
+                            const container = this.$refs.messageList;
+
+                            if (! container) {
+                                return;
+                            }
+
+                            container.scrollTop = container.scrollHeight;
+                        });
+                    },
+                };
+            };
+        }
+
+        if (! window.ticketTimeTracking) {
+            window.ticketTimeTracking = function (config) {
+                return {
+                    nowMs: Date.now(),
+                    ticketBaseSeconds: Number(config.ticketBaseSeconds ?? 0),
+                    ticketActiveStartedAts: Array.isArray(config.ticketActiveStartedAts) ? config.ticketActiveStartedAts : [],
+                    intervalId: null,
+
+                    init() {
+                        if (this.intervalId) {
+                            return;
+                        }
+
+                        this.nowMs = Date.now();
+                        this.intervalId = window.setInterval(() => {
+                            this.nowMs = Date.now();
+                        }, 1000);
+                    },
+
+                    destroy() {
+                        if (! this.intervalId) {
+                            return;
+                        }
+
+                        window.clearInterval(this.intervalId);
+                        this.intervalId = null;
+                    },
+
+                    secondsSince(startedAt) {
+                        if (! startedAt) {
+                            return 0;
+                        }
+
+                        const startedAtMs = Date.parse(startedAt);
+
+                        if (Number.isNaN(startedAtMs)) {
+                            return 0;
+                        }
+
+                        return Math.max(0, Math.floor((this.nowMs - startedAtMs) / 1000));
+                    },
+
+                    totalSeconds() {
+                        return this.ticketBaseSeconds + this.ticketActiveStartedAts.reduce((sum, startedAt) => {
+                            return sum + this.secondsSince(startedAt);
+                        }, 0);
+                    },
+
+                    durationLabel(baseSeconds, activeStartedAt) {
+                        return this.formatDuration(Number(baseSeconds || 0) + this.secondsSince(activeStartedAt));
+                    },
+
+                    formatDuration(totalSeconds) {
+                        const normalizedSeconds = Math.max(0, Number(totalSeconds || 0));
+                        const hours = Math.floor(normalizedSeconds / 3600);
+                        const minutes = Math.floor((normalizedSeconds % 3600) / 60);
+                        const seconds = normalizedSeconds % 60;
+
+                        return [hours, minutes, seconds]
+                            .map((part) => String(part).padStart(2, '0'))
+                            .join(':');
+                    },
+                };
+            };
+        }
+    </script>
+@endpush

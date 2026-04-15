@@ -3,9 +3,11 @@
 namespace App\Modules\Tickets\Livewire;
 
 use App\Enums\TicketPriority;
+use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
+use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -23,10 +25,23 @@ class ShowPage extends Component
 
     public string $ratingComment = '';
 
+    public bool $showTimeEntryForm = false;
+
+    public ?int $editingTimeEntryId = null;
+
+    /**
+     * @var array{started_at:string,ended_at:string}
+     */
+    public array $timeEntryForm = [
+        'started_at' => '',
+        'ended_at' => '',
+    ];
+
     public function mount(Ticket $ticket): void
     {
         $this->authorize('view', $ticket);
         $this->ticketId = $ticket->id;
+        $this->timeEntryForm = $this->defaultTimeEntryForm();
     }
 
     public function updateFixedField(TicketWorkflowService $workflowService, string $field, mixed $value): void
@@ -85,11 +100,122 @@ class ShowPage extends Component
         session()->flash('status', 'Avaliacao registrada com sucesso.');
     }
 
+    public function startTimeEntry(TicketWorkflowService $workflowService): void
+    {
+        $this->resetValidation('timeTracking');
+
+        $ticket = $this->ticket();
+        $this->authorize('trackTime', $ticket);
+
+        $workflowService->startTimeEntry(auth()->user(), $ticket);
+
+        session()->flash('status', 'Cronometro iniciado com sucesso.');
+    }
+
+    public function stopTimeEntry(TicketWorkflowService $workflowService, int $timeEntryId): void
+    {
+        $this->resetValidation('timeTracking');
+
+        $timeEntry = $this->timeEntry($timeEntryId);
+        $this->authorize('update', $timeEntry);
+
+        $workflowService->stopTimeEntry(auth()->user(), $timeEntry);
+
+        session()->flash('status', 'Cronometro encerrado com sucesso.');
+    }
+
+    public function openTimeEntryForm(): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('trackTime', $ticket);
+
+        $this->resetValidation();
+        $this->editingTimeEntryId = null;
+        $this->timeEntryForm = $this->defaultTimeEntryForm();
+        $this->showTimeEntryForm = true;
+    }
+
+    public function editTimeEntry(int $timeEntryId): void
+    {
+        $timeEntry = $this->timeEntry($timeEntryId);
+        $this->authorize('update', $timeEntry);
+
+        $this->resetValidation();
+        $this->editingTimeEntryId = $timeEntry->id;
+        $this->timeEntryForm = [
+            'started_at' => $this->toDateTimeLocalValue($timeEntry->started_at),
+            'ended_at' => $this->toDateTimeLocalValue($timeEntry->ended_at),
+        ];
+        $this->showTimeEntryForm = true;
+    }
+
+    public function cancelTimeEntryForm(): void
+    {
+        $this->resetValidation();
+        $this->showTimeEntryForm = false;
+        $this->editingTimeEntryId = null;
+        $this->timeEntryForm = $this->defaultTimeEntryForm();
+    }
+
+    public function saveTimeEntry(TicketWorkflowService $workflowService): void
+    {
+        $validated = $this->validate([
+            'timeEntryForm.started_at' => ['required', 'date'],
+            'timeEntryForm.ended_at' => ['required', 'date', 'after:timeEntryForm.started_at'],
+        ], [
+            'timeEntryForm.started_at.required' => 'Informe o inicio da sessao.',
+            'timeEntryForm.started_at.date' => 'Informe um horario inicial valido.',
+            'timeEntryForm.ended_at.required' => 'Informe o fim da sessao.',
+            'timeEntryForm.ended_at.date' => 'Informe um horario final valido.',
+            'timeEntryForm.ended_at.after' => 'O horario final precisa ser maior que o horario inicial.',
+        ]);
+
+        if ($this->editingTimeEntryId) {
+            $timeEntry = $this->timeEntry($this->editingTimeEntryId);
+            $this->authorize('update', $timeEntry);
+            $workflowService->updateTimeEntry(auth()->user(), $timeEntry, $validated['timeEntryForm']);
+
+            session()->flash('status', 'Sessao de tempo atualizada com sucesso.');
+        } else {
+            $ticket = $this->ticket();
+            $this->authorize('trackTime', $ticket);
+            $workflowService->createManualTimeEntry(auth()->user(), $ticket, $validated['timeEntryForm']);
+
+            session()->flash('status', 'Sessao manual registrada com sucesso.');
+        }
+
+        $this->cancelTimeEntryForm();
+    }
+
+    public function deleteTimeEntry(TicketWorkflowService $workflowService, int $timeEntryId): void
+    {
+        $timeEntry = $this->timeEntry($timeEntryId);
+        $this->authorize('delete', $timeEntry);
+
+        $workflowService->deleteTimeEntry(auth()->user(), $timeEntry);
+
+        if ($this->editingTimeEntryId === $timeEntryId) {
+            $this->cancelTimeEntryForm();
+        }
+
+        session()->flash('status', 'Sessao de tempo removida com sucesso.');
+    }
+
     public function render(): View
     {
         $ticket = $this->ticket();
         $board = $ticket->board()->with(['groups', 'fields.options'])->first();
         $canRate = auth()->user()->can('rate', $ticket);
+        $canViewTimeTracking = auth()->user()->can('viewTimeTracking', $ticket);
+        $canTrackTime = auth()->user()->can('trackTime', $ticket);
+        $activeOwnTimeEntry = $canViewTimeTracking ? $ticket->activeTimeEntryForUser(auth()->user()) : null;
+        $timeEntriesByUser = $canViewTimeTracking ? $ticket->timeEntriesTotalByUser() : collect();
+        $timeTrackingPayload = $canViewTimeTracking
+            ? $this->timeTrackingPayload($ticket)
+            : [];
+        $timeTrackingRenderKey = $canViewTimeTracking
+            ? $this->timeTrackingRenderKey($ticket)
+            : null;
 
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
@@ -108,15 +234,53 @@ class ShowPage extends Component
                 ->get(),
             'priorities' => TicketPriority::cases(),
             'canRate' => $canRate,
+            'canViewTimeTracking' => $canViewTimeTracking,
+            'canTrackTime' => $canTrackTime,
+            'activeOwnTimeEntry' => $activeOwnTimeEntry,
+            'timeEntries' => $canViewTimeTracking ? $ticket->timeEntries : collect(),
+            'timeEntriesByUser' => $timeEntriesByUser,
+            'timeTrackingPayload' => $timeTrackingPayload,
+            'timeTrackingRenderKey' => $timeTrackingRenderKey,
         ])->layout('layouts.portal', [
             'title' => "Chamado #{$ticket->id}",
             'subtitle' => 'Detalhes, historico e conversa do chamado.',
         ]);
     }
 
+    public function formatDuration(int $totalSeconds): string
+    {
+        $hours = intdiv($totalSeconds, 3600);
+        $minutes = intdiv($totalSeconds % 3600, 60);
+        $seconds = $totalSeconds % 60;
+
+        return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+    }
+
+    public function sourceLabel(TicketTimeEntrySource|string|null $source): string
+    {
+        if ($source instanceof TicketTimeEntrySource) {
+            return $source->label();
+        }
+
+        return match ((string) $source) {
+            TicketTimeEntrySource::MANUAL->value => TicketTimeEntrySource::MANUAL->label(),
+            default => TicketTimeEntrySource::TIMER->label(),
+        };
+    }
+
+    public function canUpdateTimeEntry(TicketTimeEntry $timeEntry): bool
+    {
+        return auth()->user()->can('update', $timeEntry);
+    }
+
+    public function canDeleteTimeEntry(TicketTimeEntry $timeEntry): bool
+    {
+        return auth()->user()->can('delete', $timeEntry);
+    }
+
     private function ticket(): Ticket
     {
-        return Ticket::query()
+        $ticket = Ticket::query()
             ->visibleTo(auth()->user())
             ->with([
                 'sector.company',
@@ -131,5 +295,80 @@ class ShowPage extends Component
                 'rating.user',
             ])
             ->findOrFail($this->ticketId);
+
+        if (auth()->user()->can('viewTimeTracking', $ticket)) {
+            $ticket->load([
+                'timeEntries' => fn ($query) => $query->with('user')->latest('started_at'),
+            ]);
+        }
+
+        return $ticket;
+    }
+
+    private function timeEntry(int $timeEntryId): TicketTimeEntry
+    {
+        $timeEntry = TicketTimeEntry::query()
+            ->with(['ticket', 'user'])
+            ->where('ticket_id', $this->ticketId)
+            ->findOrFail($timeEntryId);
+
+        $this->authorize('view', $timeEntry);
+
+        return $timeEntry;
+    }
+
+    /**
+     * @return array{ticketBaseSeconds:int,ticketActiveStartedAts:array<int,string>}
+     */
+    private function timeTrackingPayload(Ticket $ticket): array
+    {
+        $ticketBaseSeconds = $ticket->timeEntries
+            ->reject(fn (TicketTimeEntry $timeEntry) => $timeEntry->isRunning())
+            ->sum(fn (TicketTimeEntry $timeEntry) => (int) $timeEntry->duration_seconds);
+
+        return [
+            'ticketBaseSeconds' => $ticketBaseSeconds,
+            'ticketActiveStartedAts' => $ticket->timeEntries
+                ->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->isRunning())
+                ->map(fn (TicketTimeEntry $timeEntry) => $timeEntry->started_at?->toIso8601String())
+                ->filter()
+                ->values()
+                ->all(),
+        ];
+    }
+
+    private function timeTrackingRenderKey(Ticket $ticket): string
+    {
+        $signature = $ticket->timeEntries
+            ->map(fn (TicketTimeEntry $timeEntry) => [
+                'id' => $timeEntry->id,
+                'started_at' => $timeEntry->started_at?->toIso8601String(),
+                'ended_at' => $timeEntry->ended_at?->toIso8601String(),
+                'duration_seconds' => $timeEntry->duration_seconds,
+                'source' => $timeEntry->source?->value ?? (string) $timeEntry->source,
+            ])
+            ->values()
+            ->all();
+
+        return md5((string) json_encode($signature));
+    }
+
+    /**
+     * @return array{started_at:string,ended_at:string}
+     */
+    private function defaultTimeEntryForm(): array
+    {
+        $endedAt = now()->startOfMinute();
+        $startedAt = $endedAt->subHour();
+
+        return [
+            'started_at' => $this->toDateTimeLocalValue($startedAt),
+            'ended_at' => $this->toDateTimeLocalValue($endedAt),
+        ];
+    }
+
+    private function toDateTimeLocalValue($value): string
+    {
+        return $value?->format('Y-m-d\TH:i') ?? '';
     }
 }

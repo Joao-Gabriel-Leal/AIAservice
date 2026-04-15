@@ -123,7 +123,11 @@ class SettingsPage extends Component
     public function mount(?Sector $sector = null): void
     {
         $this->selectedSectorId = $sector?->id ?? $this->availableSectors()->first()?->id;
-        abort_if(! $this->selectedSectorId, 403);
+
+        if (! $this->selectedSectorId && $this->hasAnyActiveSector()) {
+            abort(403);
+        }
+
         $this->loadBoardMeta();
         $this->resetForms();
     }
@@ -1477,6 +1481,11 @@ class SettingsPage extends Component
         $this->authorize('update', $catalogItem->board);
         abort_unless($catalogItem->ticket_board_id === $this->board()?->id, 404);
         return $catalogItem;
+    }
+
+    private function hasAnyActiveSector(): bool
+    {
+        return Sector::query()->where('is_active', true)->exists();
     }
 
     private function groupImpact(TicketGroup $group): array

@@ -36,9 +36,17 @@ class TicketPolicy
 
     public function rate(User $user, Ticket $ticket): bool
     {
-        return $ticket->requester_id === $user->id
-            && $ticket->isClosed()
-            && ! $ticket->rating()->exists();
+        return $ticket->canBeRatedBy($user);
+    }
+
+    public function viewTimeTracking(User $user, Ticket $ticket): bool
+    {
+        return $user->hasOperationalAccess($ticket->sector_id);
+    }
+
+    public function trackTime(User $user, Ticket $ticket): bool
+    {
+        return $this->viewTimeTracking($user, $ticket);
     }
 
     public function manageBoard(User $user, Ticket $ticket): bool

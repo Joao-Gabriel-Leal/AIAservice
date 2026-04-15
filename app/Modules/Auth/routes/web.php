@@ -6,7 +6,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/dashboard/export', [DashboardController::class, 'export'])->name('dashboard.export');
     Route::get('/notifications', [NotificationsController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/{notification}/open', [NotificationsController::class, 'open'])->name('notifications.open');
+    Route::post('/notifications/read-all', [NotificationsController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
     Route::post('/notifications/{notification}/read', [NotificationsController::class, 'markAsRead'])->name('notifications.mark-read');
 });
