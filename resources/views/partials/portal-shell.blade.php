@@ -43,12 +43,14 @@
                         <p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400/72">Geral</p>
                         <div class="space-y-2">
                             <a href="{{ route('dashboard') }}" class="portal-nav-link {{ request()->routeIs('dashboard') ? 'portal-nav-link-active' : '' }}">Dashboard</a>
-                            <a href="{{ route('search') }}" class="portal-nav-link {{ request()->routeIs('search') ? 'portal-nav-link-active' : '' }}">Busca global</a>
+                            @if ($user->isSuperAdmin())
+                                <a href="{{ route('search') }}" class="portal-nav-link {{ request()->routeIs('search') ? 'portal-nav-link-active' : '' }}">Busca global</a>
+                            @endif
                             <a href="{{ route('tickets.central') }}" class="portal-nav-link {{ request()->routeIs('tickets.central', 'tickets.create') ? 'portal-nav-link-active' : '' }}">Central de formularios</a>
-                            <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Chamados</a>
                             <a href="{{ route('knowledge-base.index') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.index', 'knowledge-base.show') ? 'portal-nav-link-active' : '' }}">Base de conhecimento</a>
                             @if ($user->hasOperationalAccess())
-                                <a href="{{ route('tickets.board') }}" class="portal-nav-link {{ request()->routeIs('tickets.board') ? 'portal-nav-link-active' : '' }}">Quadro</a>
+                                <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.board', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Quadro</a>
+                                <a href="{{ route('licenses.index') }}" class="portal-nav-link {{ request()->routeIs('licenses.*') ? 'portal-nav-link-active' : '' }}">Licencas</a>
                             @endif
                             <a href="{{ route('notifications.index') }}" class="portal-nav-link {{ request()->routeIs('notifications.*') ? 'portal-nav-link-active' : '' }}">
                                 <span class="flex items-center justify-between gap-3">
@@ -100,9 +102,15 @@
                                 Voltar
                             </a>
 
-                            <a href="{{ route('tickets.index') }}" class="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/8 px-4 py-2 text-sm font-medium text-white/92 backdrop-blur-sm transition hover:bg-white/12">
-                                Meus chamados
-                            </a>
+                            @if (auth()->user()?->hasOperationalAccess())
+                                <a href="{{ route('tickets.index') }}" class="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/8 px-4 py-2 text-sm font-medium text-white/92 backdrop-blur-sm transition hover:bg-white/12">
+                                    Quadro
+                                </a>
+                            @else
+                                <a href="{{ route('tickets.central') }}" class="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/8 px-4 py-2 text-sm font-medium text-white/92 backdrop-blur-sm transition hover:bg-white/12">
+                                    Central
+                                </a>
+                            @endif
                         </div>
                     </header>
                 @elseif ($showHeader)

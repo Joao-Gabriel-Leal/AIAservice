@@ -11,8 +11,8 @@ enum SectorAccessLevel: string
     public function label(): string
     {
         return match ($this) {
-            self::SECTOR_ADMIN => 'Admin de setor',
-            self::TECHNICIAN => 'Tecnico',
+            self::SECTOR_ADMIN => 'Gestor',
+            self::TECHNICIAN => 'Operador',
             self::REQUESTER => 'Solicitante',
         };
     }

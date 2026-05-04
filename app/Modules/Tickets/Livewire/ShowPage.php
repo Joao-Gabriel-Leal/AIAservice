@@ -4,6 +4,7 @@ namespace App\Modules\Tickets\Livewire;
 
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Enums\TicketPriority;
+use App\Enums\TicketTimeEntryApprovalStatus;
 use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
 use App\Modules\Tickets\Models\Ticket;
@@ -206,6 +207,26 @@ class ShowPage extends Component
         session()->flash('status', 'Sessao de tempo removida com sucesso.');
     }
 
+    public function approveTimeEntry(TicketWorkflowService $workflowService, int $timeEntryId): void
+    {
+        $timeEntry = $this->timeEntry($timeEntryId);
+        $this->authorize('review', $timeEntry);
+
+        $workflowService->approveTimeEntry(auth()->user(), $timeEntry);
+
+        session()->flash('status', 'Apontamento manual aprovado com sucesso.');
+    }
+
+    public function rejectTimeEntry(TicketWorkflowService $workflowService, int $timeEntryId): void
+    {
+        $timeEntry = $this->timeEntry($timeEntryId);
+        $this->authorize('review', $timeEntry);
+
+        $workflowService->rejectTimeEntry(auth()->user(), $timeEntry);
+
+        session()->flash('status', 'Apontamento manual rejeitado.');
+    }
+
     public function render(): View
     {
         $ticket = $this->ticket();
@@ -215,6 +236,9 @@ class ShowPage extends Component
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
         $activeOwnTimeEntry = $canViewTimeTracking ? $ticket->activeTimeEntryForUser(auth()->user()) : null;
         $timeEntriesByUser = $canViewTimeTracking ? $ticket->timeEntriesTotalByUser() : collect();
+        $pendingTimeEntriesCount = $canViewTimeTracking
+            ? $ticket->timeEntries->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->isPendingApproval())->count()
+            : 0;
         $timeTrackingPayload = $canViewTimeTracking
             ? $this->timeTrackingPayload($ticket)
             : [];
@@ -264,6 +288,7 @@ class ShowPage extends Component
             'activeOwnTimeEntry' => $activeOwnTimeEntry,
             'timeEntries' => $canViewTimeTracking ? $ticket->timeEntries : collect(),
             'timeEntriesByUser' => $timeEntriesByUser,
+            'pendingTimeEntriesCount' => $pendingTimeEntriesCount,
             'timeTrackingPayload' => $timeTrackingPayload,
             'timeTrackingRenderKey' => $timeTrackingRenderKey,
             'canCreateKnowledgeArticle' => $canCreateKnowledgeArticle,
@@ -305,6 +330,16 @@ class ShowPage extends Component
     public function canDeleteTimeEntry(TicketTimeEntry $timeEntry): bool
     {
         return auth()->user()->can('delete', $timeEntry);
+    }
+
+    public function canReviewTimeEntry(TicketTimeEntry $timeEntry): bool
+    {
+        return auth()->user()->can('review', $timeEntry);
+    }
+
+    public function approvalStatusLabel(TicketTimeEntry $timeEntry): string
+    {
+        return ($timeEntry->approval_status ?? TicketTimeEntryApprovalStatus::APPROVED)->label();
     }
 
     private function ticket(): Ticket
@@ -354,12 +389,14 @@ class ShowPage extends Component
     private function timeTrackingPayload(Ticket $ticket): array
     {
         $ticketBaseSeconds = $ticket->timeEntries
+            ->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->countsTowardTotals())
             ->reject(fn (TicketTimeEntry $timeEntry) => $timeEntry->isRunning())
             ->sum(fn (TicketTimeEntry $timeEntry) => (int) $timeEntry->duration_seconds);
 
         return [
             'ticketBaseSeconds' => $ticketBaseSeconds,
             'ticketActiveStartedAts' => $ticket->timeEntries
+                ->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->countsTowardTotals())
                 ->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->isRunning())
                 ->map(fn (TicketTimeEntry $timeEntry) => $timeEntry->started_at?->toIso8601String())
                 ->filter()
@@ -377,6 +414,7 @@ class ShowPage extends Component
                 'ended_at' => $timeEntry->ended_at?->toIso8601String(),
                 'duration_seconds' => $timeEntry->duration_seconds,
                 'source' => $timeEntry->source?->value ?? (string) $timeEntry->source,
+                'approval_status' => $timeEntry->approval_status?->value ?? TicketTimeEntryApprovalStatus::APPROVED->value,
             ])
             ->values()
             ->all();

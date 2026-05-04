@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Services;
 
 use App\Enums\TicketAutomationTrigger;
+use App\Enums\TicketTimeEntryApprovalStatus;
 use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
 use App\Modules\Shared\Services\ActivityLogService;
@@ -17,11 +18,14 @@ use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Notifications\TicketCreatedNotification;
+use App\Modules\Tickets\Notifications\TicketManualTimeEntryPendingApprovalNotification;
 use App\Modules\Tickets\Notifications\TicketMessageNotification;
 use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
+use App\Modules\Tickets\Notifications\TicketTimeEntryReviewedNotification;
 use App\Modules\Tickets\Notifications\TicketUpdateNotification;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -164,6 +168,7 @@ class TicketWorkflowService
             $createdTimeEntry = $ticket->timeEntries()->create([
                 'user_id' => $actor->id,
                 'source' => TicketTimeEntrySource::TIMER,
+                'approval_status' => TicketTimeEntryApprovalStatus::APPROVED,
                 'started_at' => now(),
                 'ended_at' => null,
                 'duration_seconds' => null,
@@ -212,6 +217,7 @@ class TicketWorkflowService
             $createdTimeEntry = $ticket->timeEntries()->create([
                 'user_id' => $actor->id,
                 'source' => TicketTimeEntrySource::MANUAL,
+                'approval_status' => TicketTimeEntryApprovalStatus::PENDING,
                 'started_at' => $timestamps['started_at'],
                 'ended_at' => $timestamps['ended_at'],
                 'duration_seconds' => $timestamps['duration_seconds'],
@@ -232,7 +238,10 @@ class TicketWorkflowService
             return $createdTimeEntry;
         });
 
-        return $timeEntry->load('user');
+        $timeEntry = $timeEntry->load('user', 'ticket');
+        $this->notifyPendingManualTimeEntry($timeEntry, [$actor->id]);
+
+        return $timeEntry;
     }
 
     public function updateTimeEntry(User $actor, TicketTimeEntry $timeEntry, array $data): TicketTimeEntry
@@ -241,16 +250,29 @@ class TicketWorkflowService
 
         $timestamps = $this->normalizeTimeEntryTimestamps($data);
         $ticket = $timeEntry->ticket;
+        $originalApprovalStatus = $timeEntry->approval_status;
+        $shouldReturnToPending = $timeEntry->source === TicketTimeEntrySource::MANUAL
+            && in_array($originalApprovalStatus, [
+                TicketTimeEntryApprovalStatus::PENDING,
+                TicketTimeEntryApprovalStatus::REJECTED,
+            ], true);
 
-        DB::transaction(function () use ($actor, $timeEntry, $timestamps, $ticket) {
+        DB::transaction(function () use ($actor, $timeEntry, $timestamps, $ticket, $shouldReturnToPending) {
             $originalStartedAt = $timeEntry->started_at?->toIso8601String();
             $originalEndedAt = $timeEntry->ended_at?->toIso8601String();
             $originalDuration = $timeEntry->duration_seconds;
+            $originalApprovalStatus = $timeEntry->approval_status?->value;
 
             $timeEntry->forceFill([
                 'started_at' => $timestamps['started_at'],
                 'ended_at' => $timestamps['ended_at'],
                 'duration_seconds' => $timestamps['duration_seconds'],
+                'approval_status' => $shouldReturnToPending
+                    ? TicketTimeEntryApprovalStatus::PENDING
+                    : $timeEntry->approval_status,
+                'reviewed_by_id' => $shouldReturnToPending ? null : $timeEntry->reviewed_by_id,
+                'reviewed_at' => $shouldReturnToPending ? null : $timeEntry->reviewed_at,
+                'review_note' => $shouldReturnToPending ? null : $timeEntry->review_note,
             ])->save();
 
             $ticket->updateQuietly(['last_activity_at' => now()]);
@@ -268,12 +290,48 @@ class TicketWorkflowService
                     'started_at' => $timeEntry->started_at?->toIso8601String(),
                     'ended_at' => $timeEntry->ended_at?->toIso8601String(),
                     'duration_seconds' => $timeEntry->duration_seconds,
+                    'approval_status' => $timeEntry->approval_status?->value,
                 ],
+                'before_approval_status' => $originalApprovalStatus,
                 'sector_id' => $ticket->sector_id,
             ]);
         });
 
-        return $timeEntry->fresh(['user', 'ticket']);
+        $timeEntry = $timeEntry->fresh(['user', 'ticket']);
+
+        if ($shouldReturnToPending && $originalApprovalStatus === TicketTimeEntryApprovalStatus::REJECTED) {
+            $this->notifyPendingManualTimeEntry($timeEntry, [$actor->id]);
+        }
+
+        return $timeEntry;
+    }
+
+    public function approveTimeEntry(User $actor, TicketTimeEntry $timeEntry, ?string $note = null): TicketTimeEntry
+    {
+        Gate::forUser($actor)->authorize('review', $timeEntry);
+
+        return $this->reviewTimeEntry(
+            $actor,
+            $timeEntry,
+            TicketTimeEntryApprovalStatus::APPROVED,
+            'ticket.time_entry.approved',
+            'Apontamento manual aprovado.',
+            $note,
+        );
+    }
+
+    public function rejectTimeEntry(User $actor, TicketTimeEntry $timeEntry, ?string $note = null): TicketTimeEntry
+    {
+        Gate::forUser($actor)->authorize('review', $timeEntry);
+
+        return $this->reviewTimeEntry(
+            $actor,
+            $timeEntry,
+            TicketTimeEntryApprovalStatus::REJECTED,
+            'ticket.time_entry.rejected',
+            'Apontamento manual rejeitado.',
+            $note,
+        );
     }
 
     public function deleteTimeEntry(User $actor, TicketTimeEntry $timeEntry): void
@@ -476,6 +534,43 @@ class TicketWorkflowService
         Notification::send($recipients, $notification);
     }
 
+    private function notifyPendingManualTimeEntry(TicketTimeEntry $timeEntry, array $exceptUserIds = []): void
+    {
+        $ticket = $timeEntry->ticket ?? $timeEntry->ticket()->first();
+
+        if (! $ticket) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($ticket) {
+                $query
+                    ->where('global_role', 'super_admin')
+                    ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin']));
+            })
+            ->whereNotIn('id', $exceptUserIds)
+            ->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        Notification::send($recipients, new TicketManualTimeEntryPendingApprovalNotification($ticket));
+    }
+
+    private function notifyTimeEntryReviewed(TicketTimeEntry $timeEntry, TicketTimeEntryApprovalStatus $status, array $exceptUserIds = []): void
+    {
+        $recipient = $timeEntry->user;
+        $ticket = $timeEntry->ticket;
+
+        if (! $recipient || ! $ticket || in_array($recipient->id, $exceptUserIds, true)) {
+            return;
+        }
+
+        $recipient->notify(new TicketTimeEntryReviewedNotification($ticket, strtolower($status->label())));
+    }
+
     private function notifyRequesterToRate(Ticket $ticket): void
     {
         if (! $ticket->requester) {
@@ -644,6 +739,48 @@ class TicketWorkflowService
             'ended_at' => $endedAt,
             'duration_seconds' => $this->secondsBetween($startedAt, $endedAt),
         ];
+    }
+
+    private function reviewTimeEntry(
+        User $actor,
+        TicketTimeEntry $timeEntry,
+        TicketTimeEntryApprovalStatus $status,
+        string $event,
+        string $description,
+        ?string $note = null,
+    ): TicketTimeEntry {
+        if ($timeEntry->source !== TicketTimeEntrySource::MANUAL || $timeEntry->isRunning()) {
+            throw ValidationException::withMessages([
+                'timeTracking' => 'Somente apontamentos manuais encerrados podem ser revisados.',
+            ]);
+        }
+
+        DB::transaction(function () use ($actor, $timeEntry, $status, $event, $description, $note) {
+            $ticket = $timeEntry->ticket()->firstOrFail();
+
+            $timeEntry->forceFill([
+                'approval_status' => $status,
+                'reviewed_by_id' => $actor->id,
+                'reviewed_at' => now(),
+                'review_note' => filled($note) ? trim((string) $note) : null,
+            ])->save();
+
+            $ticket->updateQuietly(['last_activity_at' => now()]);
+
+            $this->activityLogService->log($actor, $ticket, $event, $description, [
+                'time_entry_id' => $timeEntry->id,
+                'user_id' => $timeEntry->user_id,
+                'approval_status' => $timeEntry->approval_status?->value,
+                'reviewed_by_id' => $actor->id,
+                'review_note' => $timeEntry->review_note,
+                'sector_id' => $ticket->sector_id,
+            ]);
+        });
+
+        $timeEntry = $timeEntry->fresh(['user', 'ticket']);
+        $this->notifyTimeEntryReviewed($timeEntry, $status, [$actor->id]);
+
+        return $timeEntry;
     }
 
     private function closeOpenTimeEntries(User $actor, Ticket $ticket, CarbonInterface $endedAt): void

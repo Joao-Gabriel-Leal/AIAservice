@@ -6,13 +6,13 @@ use App\Enums\TicketFieldType;
 use App\Enums\KnowledgeBaseArticleStatus;
 use App\Enums\KnowledgeBaseVisibility;
 use App\Enums\TicketPriority;
+use App\Enums\TicketTimeEntryApprovalStatus;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
-use App\Modules\Tickets\Livewire\BoardPage;
 use App\Modules\Tickets\Livewire\CreatePage;
 use App\Modules\Tickets\Livewire\IndexPage;
 use App\Modules\Tickets\Livewire\ShowPage;
@@ -376,6 +376,51 @@ class TicketFlowTest extends TestCase
             ->assertDontSee('Impressora sem toner');
     }
 
+    public function test_operator_uses_list_stages_and_kanban_modes_from_unified_board(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Validar tres modos',
+            'description' => 'Chamado aparece nas etapas e no kanban.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($operator)
+            ->test(IndexPage::class)
+            ->assertSee('Lista')
+            ->assertSee('Etapas')
+            ->assertSee('Kanban')
+            ->assertSee('Validar tres modos')
+            ->set('selectedSectorId', $sector->id)
+            ->call('setViewMode', 'stages')
+            ->assertSet('viewMode', 'stages')
+            ->assertSee($group->name)
+            ->assertSee('Validar tres modos')
+            ->call('setViewMode', 'kanban')
+            ->assertSet('viewMode', 'kanban')
+            ->assertSee('ui-kanban-grid', false)
+            ->assertSee('data-kanban-column', false)
+            ->assertSee('Arraste o card para mover de coluna');
+    }
+
     public function test_collaborator_without_sector_access_can_open_ticket_for_any_active_sector(): void
     {
         ['sector' => $sector, 'catalog' => $catalog] = $this->ticketContext();
@@ -483,7 +528,8 @@ class TicketFlowTest extends TestCase
         ]);
 
         Livewire::actingAs($technician)
-            ->test(BoardPage::class)
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
             ->call('updateFixedField', $ticket->id, 'priority', TicketPriority::URGENT->value);
 
         $this->assertDatabaseHas('tickets', [
@@ -623,7 +669,9 @@ class TicketFlowTest extends TestCase
         }
 
         Livewire::actingAs($technician)
-            ->test(BoardPage::class, ['sector' => $sector])
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->call('setViewMode', 'stages')
             ->assertSeeInOrder(['Erro sisanadem', 'Erro RD'])
             ->call('updateDynamicField', $olderTicket->id, $systemField->id, 'SIS')
             ->assertSeeInOrder(['Erro sisanadem', 'Erro RD']);
@@ -675,7 +723,9 @@ class TicketFlowTest extends TestCase
         ]);
 
         Livewire::actingAs($technician)
-            ->test(BoardPage::class, ['sector' => $sector])
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->call('setViewMode', 'kanban')
             ->call('moveTicketToGroup', $ticket->id, $closedGroup->id);
 
         $ticket->refresh();
@@ -713,7 +763,9 @@ class TicketFlowTest extends TestCase
         ]);
 
         Livewire::actingAs($technician)
-            ->test(BoardPage::class, ['sector' => $sector])
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->call('setViewMode', 'kanban')
             ->call('moveTicketToGroup', $ticket->id, (string) $closedGroup->id);
 
         $ticket->refresh();
@@ -751,7 +803,9 @@ class TicketFlowTest extends TestCase
         ]);
 
         Livewire::actingAs($technician)
-            ->test(BoardPage::class, ['sector' => $sector])
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->call('setViewMode', 'kanban')
             ->call('moveTicketToGroup', $ticket->id, null);
 
         $ticket->refresh();
@@ -789,7 +843,8 @@ class TicketFlowTest extends TestCase
         ]);
 
         Livewire::actingAs($technician)
-            ->test(BoardPage::class, ['sector' => $sector])
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
             ->call('setViewMode', 'kanban')
             ->assertSet('viewMode', 'kanban')
             ->assertSee('Sem etapa')
@@ -825,7 +880,8 @@ class TicketFlowTest extends TestCase
         ]);
 
         $component = Livewire::actingAs($technician)
-            ->test(BoardPage::class, ['sector' => $sector])
+            ->test(IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
             ->call('setViewMode', 'kanban');
 
         $this->assertStringNotContainsString('Number(', $component->html());
@@ -1154,6 +1210,11 @@ class TicketFlowTest extends TestCase
             'sector_id' => $sector->id,
         ]);
 
+        $manager = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+        ]);
+
         $ticket = Ticket::query()->create([
             'sector_id' => $sector->id,
             'ticket_board_id' => $board->id,
@@ -1181,12 +1242,53 @@ class TicketFlowTest extends TestCase
             ->call('saveTimeEntry')
             ->assertHasNoErrors();
 
+        $firstEntry = TicketTimeEntry::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('user_id', $firstTechnician->id)
+            ->firstOrFail();
+
+        $secondEntry = TicketTimeEntry::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('user_id', $secondTechnician->id)
+            ->firstOrFail();
+
+        $this->assertSame(TicketTimeEntryApprovalStatus::PENDING, $firstEntry->approval_status);
+        $this->assertSame(TicketTimeEntryApprovalStatus::PENDING, $secondEntry->approval_status);
+
+        $ticket = $ticket->fresh(['timeEntries.user']);
+        $timeSummary = $ticket->timeEntriesTotalByUser()->keyBy('user_id');
+
+        $this->assertSame(0, $ticket->timeEntriesTotalSeconds());
+        $this->assertCount(0, $timeSummary);
+
+        Livewire::actingAs($firstTechnician)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->call('approveTimeEntry', $secondEntry->id)
+            ->assertForbidden();
+
+        Livewire::actingAs($manager)
+            ->test(ShowPage::class, ['ticket' => $ticket->fresh()])
+            ->call('approveTimeEntry', $firstEntry->id)
+            ->assertHasNoErrors()
+            ->call('approveTimeEntry', $secondEntry->id)
+            ->assertHasNoErrors();
+
         $ticket = $ticket->fresh(['timeEntries.user']);
         $timeSummary = $ticket->timeEntriesTotalByUser()->keyBy('user_id');
 
         $this->assertSame(12600, $ticket->timeEntriesTotalSeconds());
         $this->assertSame(5400, $timeSummary[$firstTechnician->id]['total_seconds']);
         $this->assertSame(7200, $timeSummary[$secondTechnician->id]['total_seconds']);
+        $this->assertDatabaseHas('ticket_time_entries', [
+            'id' => $firstEntry->id,
+            'approval_status' => TicketTimeEntryApprovalStatus::APPROVED->value,
+            'reviewed_by_id' => $manager->id,
+        ]);
+        $this->assertDatabaseHas('ticket_time_entries', [
+            'id' => $secondEntry->id,
+            'approval_status' => TicketTimeEntryApprovalStatus::APPROVED->value,
+            'reviewed_by_id' => $manager->id,
+        ]);
 
         Livewire::actingAs($firstTechnician)
             ->test(ShowPage::class, ['ticket' => $ticket])

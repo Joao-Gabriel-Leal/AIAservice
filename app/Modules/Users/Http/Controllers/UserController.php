@@ -117,6 +117,7 @@ class UserController extends Controller
             'userModel' => $user->loadMissing('sectorAccesses.sector'),
             'globalRoles' => $this->availableGlobalRoles(),
             'accessLevels' => collect(SectorAccessLevel::cases())
+                ->reject(fn (SectorAccessLevel $level) => $level === SectorAccessLevel::REQUESTER)
                 ->mapWithKeys(fn (SectorAccessLevel $level) => [$level->value => $level->label()])
                 ->all(),
             'sectors' => $this->availableSectors(),

@@ -10,6 +10,91 @@
         </div>
     @endif
 
+    @if (! empty($loginHints))
+        <div
+            class="auth-login-hints"
+            x-data="{
+                copiedKey: null,
+                feedback: '',
+                timer: null,
+                copy(value, key, label) {
+                    if (! navigator.clipboard?.writeText) {
+                        this.feedback = 'Nao foi possivel copiar automaticamente neste navegador.'
+                        return
+                    }
+
+                    navigator.clipboard.writeText(value).then(() => {
+                        this.copiedKey = key
+                        this.feedback = `${label} copiado.`
+                        clearTimeout(this.timer)
+                        this.timer = setTimeout(() => {
+                            this.copiedKey = null
+                            this.feedback = ''
+                        }, 1800)
+                    }).catch(() => {
+                        this.feedback = 'Nao foi possivel copiar automaticamente neste navegador.'
+                    })
+                },
+            }"
+        >
+            <div class="auth-login-hints-header">
+                <p class="auth-login-hints-eyebrow">Acesso rapido temporario</p>
+                <h3 class="auth-login-hints-title">Logins principais para validacao</h3>
+                <p class="auth-login-hints-copy">
+                    Exibido apenas em ambiente local/debug e somente para contas encontradas no banco atual.
+                </p>
+            </div>
+
+            <div class="auth-login-hints-list">
+                @foreach ($loginHints as $loginHint)
+                    <article class="auth-login-hint-item">
+                        <p class="auth-login-hint-label">{{ $loginHint['label'] }}</p>
+
+                        <div class="auth-login-hint-rows">
+                            <div class="auth-login-hint-row">
+                                <span class="auth-login-hint-key">Email</span>
+
+                                <div class="auth-login-hint-value-wrap">
+                                    <code class="auth-login-hint-value">{{ $loginHint['email'] }}</code>
+
+                                    <button
+                                        type="button"
+                                        class="auth-copy-button"
+                                        data-copy-value="{{ $loginHint['email'] }}"
+                                        x-on:click='copy($el.dataset.copyValue, "email-{{ $loop->index }}", "Email")'
+                                        x-bind:aria-label="copiedKey === 'email-{{ $loop->index }}' ? 'Email copiado' : 'Copiar email'"
+                                    >
+                                        <span x-text="copiedKey === 'email-{{ $loop->index }}' ? 'Copiado' : 'Copiar'">Copiar</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="auth-login-hint-row">
+                                <span class="auth-login-hint-key">Senha</span>
+
+                                <div class="auth-login-hint-value-wrap">
+                                    <code class="auth-login-hint-value">{{ $loginHint['password'] }}</code>
+
+                                    <button
+                                        type="button"
+                                        class="auth-copy-button"
+                                        data-copy-value="{{ $loginHint['password'] }}"
+                                        x-on:click='copy($el.dataset.copyValue, "password-{{ $loop->index }}", "Senha")'
+                                        x-bind:aria-label="copiedKey === 'password-{{ $loop->index }}' ? 'Senha copiada' : 'Copiar senha'"
+                                    >
+                                        <span x-text="copiedKey === 'password-{{ $loop->index }}' ? 'Copiado' : 'Copiar'">Copiar</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+
+            <p class="auth-login-hints-feedback" x-text="feedback" x-bind:data-visible="feedback ? 'true' : 'false'" aria-live="polite"></p>
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('login.store') }}" class="auth-form-grid" x-data="{ showPassword: false }">
         @csrf
 

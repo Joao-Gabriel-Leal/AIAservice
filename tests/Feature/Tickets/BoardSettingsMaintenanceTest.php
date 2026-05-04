@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tickets;
 
 use App\Enums\TicketFieldType;
+use App\Enums\TicketFormOpeningAccessLevel;
 use App\Enums\TicketPriority;
 use App\Enums\UserRole;
 use App\Models\User;
@@ -12,6 +13,7 @@ use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Livewire\SettingsPage;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketField;
+use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketStatus;
@@ -336,6 +338,125 @@ class BoardSettingsMaintenanceTest extends TestCase
             ->set("formForm.visibility_conditions.{$field->id}.expected_value", 'x')
             ->call('saveForm')
             ->assertHasErrors(["formForm.visibility_conditions.{$field->id}.parent_field_id"]);
+    }
+
+    public function test_sector_admin_can_edit_existing_form_configuration(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $summaryField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Resumo',
+            'slug' => 'resumo',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 1,
+            'is_required' => false,
+            'show_on_board' => true,
+            'is_active' => true,
+        ]);
+        $impactField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Impacto',
+            'slug' => 'impacto',
+            'type' => TicketFieldType::TEXT,
+            'placeholder' => null,
+            'help_text' => null,
+            'settings' => null,
+            'sort_order' => 2,
+            'is_required' => false,
+            'show_on_board' => true,
+            'is_active' => true,
+        ]);
+
+        $form = TicketForm::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Formulario antigo',
+            'description' => 'Descricao anterior',
+            'opening_access_level' => TicketFormOpeningAccessLevel::PUBLIC,
+            'is_default' => false,
+            'is_active' => true,
+        ]);
+        $form->fields()->sync([
+            $summaryField->id => ['is_required' => false, 'sort_order' => 1],
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('startEditingForm', $form->id)
+            ->assertSet('editingFormId', $form->id)
+            ->assertSee('Editando: Formulario antigo')
+            ->set('formForm.name', 'Formulario revisado')
+            ->set('formForm.description', 'Descricao revisada')
+            ->set('formForm.opening_access_level', TicketFormOpeningAccessLevel::MANAGER->value)
+            ->set('formForm.field_ids', [$summaryField->id, $impactField->id])
+            ->set('formForm.required_field_ids', [$impactField->id])
+            ->set('formForm.is_default', true)
+            ->set('formForm.is_active', false)
+            ->call('saveForm')
+            ->assertHasNoErrors();
+
+        $form->refresh();
+
+        $this->assertSame('Formulario revisado', $form->name);
+        $this->assertSame('Descricao revisada', $form->description);
+        $this->assertSame(TicketFormOpeningAccessLevel::MANAGER, $form->opening_access_level);
+        $this->assertTrue($form->is_default);
+        $this->assertFalse($form->is_active);
+        $this->assertDatabaseHas('ticket_form_fields', [
+            'ticket_form_id' => $form->id,
+            'ticket_field_id' => $summaryField->id,
+            'is_required' => false,
+        ]);
+        $this->assertDatabaseHas('ticket_form_fields', [
+            'ticket_form_id' => $form->id,
+            'ticket_field_id' => $impactField->id,
+            'is_required' => true,
+        ]);
+    }
+
+    public function test_sector_admin_can_edit_existing_catalog_item(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $form = $board->forms()->firstOrFail();
+        $group = $board->groups()->where('is_closed', false)->latest('id')->firstOrFail();
+        $catalogItem = ServiceCatalogItem::query()->create([
+            'ticket_board_id' => $board->id,
+            'ticket_form_id' => $form->id,
+            'name' => 'Catalogo antigo',
+            'description' => 'Descricao antiga',
+            'default_ticket_group_id' => $board->groups()->firstOrFail()->id,
+            'default_priority' => TicketPriority::LOW,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->call('startEditingCatalogItem', $catalogItem->id)
+            ->assertSet('editingCatalogItemId', $catalogItem->id)
+            ->assertSee('Editando item: Catalogo antigo')
+            ->set('catalogForm.name', 'Catalogo revisado')
+            ->set('catalogForm.description', 'Descricao revisada')
+            ->set('catalogForm.ticket_form_id', $form->id)
+            ->set('catalogForm.default_ticket_group_id', $group->id)
+            ->set('catalogForm.default_priority', TicketPriority::URGENT->value)
+            ->set('catalogForm.is_active', false)
+            ->call('saveCatalogItem')
+            ->assertHasNoErrors();
+
+        $catalogItem->refresh();
+
+        $this->assertSame('Catalogo revisado', $catalogItem->name);
+        $this->assertSame('Descricao revisada', $catalogItem->description);
+        $this->assertSame($form->id, $catalogItem->ticket_form_id);
+        $this->assertSame($group->id, $catalogItem->default_ticket_group_id);
+        $this->assertSame(TicketPriority::URGENT, $catalogItem->default_priority);
+        $this->assertFalse($catalogItem->is_active);
     }
 
     private function maintenanceContext(): array

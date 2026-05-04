@@ -219,14 +219,15 @@
                                     </div>
                                     <div class="mt-4 grid gap-3 sm:grid-cols-2">
                                         <label class="text-sm text-slate-600">
-                                            <span class="mb-2 block font-medium">Primeira resposta</span>
-                                            <input type="number" min="1" wire:model="slaTargets.{{ $priority->value }}.first_response_minutes" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+                                            <span class="mb-2 block font-medium">Primeira resposta (horas)</span>
+                                            <input type="number" min="1" wire:model="slaTargets.{{ $priority->value }}.first_response_hours" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
                                         </label>
                                         <label class="text-sm text-slate-600">
-                                            <span class="mb-2 block font-medium">Resolucao</span>
-                                            <input type="number" min="1" wire:model="slaTargets.{{ $priority->value }}.resolution_minutes" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+                                            <span class="mb-2 block font-medium">Resolucao (horas)</span>
+                                            <input type="number" min="1" wire:model="slaTargets.{{ $priority->value }}.resolution_hours" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
                                         </label>
                                     </div>
+                                    <p class="mt-3 text-xs text-slate-500">O motor interno continua em minutos, mas a configuracao agora e feita em horas inteiras.</p>
                                 </div>
                             @endforeach
                         </div>
@@ -540,13 +541,27 @@
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
                         <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div class="mb-4">
-                                <h4 class="text-base font-semibold text-slate-900">{{ $editingFormId ? 'Editar formulario' : 'Novo formulario' }}</h4>
-                                <p class="text-sm text-slate-500">Escolha em quais formularios cada campo aparece e se ele sera obrigatorio.</p>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h4 class="text-base font-semibold text-slate-900">{{ $editingFormId ? 'Editando: '.$formForm['name'] : 'Novo formulario' }}</h4>
+                                    @if ($editingFormId)
+                                        <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">Registro existente</span>
+                                    @endif
+                                </div>
+                                <p class="mt-1 text-sm text-slate-500">Escolha em quais formularios cada campo aparece e se ele sera obrigatorio.</p>
                             </div>
 
                             <form wire:submit="saveForm" class="space-y-4">
                                 <input type="text" wire:model="formForm.name" placeholder="Nome do formulario" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" />
                                 <textarea wire:model="formForm.description" rows="3" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" placeholder="Descricao do formulario"></textarea>
+                                <label class="block text-sm text-slate-600">
+                                    <span class="mb-2 block font-medium">Nivel minimo para abrir este formulario</span>
+                                    <select wire:model="formForm.opening_access_level" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                        @foreach ($openingAccessLevels as $accessLevel)
+                                            <option value="{{ $accessLevel->value }}">{{ $accessLevel->label() }}</option>
+                                        @endforeach
+                                    </select>
+                                    <span class="mt-2 block text-xs text-slate-500">Publico libera para qualquer colaborador autenticado. Operador e Gestor seguem o nivel setorial.</span>
+                                </label>
 
                                 <div class="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
                                     @if ($board->fields->isEmpty())
@@ -664,6 +679,7 @@
                                                         @endif
                                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $form->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $form->is_active ? 'Ativo' : 'Inativo' }}</span>
                                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $publishedCatalogCount > 0 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-800' }}">{{ $publishedCatalogCount > 0 ? 'Publicado na central' : 'Nao publicado na central' }}</span>
+                                                        <span class="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">Abertura: {{ $form->opening_access_level?->label() ?? 'Publico' }}</span>
                                                     </div>
                                                     <p class="mt-2 text-sm text-slate-500">{{ $form->fields->pluck('name')->join(', ') ?: 'Sem campos vinculados' }}</p>
                                                     <p class="mt-2 text-xs text-slate-400">{{ $publishedCatalogCount }} item(ns) de catalogo ativo(s) usando este formulario.</p>
@@ -681,8 +697,16 @@
                             </div>
 
                             <div class="rounded-3xl border border-slate-200 bg-white p-5">
-                                <div class="mb-4"><h4 class="text-base font-semibold text-slate-900">Catalogo de servicos</h4><p class="text-sm text-slate-500">Cada item pode apontar para um formulario e para a etapa inicial desejada.</p></div>
-                                <form wire:submit="addCatalogItem" class="space-y-3">
+                                <div class="mb-4">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <h4 class="text-base font-semibold text-slate-900">{{ $editingCatalogItemId ? 'Editando item: '.$catalogForm['name'] : 'Catalogo de servicos' }}</h4>
+                                        @if ($editingCatalogItemId)
+                                            <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">Registro existente</span>
+                                        @endif
+                                    </div>
+                                    <p class="mt-1 text-sm text-slate-500">Cada item pode apontar para um formulario e para a etapa inicial desejada.</p>
+                                </div>
+                                <form wire:submit="saveCatalogItem" class="space-y-3">
                                     <input type="text" wire:model="catalogForm.name" placeholder="Nome do item de catalogo" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" />
                                     <textarea wire:model="catalogForm.description" rows="3" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none" placeholder="Descricao do item"></textarea>
                                     <div class="grid gap-3 md:grid-cols-3">
@@ -691,7 +715,12 @@
                                         <select wire:model="catalogForm.default_priority" class="rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">@foreach ($priorities as $priority)<option value="{{ $priority->value }}">{{ $priority->label() }}</option>@endforeach</select>
                                     </div>
                                     <label class="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" wire:model="catalogForm.is_active" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Ativo</label>
-                                    <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Criar item de catalogo</button>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">{{ $editingCatalogItemId ? 'Salvar item' : 'Criar item' }}</button>
+                                        @if ($editingCatalogItemId)
+                                            <button type="button" wire:click="cancelEditingCatalogItem" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
+                                        @endif
+                                    </div>
                                 </form>
 
                                 <div class="mt-6 space-y-3">
@@ -705,7 +734,10 @@
                                                     </div>
                                                     <p class="mt-2 text-sm text-slate-500">Formulario: {{ $catalogItem->form?->name ?? 'Sem formulario' }} / Etapa inicial: {{ $catalogItem->defaultGroup?->name ?? 'Livre' }}</p>
                                                 </div>
-                                                <button type="button" wire:click="deleteCatalogItem({{ $catalogItem->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Excluir</button>
+                                                <div class="flex flex-wrap gap-2">
+                                                    <button type="button" wire:click="startEditingCatalogItem({{ $catalogItem->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Editar</button>
+                                                    <button type="button" wire:click="deleteCatalogItem({{ $catalogItem->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Excluir</button>
+                                                </div>
                                             </div>
                                         </div>
                                     @empty

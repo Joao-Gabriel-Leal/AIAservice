@@ -13,8 +13,8 @@ enum UserRole: string
     {
         return match ($this) {
             self::SUPER_ADMIN => 'Super Admin',
-            self::SECTOR_ADMIN => 'Admin de setor',
-            self::TECHNICIAN => 'Técnico',
+            self::SECTOR_ADMIN => 'Gestor',
+            self::TECHNICIAN => 'Operador',
             self::REQUESTER => 'Solicitante',
         };
     }

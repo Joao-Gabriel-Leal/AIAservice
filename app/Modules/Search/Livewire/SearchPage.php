@@ -34,6 +34,8 @@ class SearchPage extends Component
 
     public function mount(): void
     {
+        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+
         $this->types = $this->normalizedTypes($this->types);
         $this->groupLimits = collect(GlobalSearchService::groupKeys())
             ->mapWithKeys(fn (string $groupKey) => [$groupKey => 5])

@@ -6,11 +6,14 @@ use App\Models\User;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Licenses\Models\License;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\SectorTemplates\Models\SectorTemplate;
+use App\Modules\Sectors\Support\SectorColor;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Users\Models\UserSectorAccess;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,6 +40,13 @@ class Sector extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    protected function color(): Attribute
+    {
+        return Attribute::make(
+            set: fn (mixed $value) => SectorColor::normalize(is_string($value) ? $value : null),
+        );
     }
 
     public function company(): BelongsTo
@@ -84,24 +94,23 @@ class Sector extends Model
         return $this->hasMany(Asset::class, 'current_sector_id');
     }
 
+    public function licenses(): HasMany
+    {
+        return $this->hasMany(License::class);
+    }
+
     public function displayColor(): string
     {
-        $color = (string) ($this->getAttribute('color') ?? '');
-
-        if (preg_match('/^#[0-9A-Fa-f]{6}$/', $color) !== 1) {
-            return '#3D567B';
-        }
-
-        return strtoupper($color);
+        return SectorColor::display(is_string($this->getAttribute('color')) ? $this->getAttribute('color') : null);
     }
 
     public function softColor(): string
     {
-        return $this->displayColor().'14';
+        return SectorColor::soft(is_string($this->getAttribute('color')) ? $this->getAttribute('color') : null);
     }
 
     public function borderColor(): string
     {
-        return $this->displayColor().'2E';
+        return SectorColor::border(is_string($this->getAttribute('color')) ? $this->getAttribute('color') : null);
     }
 }

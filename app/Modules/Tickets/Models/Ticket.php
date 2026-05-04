@@ -201,12 +201,14 @@ class Ticket extends Model
     public function timeEntriesTotalSeconds(?CarbonInterface $reference = null): int
     {
         return $this->timeEntriesCollection()
+            ->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->countsTowardTotals())
             ->sum(fn (TicketTimeEntry $timeEntry) => $timeEntry->elapsedSeconds($reference));
     }
 
     public function timeEntriesTotalByUser(?CarbonInterface $reference = null): Collection
     {
         return $this->timeEntriesCollection()
+            ->filter(fn (TicketTimeEntry $timeEntry) => $timeEntry->countsTowardTotals())
             ->groupBy('user_id')
             ->map(function (Collection $entries) use ($reference) {
                 /** @var TicketTimeEntry $firstEntry */

@@ -68,7 +68,7 @@ class GlobalSearchTest extends TestCase
             'is_system' => false,
         ]);
 
-        ActivityLog::query()->create([
+        ActivityLog::query()->forceCreate([
             'subject_type' => Ticket::class,
             'subject_id' => $ticket->id,
             'causer_id' => $technician->id,
@@ -108,9 +108,11 @@ class GlobalSearchTest extends TestCase
             ->assertSee('Notebook Lunar');
     }
 
-    public function test_global_search_can_filter_by_type_and_period_and_prioritizes_exact_ticket_id(): void
+    public function test_super_admin_can_filter_by_type_and_period_and_prioritizes_exact_ticket_id(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $superAdmin = User::factory()->superAdmin()->create();
 
         $technician = User::factory()->create([
             'role' => UserRole::TECHNICIAN,
@@ -145,7 +147,7 @@ class GlobalSearchTest extends TestCase
             'last_activity_at' => now()->subHour(),
         ]);
 
-        TicketMessage::query()->create([
+        TicketMessage::query()->forceCreate([
             'ticket_id' => $exactTicket->id,
             'user_id' => $technician->id,
             'message' => 'Mensagem filtrada antiga.',
@@ -154,7 +156,7 @@ class GlobalSearchTest extends TestCase
             'updated_at' => now()->subDays(5),
         ]);
 
-        TicketMessage::query()->create([
+        TicketMessage::query()->forceCreate([
             'ticket_id' => $exactTicket->id,
             'user_id' => $technician->id,
             'message' => 'Mensagem filtrada recente.',
@@ -163,7 +165,7 @@ class GlobalSearchTest extends TestCase
             'updated_at' => now()->subDay(),
         ]);
 
-        $response = $this->actingAs($technician)->get(route('search', [
+        $response = $this->actingAs($superAdmin)->get(route('search', [
             'q' => (string) $exactTicket->id,
             'types' => ['tickets'],
         ]));
@@ -172,101 +174,50 @@ class GlobalSearchTest extends TestCase
             ->assertOk()
             ->assertSeeInOrder([$exactTicket->title, $secondaryTicket->title]);
 
-        Livewire::actingAs($technician)
+        Livewire::actingAs($superAdmin)
             ->test(SearchPage::class)
             ->set('query', 'filtrada')
             ->set('types', ['messages'])
             ->set('dateFrom', now()->subDays(2)->toDateString())
             ->assertSee('Mensagens')
             ->assertSee('Mensagem filtrada recente.')
-            ->assertDontSee('Chamados')
+            ->assertDontSee($secondaryTicket->title)
             ->assertDontSee('Mensagem filtrada antiga.');
     }
 
-    public function test_global_search_hides_inaccessible_ticket_content_and_foreign_assets(): void
+    public function test_global_search_is_forbidden_for_non_super_admins(): void
     {
-        ['sector' => $sectorA, 'room' => $roomA] = $this->ticketContext('Operacoes', 'Empresa Busca A', 'Sala Busca A');
-        ['sector' => $sectorB, 'room' => $roomB, 'board' => $boardB, 'group' => $groupB, 'status' => $statusB] = $this->ticketContext('Financeiro', 'Empresa Busca B', 'Sala Busca B');
+        ['sector' => $sector, 'room' => $room] = $this->ticketContext();
+
+        $sectorAdmin = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
 
         $requester = User::factory()->create([
             'role' => UserRole::REQUESTER,
-            'sector_id' => $sectorA->id,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
         ]);
 
-        $otherUser = User::factory()->create([
-            'name' => 'Analista Secreto',
-            'email' => 'analista.secreto@example.com',
-            'role' => UserRole::TECHNICIAN,
-            'sector_id' => $sectorB->id,
-        ]);
+        $this->actingAs($sectorAdmin)
+            ->get(route('search'))
+            ->assertForbidden();
 
-        $restrictedTicket = Ticket::query()->create([
-            'sector_id' => $sectorB->id,
-            'ticket_board_id' => $boardB->id,
-            'ticket_group_id' => $groupB->id,
-            'ticket_status_id' => $statusB->id,
-            'room_id' => $roomB->id,
-            'title' => 'Projeto secreto financeiro',
-            'description' => 'Descricao secreta.',
-            'requester_id' => $otherUser->id,
-            'assignee_id' => $otherUser->id,
-            'priority' => TicketPriority::HIGH,
-            'last_activity_at' => now(),
-        ]);
+        $this->actingAs($technician)
+            ->get(route('search'))
+            ->assertForbidden();
 
-        TicketMessage::query()->create([
-            'ticket_id' => $restrictedTicket->id,
-            'user_id' => $otherUser->id,
-            'message' => 'Mensagem secreta do financeiro.',
-            'is_system' => false,
-        ]);
-
-        ActivityLog::query()->create([
-            'subject_type' => Ticket::class,
-            'subject_id' => $restrictedTicket->id,
-            'causer_id' => $otherUser->id,
-            'sector_id' => $sectorB->id,
-            'event' => 'ticket.updated',
-            'description' => 'Historico secreto do financeiro.',
-            'properties' => ['sector_id' => $sectorB->id],
-        ]);
-
-        Asset::query()->create([
-            'uuid' => (string) fake()->uuid(),
-            'asset_code' => 'ASSET-SECRET-1',
-            'name' => 'Notebook secreto',
-            'serial_number' => 'SERIAL-SECRET-1',
-            'status' => AssetStatus::EM_USO,
-            'allocation_status' => AssetAllocationStatus::ALLOCATED,
-            'current_sector_id' => $sectorB->id,
-            'current_room_id' => $roomB->id,
-            'current_user_id' => $otherUser->id,
-            'created_by' => $otherUser->id,
-        ]);
-
-        Asset::query()->create([
-            'uuid' => (string) fake()->uuid(),
-            'asset_code' => 'ASSET-OWN-1',
-            'name' => 'Notebook secreto pessoal',
-            'serial_number' => 'SERIAL-SECRET-OWN',
-            'status' => AssetStatus::EM_USO,
-            'allocation_status' => AssetAllocationStatus::ALLOCATED,
-            'current_sector_id' => $sectorA->id,
-            'current_room_id' => $roomA->id,
-            'current_user_id' => $requester->id,
-            'created_by' => $requester->id,
-        ]);
-
-        $response = $this->actingAs($requester)->get(route('search', ['q' => 'secreto']));
-
-        $response
-            ->assertOk()
-            ->assertDontSee('Projeto secreto financeiro')
-            ->assertDontSee('Mensagem secreta do financeiro.')
-            ->assertDontSee('Historico secreto do financeiro.')
-            ->assertDontSee('Analista Secreto')
-            ->assertDontSee('Notebook secreto')
-            ->assertSee('Notebook secreto pessoal');
+        $this->actingAs($requester)
+            ->get(route('search'))
+            ->assertForbidden();
     }
 
     private function ticketContext(

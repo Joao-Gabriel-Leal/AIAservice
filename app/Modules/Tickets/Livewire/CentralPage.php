@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Livewire;
 
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Tickets\Models\TicketForm;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -48,6 +49,7 @@ class CentralPage extends Component
             ->with([
                 'company',
                 'board.forms' => fn ($query) => $query
+                    ->accessibleTo(auth()->user())
                     ->where('is_active', true)
                     ->with(['catalogItems' => fn ($catalogQuery) => $catalogQuery
                         ->where('is_active', true)

@@ -5,11 +5,16 @@ namespace Tests\Feature\Exports;
 use App\Enums\AssetStatus;
 use App\Enums\GlobalUserRole;
 use App\Enums\KnowledgeBaseVisibility;
+use App\Enums\LicenseAssignmentStatus;
+use App\Enums\LicenseStatus;
 use App\Enums\TicketPriority;
+use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Assets\Services\AssetMovementService;
 use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Licenses\Models\License;
+use App\Modules\Licenses\Models\LicenseAssignment;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
@@ -64,6 +69,57 @@ class ExcelExportTest extends TestCase
         $this->assertSame('PAT-000001', $expected->asset_code);
     }
 
+    public function test_licenses_export_respects_sector_scope_and_search_filters(): void
+    {
+        $company = Company::query()->create(['name' => 'Empresa Licencas Export', 'is_active' => true]);
+        $sectorA = Sector::query()->create(['company_id' => $company->id, 'name' => 'TI Export', 'slug' => 'ti-export', 'is_active' => true]);
+        $sectorB = Sector::query()->create(['company_id' => $company->id, 'name' => 'RH Export', 'slug' => 'rh-export', 'is_active' => true]);
+        $technician = User::factory()->create(['sector_id' => $sectorA->id, 'role' => UserRole::TECHNICIAN]);
+        $collaborator = User::factory()->create(['sector_id' => $sectorA->id]);
+
+        $visibleLicense = License::query()->create([
+            'sector_id' => $sectorA->id,
+            'vendor_name' => 'Microsoft',
+            'product_name' => 'Microsoft 365',
+            'plan_name' => 'Business Standard',
+            'seats_total' => 3,
+            'status' => LicenseStatus::ACTIVE->value,
+            'auto_renew' => false,
+        ]);
+
+        LicenseAssignment::query()->create([
+            'license_id' => $visibleLicense->id,
+            'user_id' => $collaborator->id,
+            'assigned_email' => $collaborator->email,
+            'display_name' => $collaborator->name,
+            'status' => LicenseAssignmentStatus::ACTIVE->value,
+            'assigned_at' => now(),
+        ]);
+
+        License::query()->create([
+            'sector_id' => $sectorB->id,
+            'vendor_name' => 'SAP',
+            'product_name' => 'SAP Business One',
+            'plan_name' => 'Profissional',
+            'seats_total' => 1,
+            'status' => LicenseStatus::ACTIVE->value,
+            'auto_renew' => false,
+        ]);
+
+        $spreadsheet = $this->spreadsheetFromResponse(
+            $this->actingAs($technician)->get(route('licenses.export', [
+                'search' => $collaborator->email,
+            ])),
+        );
+
+        $rows = $this->sheetValues($spreadsheet->getSheet(0));
+        $content = implode("\n", $rows);
+
+        $this->assertStringContainsString('Microsoft | Microsoft 365 | Business Standard', $content);
+        $this->assertStringNotContainsString('SAP Business One', $content);
+        $this->assertSame('Licencas', $spreadsheet->getSheet(0)->getTitle());
+    }
+
     public function test_dashboard_export_generates_all_analytical_tabs(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketScope();
@@ -96,7 +152,7 @@ class ExcelExportTest extends TestCase
     {
         ['sector' => $sectorA, 'room' => $roomA, 'board' => $boardA, 'group' => $groupA, 'status' => $statusA] = $this->ticketScope('Tecnologia');
         ['sector' => $sectorB, 'room' => $roomB, 'board' => $boardB, 'group' => $groupB, 'status' => $statusB] = $this->ticketScope('Financeiro', 'Empresa Tickets 2');
-        $technician = User::factory()->create(['sector_id' => $sectorA->id, 'room_id' => $roomA->id, 'role' => \App\Enums\UserRole::TECHNICIAN]);
+        $technician = User::factory()->create(['sector_id' => $sectorA->id, 'room_id' => $roomA->id, 'role' => UserRole::TECHNICIAN]);
         $requester = User::factory()->create(['sector_id' => $sectorA->id, 'room_id' => $roomA->id]);
 
         Ticket::query()->create([
@@ -182,7 +238,7 @@ class ExcelExportTest extends TestCase
             'name' => 'Tecnico Ativo',
             'email' => 'tecnico@empresa.test',
             'password' => 'password',
-            'role' => \App\Enums\UserRole::TECHNICIAN,
+            'role' => UserRole::TECHNICIAN,
             'global_role' => GlobalUserRole::COLLABORATOR,
             'sector_id' => $sectorA->id,
             'is_active' => true,
@@ -192,7 +248,7 @@ class ExcelExportTest extends TestCase
             'name' => 'Solicitante Inativo',
             'email' => 'requester@empresa.test',
             'password' => 'password',
-            'role' => \App\Enums\UserRole::REQUESTER,
+            'role' => UserRole::REQUESTER,
             'global_role' => GlobalUserRole::COLLABORATOR,
             'sector_id' => $sectorB->id,
             'is_active' => false,

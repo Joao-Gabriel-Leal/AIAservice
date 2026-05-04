@@ -14,7 +14,6 @@ use App\Modules\Tickets\Services\TicketCreationSuggestionService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -46,16 +45,23 @@ class CreatePage extends Component
         'previous_solutions' => [],
     ];
 
-    public function mount(Request $request, ?ServiceCatalogItem $catalogItem = null): void
+    public function mount(?ServiceCatalogItem $catalogItem = null): void
     {
+        if ($catalogItem && ! $catalogItem->exists) {
+            $catalogItem = null;
+        }
+
         if ($catalogItem) {
+            abort_unless($catalogItem->is_active && $catalogItem->form?->is_active, 404);
+            abort_unless($catalogItem->form?->canBeOpenedBy(auth()->user()), 403);
+
             $this->selectedSectorId = $catalogItem->board?->sector_id;
             $this->selectedCatalogId = $catalogItem->id;
             $this->selectedFormId = $catalogItem->ticket_form_id;
             $this->priority = $catalogItem->default_priority?->value ?? TicketPriority::MEDIUM->value;
         } else {
-            $this->selectedSectorId = $this->resolveSectorId($request->integer('sector'));
-            $this->selectedFormId = $this->resolveFormId($request->integer('form'));
+            $this->selectedSectorId = $this->resolveSectorId(request()->integer('sector'));
+            $this->selectedFormId = $this->resolveFormId(request()->integer('form'));
             $this->selectedCatalogId = $this->resolveCatalogIdForForm($this->selectedFormId);
         }
     }
@@ -118,7 +124,8 @@ class CreatePage extends Component
         $allFields = $form?->fields ?? collect();
         $visibleFields = $this->visibleFormFields($allFields);
 
-        abort_unless($form && $board, 404);
+        abort_unless($board, 404);
+        abort_if($this->selectedFormId !== null && $form === null, 403);
 
         $this->sanitizeDynamicValuesForVisibility($allFields);
         $validated = $this->validate($this->rules($visibleFields));
@@ -208,6 +215,7 @@ class CreatePage extends Component
         }
 
         return TicketForm::query()
+            ->accessibleTo(auth()->user(), $this->selectedSectorId)
             ->with([
                 'fields.options',
                 'fields',
@@ -232,6 +240,7 @@ class CreatePage extends Component
                 'board.groups',
                 'board.statuses',
             ])
+            ->whereHas('form', fn ($query) => $query->accessibleTo(auth()->user(), $this->selectedSectorId))
             ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
             ->where('is_active', true)
             ->find($this->selectedCatalogId);
@@ -280,6 +289,7 @@ class CreatePage extends Component
         }
 
         return TicketForm::query()
+            ->accessibleTo(auth()->user(), $this->selectedSectorId)
             ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
             ->with(['catalogItems' => fn ($query) => $query->where('is_active', true)->orderBy('name')])
             ->where('is_active', true)
@@ -316,6 +326,7 @@ class CreatePage extends Component
         }
 
         return TicketForm::query()
+            ->accessibleTo(auth()->user(), $this->selectedSectorId)
             ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
             ->where('is_active', true)
             ->whereKey($requestedFormId)
@@ -329,6 +340,7 @@ class CreatePage extends Component
         }
 
         return ServiceCatalogItem::query()
+            ->whereHas('form', fn ($query) => $query->accessibleTo(auth()->user(), $this->selectedSectorId))
             ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
             ->where('ticket_form_id', $formId)
             ->where('is_active', true)

@@ -7,6 +7,8 @@ use App\Enums\SectorAccessLevel;
 use App\Enums\UserRole;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Licenses\Models\License;
+use App\Modules\Licenses\Models\LicenseAssignment;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
@@ -153,6 +155,21 @@ class User extends Authenticatable
     public function knowledgeBaseArticles(): HasMany
     {
         return $this->hasMany(KnowledgeBaseArticle::class, 'created_by');
+    }
+
+    public function createdLicenses(): HasMany
+    {
+        return $this->hasMany(License::class, 'created_by');
+    }
+
+    public function licenseAssignments(): HasMany
+    {
+        return $this->hasMany(LicenseAssignment::class);
+    }
+
+    public function createdLicenseAssignments(): HasMany
+    {
+        return $this->hasMany(LicenseAssignment::class, 'created_by');
     }
 
     public function isSuperAdmin(): bool

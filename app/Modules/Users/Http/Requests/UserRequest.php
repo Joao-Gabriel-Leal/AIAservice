@@ -59,17 +59,13 @@ class UserRequest extends FormRequest
 
             if (! $actor->isSuperAdmin()) {
                 if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
-                    $validator->errors()->add('global_role', 'Admin de setor nao pode criar ou promover super admins.');
+                    $validator->errors()->add('global_role', 'Gestor nao pode criar ou promover super admins.');
                 }
 
                 $unauthorizedSectorIds = $requestedSectorIds->diff($actor->adminSectorIds());
 
                 if ($unauthorizedSectorIds->isNotEmpty()) {
                     $validator->errors()->add('sector_accesses', 'Voce so pode gerenciar acessos dos setores que administra.');
-                }
-
-                if (! $this->route('user') && $sectorAccesses->isEmpty()) {
-                    $validator->errors()->add('sector_accesses', 'Selecione ao menos um acesso setorial para o novo colaborador.');
                 }
             }
         });

@@ -7,6 +7,7 @@ use App\Enums\TicketAutomationConditionField;
 use App\Enums\TicketAutomationConditionOperator;
 use App\Enums\TicketAutomationTrigger;
 use App\Enums\TicketFieldType;
+use App\Enums\TicketFormOpeningAccessLevel;
 use App\Enums\TicketPriority;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
@@ -85,6 +86,7 @@ class SettingsPage extends Component
     public array $formForm = [
         'name' => '',
         'description' => '',
+        'opening_access_level' => 'public',
         'field_ids' => [],
         'required_field_ids' => [],
         'visibility_conditions' => [],
@@ -100,6 +102,7 @@ class SettingsPage extends Component
         'default_priority' => 'medium',
         'is_active' => true,
     ];
+    public ?int $editingCatalogItemId = null;
     public ?string $pendingDeletionType = null;
     public ?int $pendingDeletionId = null;
     public array $deletionContext = [];
@@ -177,15 +180,24 @@ class SettingsPage extends Component
         $rules = ['slaIsActive' => ['boolean']];
 
         foreach (TicketPriority::cases() as $priority) {
-            $rules["slaTargets.{$priority->value}.first_response_minutes"] = ['nullable', 'integer', 'min:1'];
-            $rules["slaTargets.{$priority->value}.resolution_minutes"] = ['nullable', 'integer', 'min:1'];
+            $rules["slaTargets.{$priority->value}.first_response_hours"] = ['nullable', 'integer', 'min:1'];
+            $rules["slaTargets.{$priority->value}.resolution_hours"] = ['nullable', 'integer', 'min:1'];
         }
 
         $validated = $this->validate($rules);
         $board = $this->board();
         $this->authorize('update', $board);
 
-        $ticketSlaService->syncPolicy($board, $validated['slaTargets'] ?? [], (bool) $validated['slaIsActive']);
+        $normalizedTargets = collect($validated['slaTargets'] ?? [])
+            ->mapWithKeys(fn (array $target, string $priority) => [
+                $priority => [
+                    'first_response_minutes' => $this->hoursToMinutes(data_get($target, 'first_response_hours')),
+                    'resolution_minutes' => $this->hoursToMinutes(data_get($target, 'resolution_hours')),
+                ],
+            ])
+            ->all();
+
+        $ticketSlaService->syncPolicy($board, $normalizedTargets, (bool) $validated['slaIsActive']);
         $this->loadBoardMeta();
         $this->setOpenSection('sla');
 
@@ -680,6 +692,7 @@ class SettingsPage extends Component
         $this->formForm = [
             'name' => $form->name,
             'description' => $form->description ?? '',
+            'opening_access_level' => ($form->opening_access_level ?? TicketFormOpeningAccessLevel::PUBLIC)->value,
             'field_ids' => $form->fields->sortBy('pivot.sort_order')->pluck('id')->all(),
             'required_field_ids' => $form->fields->filter(fn (TicketField $field) => (bool) $field->pivot?->is_required)->pluck('id')->all(),
             'visibility_conditions' => $form->fields->mapWithKeys(fn (TicketField $field) => [
@@ -710,6 +723,7 @@ class SettingsPage extends Component
         $validated = $this->validate([
             'formForm.name' => ['required', 'string', 'max:80'],
             'formForm.description' => ['nullable', 'string'],
+            'formForm.opening_access_level' => [Rule::enum(TicketFormOpeningAccessLevel::class)],
             'formForm.field_ids' => ['array'],
             'formForm.field_ids.*' => ['integer', 'exists:ticket_fields,id'],
             'formForm.required_field_ids' => ['array'],
@@ -735,6 +749,7 @@ class SettingsPage extends Component
             'ticket_board_id' => $board->id,
             'name' => $validated['formForm']['name'],
             'description' => $validated['formForm']['description'] ?: null,
+            'opening_access_level' => $validated['formForm']['opening_access_level'],
             'is_default' => (bool) $validated['formForm']['is_default'],
             'is_active' => (bool) $validated['formForm']['is_active'],
         ]);
@@ -775,21 +790,62 @@ class SettingsPage extends Component
         session()->flash('status', 'Formulario removido com sucesso.');
     }
 
+    public function startEditingCatalogItem(int $catalogItemId): void
+    {
+        $catalogItem = $this->catalogItemForBoard($catalogItemId);
+
+        $this->editingCatalogItemId = $catalogItem->id;
+        $this->catalogForm = [
+            'name' => $catalogItem->name,
+            'description' => $catalogItem->description ?? '',
+            'ticket_form_id' => $catalogItem->ticket_form_id,
+            'default_ticket_group_id' => $catalogItem->default_ticket_group_id,
+            'default_priority' => $catalogItem->default_priority?->value ?? TicketPriority::MEDIUM->value,
+            'is_active' => $catalogItem->is_active,
+        ];
+
+        $this->resetValidation();
+        $this->setOpenSection('forms');
+    }
+
+    public function cancelEditingCatalogItem(): void
+    {
+        $this->editingCatalogItemId = null;
+        $this->catalogForm = $this->emptyCatalogForm($this->board());
+        $this->resetValidation();
+        $this->setOpenSection('forms');
+    }
+
     public function addCatalogItem(): void
     {
+        $this->saveCatalogItem();
+    }
+
+    public function saveCatalogItem(): void
+    {
+        $board = $this->board();
+        $this->authorize('update', $board);
+
         $validated = $this->validate([
             'catalogForm.name' => ['required', 'string', 'max:120'],
             'catalogForm.description' => ['nullable', 'string'],
-            'catalogForm.ticket_form_id' => ['nullable', 'exists:ticket_forms,id'],
-            'catalogForm.default_ticket_group_id' => ['nullable', 'exists:ticket_groups,id'],
+            'catalogForm.ticket_form_id' => [
+                'nullable',
+                Rule::exists('ticket_forms', 'id')->where('ticket_board_id', $board->id),
+            ],
+            'catalogForm.default_ticket_group_id' => [
+                'nullable',
+                Rule::exists('ticket_groups', 'id')->where('ticket_board_id', $board->id),
+            ],
             'catalogForm.default_priority' => ['required', Rule::enum(TicketPriority::class)],
             'catalogForm.is_active' => ['boolean'],
         ]);
 
-        $board = $this->board();
-        $this->authorize('update', $board);
+        $catalogItem = $this->editingCatalogItemId
+            ? $this->catalogItemForBoard($this->editingCatalogItemId)
+            : new ServiceCatalogItem();
 
-        ServiceCatalogItem::query()->create([
+        $catalogItem->fill([
             'ticket_board_id' => $board->id,
             'ticket_form_id' => $validated['catalogForm']['ticket_form_id'],
             'name' => $validated['catalogForm']['name'],
@@ -798,17 +854,25 @@ class SettingsPage extends Component
             'default_priority' => $validated['catalogForm']['default_priority'],
             'is_active' => (bool) $validated['catalogForm']['is_active'],
         ]);
+        $catalogItem->save();
 
+        $wasEditing = $this->editingCatalogItemId !== null;
+        $this->editingCatalogItemId = null;
         $this->catalogForm = $this->emptyCatalogForm($board);
         $this->loadBoardMeta();
         $this->setOpenSection('forms');
-        session()->flash('status', 'Item do catalogo criado com sucesso.');
+        session()->flash('status', $wasEditing ? 'Item do catalogo atualizado com sucesso.' : 'Item do catalogo criado com sucesso.');
     }
 
     public function deleteCatalogItem(int $catalogItemId): void
     {
         $catalogItem = $this->catalogItemForBoard($catalogItemId);
         $catalogItem->delete();
+
+        if ($this->editingCatalogItemId === $catalogItemId) {
+            $this->editingCatalogItemId = null;
+            $this->catalogForm = $this->emptyCatalogForm($this->board());
+        }
 
         $this->loadBoardMeta();
         $this->setOpenSection('forms');
@@ -1366,6 +1430,7 @@ class SettingsPage extends Component
             'automationConditionOperators' => TicketAutomationConditionOperator::cases(),
             'automationActionTypes' => $this->supportedAutomationActionTypes(),
             'automationAssignees' => $this->boardAssignees(),
+            'openingAccessLevels' => TicketFormOpeningAccessLevel::cases(),
         ])->layout('layouts.portal', [
             'title' => 'Configurar quadro',
             'subtitle' => 'Etapas, SLA, automacoes, campos e formularios do setor.',
@@ -1377,8 +1442,12 @@ class SettingsPage extends Component
         $board = $this->board();
         $this->boardName = $board?->name ?? '';
         $this->boardDescription = $board?->description ?? '';
-        $this->catalogForm['ticket_form_id'] = $board?->forms()->where('is_default', true)->value('id');
-        $this->catalogForm['default_ticket_group_id'] = $board?->defaultGroup()?->id;
+
+        if (! $this->editingCatalogItemId) {
+            $this->catalogForm['ticket_form_id'] = $board?->forms()->where('is_default', true)->value('id');
+            $this->catalogForm['default_ticket_group_id'] = $board?->defaultGroup()?->id;
+        }
+
         $policy = $board?->slaPolicy;
         $this->slaIsActive = $policy?->is_active ?? true;
         $this->slaTargets = [];
@@ -1386,8 +1455,8 @@ class SettingsPage extends Component
         foreach (TicketPriority::cases() as $priority) {
             $target = $policy?->targets?->firstWhere('priority', $priority);
             $this->slaTargets[$priority->value] = [
-                'first_response_minutes' => $target?->first_response_minutes,
-                'resolution_minutes' => $target?->resolution_minutes,
+                'first_response_hours' => $this->minutesToHours($target?->first_response_minutes),
+                'resolution_hours' => $this->minutesToHours($target?->resolution_minutes),
             ];
         }
 
@@ -1590,6 +1659,7 @@ class SettingsPage extends Component
         $this->editingGroupId = null;
         $this->editingStatusId = null;
         $this->editingFormId = null;
+        $this->editingCatalogItemId = null;
         $board = $this->board();
         $this->catalogForm = $this->emptyCatalogForm($board);
         $this->resetAutomationForm();
@@ -1705,12 +1775,31 @@ class SettingsPage extends Component
         return [
             'name' => '',
             'description' => '',
+            'opening_access_level' => TicketFormOpeningAccessLevel::PUBLIC->value,
             'field_ids' => [],
             'required_field_ids' => [],
             'visibility_conditions' => [],
             'is_default' => false,
             'is_active' => true,
         ];
+    }
+
+    private function minutesToHours(?int $minutes): ?int
+    {
+        if (! $minutes) {
+            return null;
+        }
+
+        return (int) ceil($minutes / 60);
+    }
+
+    private function hoursToMinutes(mixed $hours): ?int
+    {
+        if ($hours === null || $hours === '') {
+            return null;
+        }
+
+        return max(1, (int) $hours) * 60;
     }
 
     private function normalizedVisibilityConditions(array $fieldIds, array $submittedConditions): array

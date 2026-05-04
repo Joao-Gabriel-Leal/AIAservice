@@ -2,6 +2,9 @@
 
 namespace App\Modules\Tickets\Models;
 
+use App\Enums\TicketFormOpeningAccessLevel;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +20,7 @@ class TicketForm extends Model
         'ticket_board_id',
         'name',
         'description',
+        'opening_access_level',
         'is_default',
         'is_active',
     ];
@@ -24,9 +28,44 @@ class TicketForm extends Model
     protected function casts(): array
     {
         return [
+            'opening_access_level' => TicketFormOpeningAccessLevel::class,
             'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function scopeAccessibleTo(Builder $query, User $user, ?int $sectorId = null): Builder
+    {
+        if ($sectorId !== null) {
+            $query->whereHas('board', fn (Builder $boardQuery) => $boardQuery->where('sector_id', $sectorId));
+        }
+
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        $operatorSectorIds = $user->operationalSectorIds();
+        $managerSectorIds = $user->adminSectorIds();
+
+        return $query->where(function (Builder $accessQuery) use ($operatorSectorIds, $managerSectorIds) {
+            $accessQuery->where('opening_access_level', TicketFormOpeningAccessLevel::PUBLIC->value);
+
+            if ($operatorSectorIds !== []) {
+                $accessQuery->orWhere(function (Builder $operatorQuery) use ($operatorSectorIds) {
+                    $operatorQuery
+                        ->where('opening_access_level', TicketFormOpeningAccessLevel::OPERATOR->value)
+                        ->whereHas('board', fn (Builder $boardQuery) => $boardQuery->whereIn('sector_id', $operatorSectorIds));
+                });
+            }
+
+            if ($managerSectorIds !== []) {
+                $accessQuery->orWhere(function (Builder $managerQuery) use ($managerSectorIds) {
+                    $managerQuery
+                        ->where('opening_access_level', TicketFormOpeningAccessLevel::MANAGER->value)
+                        ->whereHas('board', fn (Builder $boardQuery) => $boardQuery->whereIn('sector_id', $managerSectorIds));
+                });
+            }
+        });
     }
 
     public function board(): BelongsTo
@@ -55,5 +94,16 @@ class TicketForm extends Model
     public function catalogItems(): HasMany
     {
         return $this->hasMany(ServiceCatalogItem::class);
+    }
+
+    public function canBeOpenedBy(User $user): bool
+    {
+        $sectorId = $this->board?->sector_id ?? $this->board()->value('sector_id');
+
+        if (! $sectorId) {
+            return false;
+        }
+
+        return ($this->opening_access_level ?? TicketFormOpeningAccessLevel::PUBLIC)->allows($user, (int) $sectorId);
     }
 }

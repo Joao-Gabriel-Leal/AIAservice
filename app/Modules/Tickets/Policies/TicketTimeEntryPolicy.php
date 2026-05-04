@@ -29,4 +29,13 @@ class TicketTimeEntryPolicy
     {
         return $this->update($user, $timeEntry);
     }
+
+    public function review(User $user, TicketTimeEntry $timeEntry): bool
+    {
+        if (! $user->hasOperationalAccess($timeEntry->ticket->sector_id)) {
+            return false;
+        }
+
+        return $user->isSuperAdmin() || $user->isSectorAdmin($timeEntry->ticket->sector_id);
+    }
 }

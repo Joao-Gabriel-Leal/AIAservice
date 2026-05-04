@@ -36,7 +36,7 @@
         @else
             <input type="hidden" name="global_role" value="{{ \App\Enums\GlobalUserRole::COLLABORATOR->value }}">
             <div class="md:col-span-2 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                Novos usuarios criados por administradores de setor entram como colaboradores e recebem acesso pelos vinculos abaixo.
+                Novos usuarios criados por gestores entram como colaboradores e recebem acesso pelos vinculos abaixo.
             </div>
         @endif
     </div>
