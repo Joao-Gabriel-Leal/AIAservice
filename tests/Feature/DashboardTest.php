@@ -58,6 +58,10 @@ class DashboardTest extends TestCase
         $response->assertSeeText('Base de conhecimento');
         $response->assertSeeText('Ativos pendentes');
         $response->assertSeeText('Proximas renovacoes');
+        $response->assertDontSeeText('Abrir quadro');
+        $response->assertDontSeeText('Novo chamado');
+        $response->assertDontSeeText('Licencas vencendo');
+        $response->assertDontSeeText('Revisar base');
         $response->assertSee('data-chart=', false);
     }
 

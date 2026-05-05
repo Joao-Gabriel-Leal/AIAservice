@@ -19,40 +19,6 @@
             ['label' => 'Com atividade recente', 'value' => $stats['active_in_period'], 'hint' => "Atualizados nos ultimos {$period} dias."],
         ];
 
-        $quickActions = [
-            [
-                'label' => auth()->user()->hasOperationalAccess() ? 'Abrir quadro' : 'Abrir central',
-                'url' => auth()->user()->hasOperationalAccess()
-                    ? route('tickets.board', array_filter(['sector' => $selectedSectorId]))
-                    : route('tickets.central'),
-                'show' => true,
-                'primary' => true,
-            ],
-            [
-                'label' => 'Novo chamado',
-                'url' => route('tickets.create'),
-                'show' => true,
-                'primary' => false,
-            ],
-            [
-                'label' => 'Licencas vencendo',
-                'url' => route('licenses.index', array_filter(['renewal' => 'expiring', 'sector_id' => $selectedSectorId])),
-                'show' => $licenseSummary['can_view'],
-                'primary' => false,
-            ],
-            [
-                'label' => 'Ativos',
-                'url' => route('assets.index'),
-                'show' => $assetSummary['can_view_index'],
-                'primary' => false,
-            ],
-            [
-                'label' => $knowledgeBaseSummary['can_manage'] ? 'Revisar base' : 'Base de conhecimento',
-                'url' => $knowledgeBaseSummary['can_manage'] ? route('knowledge-base.manage') : route('knowledge-base.index'),
-                'show' => true,
-                'primary' => false,
-            ],
-        ];
         $ticketsListUrl = auth()->user()->hasOperationalAccess()
             ? route('tickets.index', array_filter(['sector' => $selectedSectorId, 'view' => 'list']))
             : route('tickets.central');
@@ -82,41 +48,22 @@
             </x-slot:actions>
 
             <div class="space-y-5">
-                <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                        @foreach ($quickActions as $action)
-                            @if ($action['show'])
-                                <a
-                                    href="{{ $action['url'] }}"
-                                    class="{{ $action['primary'] ? 'ui-action-primary text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-200' }} ui-action rounded-2xl px-4 py-3 text-sm font-semibold"
-                                >
-                                    {{ $action['label'] }}
-                                </a>
-                            @endif
-                        @endforeach
-                    </div>
-
-                    @if ($availableSectors->count() > 1)
-                        <form method="GET" action="{{ route('dashboard') }}" class="flex gap-2">
-                            <input type="hidden" name="period" value="{{ $period }}">
-                            <select name="sector_id" class="ui-native-select min-w-0 flex-1 rounded-2xl border-white/20 bg-white/95 text-sm">
-                                <option value="">Todos os setores</option>
-                                @foreach ($availableSectors as $sector)
-                                    <option value="{{ $sector->id }}" @selected((int) $selectedSectorId === (int) $sector->id)>
-                                        {{ $sector->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <button type="submit" class="ui-action rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-[#1f3152]">
-                                Filtrar
-                            </button>
-                        </form>
-                    @else
-                        <div class="rounded-2xl border border-white/12 bg-white/6 px-4 py-3 text-sm font-medium text-white">
-                            {{ $selectedSector?->name ?? 'Todos os setores visiveis' }}
-                        </div>
-                    @endif
-                </div>
+                @if ($availableSectors->count() > 1)
+                    <form method="GET" action="{{ route('dashboard') }}" class="flex max-w-xl gap-2">
+                        <input type="hidden" name="period" value="{{ $period }}">
+                        <select name="sector_id" class="ui-native-select min-w-0 flex-1 rounded-2xl border-white/20 bg-white/95 text-sm">
+                            <option value="">Todos os setores</option>
+                            @foreach ($availableSectors as $sector)
+                                <option value="{{ $sector->id }}" @selected((int) $selectedSectorId === (int) $sector->id)>
+                                    {{ $sector->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="ui-action rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-[#1f3152]">
+                            Filtrar
+                        </button>
+                    </form>
+                @endif
 
                 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                     @foreach ($alerts as $alert)
