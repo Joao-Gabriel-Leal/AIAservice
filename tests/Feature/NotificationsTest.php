@@ -11,6 +11,7 @@ use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Notifications\TicketActivityNotification;
 use App\Modules\Tickets\Services\SectorProvisioningService;
+use App\Modules\Users\Notifications\AccountCreatedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -64,6 +65,21 @@ class NotificationsTest extends TestCase
         $response = $this->actingAs($user)->get(route('notifications.open', $notification->id));
 
         $response->assertRedirect(route('tickets.show', $ticket));
+        $this->assertNotNull($notification->fresh()->read_at);
+    }
+
+    public function test_opening_account_created_notification_with_password_change_redirects_to_security_form(): void
+    {
+        $user = User::factory()->create([
+            'must_change_password' => true,
+        ]);
+
+        $user->notify(new AccountCreatedNotification($user->email, true));
+        $notification = $user->notifications()->firstOrFail();
+
+        $response = $this->actingAs($user)->get(route('notifications.open', $notification->id));
+
+        $response->assertRedirect(route('profile.edit').'#seguranca');
         $this->assertNotNull($notification->fresh()->read_at);
     }
 

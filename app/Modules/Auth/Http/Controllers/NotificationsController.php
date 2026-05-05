@@ -3,6 +3,7 @@
 namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Users\Notifications\AccountCreatedNotification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Notifications\DatabaseNotification;
@@ -58,9 +59,20 @@ class NotificationsController extends Controller
             $notification->markAsRead();
         }
 
-        $url = $notification->data['url'] ?? route('notifications.index');
+        $url = $this->resolveOpenUrl($notification);
 
         return redirect()->to($url);
+    }
+
+    private function resolveOpenUrl(DatabaseNotification $notification): string
+    {
+        if ($notification->type === AccountCreatedNotification::class) {
+            return ($notification->data['must_change_password'] ?? false)
+                ? route('profile.edit').'#seguranca'
+                : route('dashboard');
+        }
+
+        return $notification->data['url'] ?? route('notifications.index');
     }
 
     private function notificationForCurrentUser(string $notificationId): DatabaseNotification

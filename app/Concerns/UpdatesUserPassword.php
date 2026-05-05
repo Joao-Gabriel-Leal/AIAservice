@@ -25,6 +25,7 @@ trait UpdatesUserPassword
 
         Auth::user()->update([
             'password' => $validated['password'],
+            'must_change_password' => false,
         ]);
 
         $this->resetPasswordFormFields();

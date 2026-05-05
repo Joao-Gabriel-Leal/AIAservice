@@ -36,7 +36,7 @@ class SettingsPage extends Component
     use AuthorizesRequests;
 
     public ?int $selectedSectorId = null;
-    public ?string $openSection = 'groups';
+    public ?string $openSection = null;
     public string $boardName = '';
     public string $boardDescription = '';
     public bool $slaIsActive = true;
@@ -152,9 +152,21 @@ class SettingsPage extends Component
 
     public function setOpenSection(string $section): void
     {
-        if (in_array($section, ['board', 'groups', 'statuses', 'sla', 'automations', 'fields', 'forms'], true)) {
+        if ($this->isSupportedSection($section)) {
             $this->openSection = $this->openSection === $section ? null : $section;
         }
+    }
+
+    private function keepSectionOpen(string $section): void
+    {
+        if ($this->isSupportedSection($section)) {
+            $this->openSection = $section;
+        }
+    }
+
+    private function isSupportedSection(string $section): bool
+    {
+        return in_array($section, ['board', 'groups', 'statuses', 'sla', 'automations', 'fields', 'forms'], true);
     }
 
     public function saveBoardMeta(): void
@@ -171,7 +183,7 @@ class SettingsPage extends Component
             'description' => $validated['boardDescription'] ?: null,
         ]);
 
-        $this->setOpenSection('board');
+        $this->keepSectionOpen('board');
         session()->flash('status', 'Quadro atualizado com sucesso.');
     }
 
@@ -199,7 +211,7 @@ class SettingsPage extends Component
 
         $ticketSlaService->syncPolicy($board, $normalizedTargets, (bool) $validated['slaIsActive']);
         $this->loadBoardMeta();
-        $this->setOpenSection('sla');
+        $this->keepSectionOpen('sla');
 
         session()->flash('status', 'Politica de SLA atualizada com sucesso.');
     }
@@ -240,7 +252,7 @@ class SettingsPage extends Component
 
         $this->groupForm = $this->emptyGroupForm();
         $this->loadBoardMeta();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
 
         session()->flash('status', 'Etapa criada com sucesso.');
     }
@@ -261,7 +273,7 @@ class SettingsPage extends Component
 
         $this->cancelDeletion();
         $this->resetValidation();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
     }
 
     public function cancelEditingGroup(): void
@@ -323,7 +335,7 @@ class SettingsPage extends Component
 
         $this->cancelEditingGroup();
         $this->loadBoardMeta();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
 
         session()->flash('status', 'Etapa atualizada com sucesso.');
     }
@@ -332,7 +344,7 @@ class SettingsPage extends Component
     {
         $this->moveOrderedItem($this->groupForBoard($groupId), 'up');
         $this->loadBoardMeta();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
         session()->flash('status', 'Ordem das etapas atualizada.');
     }
 
@@ -340,7 +352,7 @@ class SettingsPage extends Component
     {
         $this->moveOrderedItem($this->groupForBoard($groupId), 'down');
         $this->loadBoardMeta();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
         session()->flash('status', 'Ordem das etapas atualizada.');
     }
 
@@ -356,7 +368,7 @@ class SettingsPage extends Component
         ]);
         $this->replacementSelection = ['group_ticket_group_id' => '', 'group_catalog_group_id' => ''];
         $this->cancelEditingGroup();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
     }
 
     public function deleteGroup(): void
@@ -401,7 +413,7 @@ class SettingsPage extends Component
 
         $this->cancelDeletion();
         $this->loadBoardMeta();
-        $this->setOpenSection('groups');
+        $this->keepSectionOpen('groups');
         session()->flash('status', 'Etapa removida com sucesso.');
     }
 
@@ -441,7 +453,7 @@ class SettingsPage extends Component
 
         $this->statusForm = $this->emptyStatusForm();
         $this->loadBoardMeta();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
         session()->flash('status', 'Status criado com sucesso.');
     }
 
@@ -460,7 +472,7 @@ class SettingsPage extends Component
 
         $this->cancelDeletion();
         $this->resetValidation();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
     }
 
     public function cancelEditingStatus(): void
@@ -512,7 +524,7 @@ class SettingsPage extends Component
 
         $this->cancelEditingStatus();
         $this->loadBoardMeta();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
         session()->flash('status', 'Status atualizado com sucesso.');
     }
 
@@ -520,7 +532,7 @@ class SettingsPage extends Component
     {
         $this->moveOrderedItem($this->statusForBoard($statusId), 'up');
         $this->loadBoardMeta();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
         session()->flash('status', 'Ordem dos status atualizada.');
     }
 
@@ -528,7 +540,7 @@ class SettingsPage extends Component
     {
         $this->moveOrderedItem($this->statusForBoard($statusId), 'down');
         $this->loadBoardMeta();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
         session()->flash('status', 'Ordem dos status atualizada.');
     }
 
@@ -558,7 +570,7 @@ class SettingsPage extends Component
 
         $this->cancelEditingGroup();
         $this->cancelEditingStatus();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
     }
 
     public function deleteStatus(): void
@@ -610,7 +622,7 @@ class SettingsPage extends Component
 
         $this->cancelDeletion();
         $this->loadBoardMeta();
-        $this->setOpenSection('statuses');
+        $this->keepSectionOpen('statuses');
         session()->flash('status', 'Status removido com sucesso.');
     }
 
@@ -665,7 +677,7 @@ class SettingsPage extends Component
 
         $this->fieldForm = $this->emptyFieldForm();
         $this->loadBoardMeta();
-        $this->setOpenSection('fields');
+        $this->keepSectionOpen('fields');
         session()->flash('status', 'Campo criado com sucesso.');
     }
 
@@ -680,7 +692,7 @@ class SettingsPage extends Component
         }
 
         $this->loadBoardMeta();
-        $this->setOpenSection('fields');
+        $this->keepSectionOpen('fields');
         session()->flash('status', 'Campo removido com sucesso.');
     }
 
@@ -708,7 +720,7 @@ class SettingsPage extends Component
         ];
 
         $this->resetValidation();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
     }
 
     public function cancelEditingForm(): void
@@ -771,7 +783,7 @@ class SettingsPage extends Component
         $wasEditing = $this->editingFormId !== null;
         $this->cancelEditingForm();
         $this->loadBoardMeta();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
         session()->flash('status', $wasEditing ? 'Formulario atualizado com sucesso.' : 'Formulario criado com sucesso.');
     }
 
@@ -786,7 +798,7 @@ class SettingsPage extends Component
         }
 
         $this->loadBoardMeta();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
         session()->flash('status', 'Formulario removido com sucesso.');
     }
 
@@ -805,7 +817,7 @@ class SettingsPage extends Component
         ];
 
         $this->resetValidation();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
     }
 
     public function cancelEditingCatalogItem(): void
@@ -813,7 +825,7 @@ class SettingsPage extends Component
         $this->editingCatalogItemId = null;
         $this->catalogForm = $this->emptyCatalogForm($this->board());
         $this->resetValidation();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
     }
 
     public function addCatalogItem(): void
@@ -860,7 +872,7 @@ class SettingsPage extends Component
         $this->editingCatalogItemId = null;
         $this->catalogForm = $this->emptyCatalogForm($board);
         $this->loadBoardMeta();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
         session()->flash('status', $wasEditing ? 'Item do catalogo atualizado com sucesso.' : 'Item do catalogo criado com sucesso.');
     }
 
@@ -875,14 +887,14 @@ class SettingsPage extends Component
         }
 
         $this->loadBoardMeta();
-        $this->setOpenSection('forms');
+        $this->keepSectionOpen('forms');
         session()->flash('status', 'Item do catalogo removido com sucesso.');
     }
 
     public function addAutomationCondition(): void
     {
         $this->automationConditions[] = $this->emptyCondition(count($this->automationConditions) + 1);
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
     }
 
     public function removeAutomationCondition(int $index): void
@@ -895,7 +907,7 @@ class SettingsPage extends Component
     public function addAutomationAction(): void
     {
         $this->automationActions[] = $this->emptyAction(count($this->automationActions) + 1);
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
     }
 
     public function removeAutomationAction(int $index): void
@@ -915,7 +927,7 @@ class SettingsPage extends Component
             || $rule->actions->contains(fn ($action) => ! in_array($action->action->value, $this->supportedAutomationActionTypeValues(), true))
         ) {
             session()->flash('error', 'Esta automacao ainda usa configuracoes legadas de status e precisa ser revisada antes da edicao.');
-            $this->setOpenSection('automations');
+            $this->keepSectionOpen('automations');
 
             return;
         }
@@ -941,13 +953,13 @@ class SettingsPage extends Component
             'payload' => $action->payload ?? [],
             'sort_order' => $index + 1,
         ])->values()->all();
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
     }
 
     public function cancelAutomationEditing(): void
     {
         $this->resetAutomationForm();
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
     }
 
     public function saveAutomation(): void
@@ -999,7 +1011,7 @@ class SettingsPage extends Component
 
         $this->loadBoardMeta();
         $this->resetAutomationForm();
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
         session()->flash('status', 'Automacao salva com sucesso.');
     }
 
@@ -1009,7 +1021,7 @@ class SettingsPage extends Component
         $this->authorize('update', $rule->board);
         $rule->update(['is_active' => ! $rule->is_active]);
         $this->loadBoardMeta();
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
         session()->flash('status', 'Automacao atualizada com sucesso.');
     }
 
@@ -1024,7 +1036,7 @@ class SettingsPage extends Component
             $this->resetAutomationForm();
         }
 
-        $this->setOpenSection('automations');
+        $this->keepSectionOpen('automations');
         session()->flash('status', 'Automacao removida com sucesso.');
     }
 
@@ -1649,7 +1661,7 @@ class SettingsPage extends Component
     private function resetForms(): void
     {
         $this->resetValidation();
-        $this->openSection = 'groups';
+        $this->openSection = null;
         $this->groupForm = $this->emptyGroupForm();
         $this->editGroupForm = $this->emptyGroupForm();
         $this->statusForm = $this->emptyStatusForm();

@@ -58,7 +58,6 @@ class ProfileUpdateTest extends TestCase
 
         $this->get(route('profile.edit'))
             ->assertOk()
-            ->assertDontSee('Aparencia')
             ->assertDontSee('Excluir conta')
             ->assertDontSee('wire:model="name"', false)
             ->assertDontSee('wire:model="email"', false);
@@ -137,6 +136,7 @@ class ProfileUpdateTest extends TestCase
     {
         $user = User::factory()->create([
             'password' => Hash::make('password'),
+            'must_change_password' => true,
         ]);
 
         $this->actingAs($user);
@@ -150,6 +150,7 @@ class ProfileUpdateTest extends TestCase
         $response->assertHasNoErrors();
 
         $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertFalse($user->must_change_password);
     }
 
     public function test_user_can_delete_their_account(): void

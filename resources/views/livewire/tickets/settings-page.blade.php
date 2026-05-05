@@ -1,4 +1,12 @@
-<div class="space-y-6">
+<div
+    class="space-y-6"
+    x-data="{
+        openSection: $wire.entangle('openSection').live,
+        toggleSection(section) {
+            this.openSection = this.openSection === section ? null : section;
+        },
+    }"
+>
     @if (session('status'))
         <div class="ui-panel rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('status') }}</div>
     @endif
@@ -52,16 +60,15 @@
         </div>
     @else
         <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" wire:click="setOpenSection('board')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+            <button type="button" x-on:click="toggleSection('board')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Dados do quadro</h3>
                     <p class="text-sm text-slate-500">Resumo do ambiente: {{ $board->groups->count() }} etapas, {{ $board->fields->count() }} campos, {{ $board->forms->count() }} formularios.</p>
                 </div>
-                <span class="text-sm text-slate-500">{{ $openSection === 'board' ? 'Recolher' : 'Abrir' }}</span>
+                <span class="text-sm text-slate-500" x-text="openSection === 'board' ? 'Recolher' : 'Abrir'"></span>
             </button>
 
-            @if ($openSection === 'board')
-                <div class="border-t border-slate-200 px-6 py-6">
+            <div x-show="openSection === 'board'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-4 lg:grid-cols-4">
                         <div class="rounded-2xl bg-slate-50 p-4">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Etapa inicial</p>
@@ -97,20 +104,18 @@
                         </div>
                     </form>
                 </div>
-            @endif
         </section>
 
         <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" wire:click="setOpenSection('groups')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+            <button type="button" x-on:click="toggleSection('groups')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Etapas</h3>
                     <p class="text-sm text-slate-500">Fluxo principal do quadro. O ticket fecha sozinho ao entrar na etapa final.</p>
                 </div>
-                <span class="text-sm text-slate-500">{{ $openSection === 'groups' ? 'Recolher' : 'Abrir' }}</span>
+                <span class="text-sm text-slate-500" x-text="openSection === 'groups' ? 'Recolher' : 'Abrir'"></span>
             </button>
 
-            @if ($openSection === 'groups')
-                <div class="border-t border-slate-200 px-6 py-6">
+            <div x-show="openSection === 'groups'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
                         <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div class="mb-4">
@@ -130,7 +135,16 @@
                                 </div>
 
                                 <div class="flex flex-wrap gap-2">
-                                    <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">{{ $editingGroupId ? 'Salvar etapa' : 'Criar etapa' }}</button>
+                                    <button
+                                        type="submit"
+                                        wire:loading.attr="disabled"
+                                        wire:loading.class="ui-loading"
+                                        wire:target="{{ $editingGroupId ? 'updateGroup' : 'addGroup' }}"
+                                        class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm"
+                                    >
+                                        <span wire:loading.remove wire:target="{{ $editingGroupId ? 'updateGroup' : 'addGroup' }}">{{ $editingGroupId ? 'Salvar etapa' : 'Criar etapa' }}</span>
+                                        <span wire:loading wire:target="{{ $editingGroupId ? 'updateGroup' : 'addGroup' }}">Salvando...</span>
+                                    </button>
                                     @if ($editingGroupId)
                                         <button type="button" wire:click="cancelEditingGroup" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
                                     @endif
@@ -159,10 +173,10 @@
                                         </div>
 
                                         <div class="flex flex-wrap gap-2">
-                                            <button type="button" wire:click="moveGroupUp({{ $group->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" @disabled($loop->first)>Subir</button>
-                                            <button type="button" wire:click="moveGroupDown({{ $group->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" @disabled($loop->last)>Descer</button>
-                                            <button type="button" wire:click="startEditingGroup({{ $group->id }})" class="ui-action rounded-xl border border-sky-200 px-3 py-2 text-sm text-sky-700 hover:bg-sky-50">Editar</button>
-                                            <button type="button" wire:click="confirmDeleteGroup({{ $group->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Excluir</button>
+                                            <button type="button" wire:click="moveGroupUp({{ $group->id }})" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="moveGroupUp({{ $group->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" @disabled($loop->first)>Subir</button>
+                                            <button type="button" wire:click="moveGroupDown({{ $group->id }})" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="moveGroupDown({{ $group->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" @disabled($loop->last)>Descer</button>
+                                            <button type="button" wire:click="startEditingGroup({{ $group->id }})" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="startEditingGroup({{ $group->id }})" class="ui-action rounded-xl border border-sky-200 px-3 py-2 text-sm text-sky-700 hover:bg-sky-50">Editar</button>
+                                            <button type="button" wire:click="confirmDeleteGroup({{ $group->id }})" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="confirmDeleteGroup({{ $group->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Excluir</button>
                                         </div>
                                     </div>
 
@@ -184,7 +198,7 @@
                                                 </select>
                                             </div>
                                             <div class="mt-4 flex flex-wrap gap-2">
-                                                <button type="button" wire:click="deleteGroup" class="ui-action rounded-2xl bg-rose-600 px-4 py-3 text-sm font-medium text-white hover:bg-rose-500">Confirmar exclusao</button>
+                                                <button type="button" wire:click="deleteGroup" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="deleteGroup" class="ui-action rounded-2xl bg-rose-600 px-4 py-3 text-sm font-medium text-white hover:bg-rose-500">Confirmar exclusao</button>
                                                 <button type="button" wire:click="cancelDeletion" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
                                             </div>
                                         </div>
@@ -194,20 +208,18 @@
                         </div>
                     </div>
                 </div>
-            @endif
         </section>
 
         <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" wire:click="setOpenSection('sla')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+            <button type="button" x-on:click="toggleSection('sla')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">SLA</h3>
                     <p class="text-sm text-slate-500">{{ $slaIsActive ? 'Ativo no quadro.' : 'Desativado no quadro.' }} Configure tempos por prioridade.</p>
                 </div>
-                <span class="text-sm text-slate-500">{{ $openSection === 'sla' ? 'Recolher' : 'Abrir' }}</span>
+                <span class="text-sm text-slate-500" x-text="openSection === 'sla' ? 'Recolher' : 'Abrir'"></span>
             </button>
 
-            @if ($openSection === 'sla')
-                <div class="border-t border-slate-200 px-6 py-6">
+            <div x-show="openSection === 'sla'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <form wire:submit="saveSlaPolicy" class="space-y-5">
                         <label class="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" wire:model="slaIsActive" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> SLA ativo neste quadro</label>
                         <div class="grid gap-3 lg:grid-cols-2">
@@ -234,20 +246,18 @@
                         <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Salvar SLA</button>
                     </form>
                 </div>
-            @endif
         </section>
 
         <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" wire:click="setOpenSection('automations')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+            <button type="button" x-on:click="toggleSection('automations')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Automacoes</h3>
                     <p class="text-sm text-slate-500">Regras no formato Quando / Se / Entao usando etapa, prioridade, responsavel e fechamento.</p>
                 </div>
-                <span class="text-sm text-slate-500">{{ $openSection === 'automations' ? 'Recolher' : 'Abrir' }}</span>
+                <span class="text-sm text-slate-500" x-text="openSection === 'automations' ? 'Recolher' : 'Abrir'"></span>
             </button>
 
-            @if ($openSection === 'automations')
-                <div class="border-t border-slate-200 px-6 py-6">
+            <div x-show="openSection === 'automations'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
                         <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div class="mb-4 flex items-start justify-between gap-4">
@@ -451,20 +461,18 @@
                         </section>
                     </div>
                 </div>
-            @endif
         </section>
 
         <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" wire:click="setOpenSection('fields')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+            <button type="button" x-on:click="toggleSection('fields')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Campos do chamado</h3>
                     <p class="text-sm text-slate-500">Cada campo pode aparecer no quadro e tambem ser perguntado, ou nao, em cada formulario.</p>
                 </div>
-                <span class="text-sm text-slate-500">{{ $openSection === 'fields' ? 'Recolher' : 'Abrir' }}</span>
+                <span class="text-sm text-slate-500" x-text="openSection === 'fields' ? 'Recolher' : 'Abrir'"></span>
             </button>
 
-            @if ($openSection === 'fields')
-                <div class="border-t border-slate-200 px-6 py-6">
+            <div x-show="openSection === 'fields'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
                         <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div class="mb-4">
@@ -524,20 +532,18 @@
                         </section>
                     </div>
                 </div>
-            @endif
         </section>
 
         <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" wire:click="setOpenSection('forms')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+            <button type="button" x-on:click="toggleSection('forms')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Formularios e catalogo</h3>
                     <p class="text-sm text-slate-500">Defina quais perguntas entram em cada formulario e qual etapa o ticket recebe ao nascer.</p>
                 </div>
-                <span class="text-sm text-slate-500">{{ $openSection === 'forms' ? 'Recolher' : 'Abrir' }}</span>
+                <span class="text-sm text-slate-500" x-text="openSection === 'forms' ? 'Recolher' : 'Abrir'"></span>
             </button>
 
-            @if ($openSection === 'forms')
-                <div class="border-t border-slate-200 px-6 py-6">
+            <div x-show="openSection === 'forms'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
                         <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div class="mb-4">
@@ -748,7 +754,6 @@
                         </section>
                     </div>
                 </div>
-            @endif
         </section>
     @endif
 </div>

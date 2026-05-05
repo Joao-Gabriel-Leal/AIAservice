@@ -45,7 +45,7 @@ class AccountCreatedNotification extends Notification
             'message' => $this->mustChangePassword
                 ? 'Sua conta esta pronta e exige troca de senha no primeiro acesso.'
                 : 'Sua conta esta pronta para uso.',
-            'url' => route('login'),
+            'url' => $this->mustChangePassword ? route('profile.edit').'#seguranca' : route('dashboard'),
             'email' => $this->email,
             'must_change_password' => $this->mustChangePassword,
         ];

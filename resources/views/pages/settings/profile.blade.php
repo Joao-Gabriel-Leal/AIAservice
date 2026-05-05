@@ -147,6 +147,13 @@ new #[Title('Meu perfil')] class extends Component {
         </div>
     @endif
 
+    @if (auth()->user()->must_change_password)
+        <div class="ui-panel rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p class="font-semibold">Troca de senha obrigatoria</p>
+            <p class="mt-1">Antes de continuar usando o portal, atualize a senha da sua conta.</p>
+        </div>
+    @endif
+
     <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-3 border-b border-slate-200 pb-5">
             <h2 class="text-lg font-semibold text-slate-900">Foto de perfil</h2>
@@ -333,7 +340,7 @@ new #[Title('Meu perfil')] class extends Component {
         <div class="flex flex-col gap-3 border-b border-slate-200 pb-5">
             <h2 class="text-lg font-semibold text-slate-900">Seguranca da conta</h2>
             <p class="max-w-3xl text-sm text-slate-500">
-                Troque sua senha e mantenha os controles de autenticacao em um unico lugar.
+                {{ auth()->user()->must_change_password ? 'Defina uma nova senha para liberar o acesso ao restante do portal.' : 'Troque sua senha e mantenha os controles de autenticacao em um unico lugar.' }}
             </p>
         </div>
 

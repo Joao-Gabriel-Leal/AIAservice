@@ -68,6 +68,34 @@ class TicketBoardAccessTest extends TestCase
             ->assertDontSee('>Chamados</a>', false);
     }
 
+    public function test_ticket_index_hides_global_search_action_for_non_super_admins(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Busca Operacional',
+            'is_active' => true,
+        ]);
+
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Suporte Busca',
+            'slug' => 'suporte-busca',
+            'is_active' => true,
+        ]);
+
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        app(SectorProvisioningService::class)->provision($sector);
+
+        $this->actingAs($operator)
+            ->get(route('tickets.index'))
+            ->assertOk()
+            ->assertDontSeeText('Buscar em tudo')
+            ->assertDontSee(route('search', absolute: false), false);
+    }
+
     public function test_user_without_operational_access_is_redirected_to_central(): void
     {
         $user = User::factory()->create();

@@ -54,9 +54,11 @@
                 </div>
             </div>
 
-            <a href="{{ route('search') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                Buscar em tudo
-            </a>
+            @if (auth()->user()->isSuperAdmin())
+                <a href="{{ route('search') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                    Buscar em tudo
+                </a>
+            @endif
             <a href="{{ route('tickets.central') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
                 Central de formularios
             </a>

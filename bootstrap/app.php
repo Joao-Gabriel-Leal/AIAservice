@@ -1,9 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsurePasswordChangeIsCompleted;
+use App\Modules\Shared\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Modules\Shared\Http\Middleware\EnsureRole;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => EnsureRole::class,
+        ]);
+
+        $middleware->web(append: [
+            EnsurePasswordChangeIsCompleted::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

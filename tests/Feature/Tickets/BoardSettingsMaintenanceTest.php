@@ -26,6 +26,61 @@ class BoardSettingsMaintenanceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_settings_sections_start_closed_and_can_toggle_groups(): void
+    {
+        ['sector' => $sector, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+
+        Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->assertSet('openSection', null)
+            ->call('setOpenSection', 'groups')
+            ->assertSet('openSection', 'groups')
+            ->call('setOpenSection', 'groups')
+            ->assertSet('openSection', null);
+    }
+
+    public function test_group_actions_keep_groups_section_open(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+        $secondGroup = $board->groups()->whereKeyNot($group->id)->orderBy('sort_order')->firstOrFail();
+
+        $component = Livewire::actingAs($admin)
+            ->test(SettingsPage::class)
+            ->set('groupForm.name', 'Retorno')
+            ->set('groupForm.color', '#2563eb')
+            ->call('addGroup')
+            ->assertHasNoErrors()
+            ->assertSet('openSection', 'groups')
+            ->call('startEditingGroup', $group->id)
+            ->assertSet('openSection', 'groups')
+            ->set('editGroupForm.name', 'Triagem operacional')
+            ->call('updateGroup')
+            ->assertHasNoErrors()
+            ->assertSet('openSection', 'groups')
+            ->call('moveGroupDown', $group->id)
+            ->assertHasNoErrors()
+            ->assertSet('openSection', 'groups')
+            ->call('moveGroupUp', $secondGroup->id)
+            ->assertHasNoErrors()
+            ->assertSet('openSection', 'groups');
+
+        $newGroup = TicketGroup::query()
+            ->where('ticket_board_id', $board->id)
+            ->where('name', 'Retorno')
+            ->firstOrFail();
+
+        $component
+            ->call('confirmDeleteGroup', $newGroup->id)
+            ->assertSet('openSection', 'groups')
+            ->call('deleteGroup')
+            ->assertHasNoErrors()
+            ->assertSet('openSection', 'groups');
+    }
+
     public function test_sector_admin_can_edit_a_group_without_breaking_existing_tickets(): void
     {
         ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status, 'room' => $room] = $this->maintenanceContext();
