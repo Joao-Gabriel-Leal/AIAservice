@@ -62,7 +62,7 @@
                     required
                     autocomplete="new-password"
                     placeholder="Crie uma senha forte"
-                    minlength="8"
+                    minlength="12"
                     class="ui-input auth-field-input auth-field-input-icon auth-field-input-toggle"
                 />
 
@@ -101,7 +101,7 @@
                     required
                     autocomplete="new-password"
                     placeholder="Repita a nova senha"
-                    minlength="8"
+                    minlength="12"
                     class="ui-input auth-field-input auth-field-input-icon auth-field-input-toggle"
                 />
 
@@ -131,7 +131,7 @@
     </form>
 
     <div class="auth-helper-card">
-        Escolha uma senha com pelo menos 8 caracteres e combine palavras, numeros ou simbolos para reforcar sua seguranca.
+        Escolha uma senha com pelo menos 12 caracteres, com letras maiusculas e minusculas, numeros e simbolos.
     </div>
 
     @if (Route::has('password.request'))

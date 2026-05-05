@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -170,6 +172,38 @@ class ProfileUpdateTest extends TestCase
 
         $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
         $this->assertFalse($user->must_change_password);
+    }
+
+    public function test_pending_password_change_form_hides_current_password_field(): void
+    {
+        $user = User::factory()->create([
+            'must_change_password' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test('pages::settings.profile')
+            ->assertSee('Defina uma nova senha para liberar o acesso ao restante do portal.')
+            ->assertDontSee('Senha atual')
+            ->assertDontSee('wire:model="current_password"', false);
+    }
+
+    public function test_password_minimum_validation_message_is_translated(): void
+    {
+        app()->setLocale('pt_BR');
+
+        $validator = Validator::make(
+            [
+                'password' => 'curta',
+                'password_confirmation' => 'curta',
+            ],
+            [
+                'password' => ['required', 'string', Password::min(12), 'confirmed'],
+            ],
+        );
+
+        $this->assertTrue($validator->fails());
+        $this->assertSame('O campo nova senha deve ter pelo menos 12 caracteres.', $validator->errors()->first('password'));
     }
 
     public function test_current_password_is_required_when_password_change_is_not_pending(): void

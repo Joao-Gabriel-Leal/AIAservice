@@ -83,18 +83,20 @@ new #[Title('Seguranca da conta')] class extends Component {
             </div>
 
             <form method="POST" wire:submit="updatePassword" class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-3">
-                    <label class="block text-sm text-slate-600">
-                        <span class="mb-2 block font-medium">Senha atual</span>
-                        <input
-                            type="password"
-                            wire:model="current_password"
-                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
-                            autocomplete="current-password"
-                            required
-                        >
-                        @error('current_password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                    </label>
+                <div class="grid gap-4 {{ auth()->user()->must_change_password ? 'md:grid-cols-2' : 'md:grid-cols-3' }}">
+                    @unless (auth()->user()->must_change_password)
+                        <label class="block text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Senha atual</span>
+                            <input
+                                type="password"
+                                wire:model="current_password"
+                                class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                                autocomplete="current-password"
+                                required
+                            >
+                            @error('current_password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+                    @endunless
 
                     <label class="block text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Nova senha</span>
@@ -103,6 +105,7 @@ new #[Title('Seguranca da conta')] class extends Component {
                             wire:model="password"
                             class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
                             autocomplete="new-password"
+                            minlength="12"
                             required
                         >
                         @error('password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
@@ -115,13 +118,14 @@ new #[Title('Seguranca da conta')] class extends Component {
                             wire:model="password_confirmation"
                             class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
                             autocomplete="new-password"
+                            minlength="12"
                             required
                         >
                     </label>
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                    <p class="text-sm text-slate-500">Escolha uma senha exclusiva para este ambiente interno e evite repetir combinacoes antigas.</p>
+                    <p class="text-sm text-slate-500">Use pelo menos 12 caracteres, com letras maiusculas e minusculas, numeros e simbolos.</p>
                     <button
                         type="submit"
                         wire:loading.attr="disabled"

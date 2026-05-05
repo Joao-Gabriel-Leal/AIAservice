@@ -368,6 +368,7 @@ new #[Title('Meu perfil')] class extends Component {
                             wire:model="password"
                             class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
                             autocomplete="new-password"
+                            minlength="12"
                             required
                         >
                         @error('password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
@@ -380,13 +381,14 @@ new #[Title('Meu perfil')] class extends Component {
                             wire:model="password_confirmation"
                             class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
                             autocomplete="new-password"
+                            minlength="12"
                             required
                         >
                     </label>
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                    <p class="text-sm text-slate-500">Use uma senha longa, exclusiva e diferente das combinacoes antigas.</p>
+                    <p class="text-sm text-slate-500">Use pelo menos 12 caracteres, com letras maiusculas e minusculas, numeros e simbolos.</p>
                     <button
                         type="submit"
                         wire:loading.attr="disabled"
