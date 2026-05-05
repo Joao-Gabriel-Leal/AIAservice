@@ -2,15 +2,27 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AssetAllocationStatus;
+use App\Enums\AssetStatus;
+use App\Enums\KnowledgeBaseArticleStatus;
+use App\Enums\KnowledgeBaseVisibility;
+use App\Enums\LicenseAssignmentStatus;
+use App\Enums\LicenseStatus;
 use App\Enums\TicketPriority;
+use App\Enums\TicketTimeEntryApprovalStatus;
+use App\Enums\TicketTimeEntrySource;
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Modules\Assets\Models\Asset;
 use App\Modules\Companies\Models\Company;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Licenses\Models\License;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
@@ -34,7 +46,7 @@ class DashboardTest extends TestCase
 
     public function test_dashboard_renders_visual_sections_and_chart_payloads(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->superAdmin()->create();
 
         $response = $this->actingAs($user)->get(route('dashboard', ['period' => 30]));
 
@@ -42,6 +54,10 @@ class DashboardTest extends TestCase
         $response->assertSeeText('Volume no periodo');
         $response->assertSeeText('Distribuicao por status');
         $response->assertSeeText('Saude operacional');
+        $response->assertSeeText('Fila de atencao');
+        $response->assertSeeText('Base de conhecimento');
+        $response->assertSeeText('Ativos pendentes');
+        $response->assertSeeText('Proximas renovacoes');
         $response->assertSee('data-chart=', false);
     }
 
@@ -192,6 +208,169 @@ class DashboardTest extends TestCase
         $response->assertSeeText('Chamado avaliado');
         $response->assertSeeText('Chamado sem avaliacao');
         $response->assertSeeText('Sem avaliacao');
+    }
+
+    public function test_dashboard_counts_operational_modules_and_respects_sector_filter(): void
+    {
+        ['sector' => $sectorA, 'room' => $roomA, 'board' => $boardA, 'group' => $groupA, 'status' => $statusA] = $this->ticketContext();
+        ['sector' => $sectorB, 'room' => $roomB, 'board' => $boardB, 'group' => $groupB, 'status' => $statusB] = $this->ticketContext();
+
+        $superAdmin = User::factory()->superAdmin()->create();
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sectorA->id,
+            'room_id' => $roomA->id,
+        ]);
+        $requesterA = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sectorA->id,
+            'room_id' => $roomA->id,
+        ]);
+        $requesterB = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sectorB->id,
+            'room_id' => $roomB->id,
+        ]);
+
+        $criticalTicket = Ticket::query()->create([
+            'sector_id' => $sectorA->id,
+            'ticket_board_id' => $boardA->id,
+            'ticket_group_id' => $groupA->id,
+            'ticket_status_id' => $statusA->id,
+            'room_id' => $roomA->id,
+            'title' => 'SLA critico setor A',
+            'description' => 'Chamado em atraso para o dashboard completo.',
+            'requester_id' => $requesterA->id,
+            'priority' => TicketPriority::URGENT,
+            'first_response_due_at' => now()->subHour(),
+            'last_activity_at' => now()->subDays(8),
+            'created_at' => now()->subDays(8),
+            'updated_at' => now()->subHours(2),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sectorB->id,
+            'ticket_board_id' => $boardB->id,
+            'ticket_group_id' => $groupB->id,
+            'ticket_status_id' => $statusB->id,
+            'room_id' => $roomB->id,
+            'title' => 'Chamado setor B fora do filtro',
+            'description' => 'Nao deve aparecer quando setor A estiver filtrado.',
+            'requester_id' => $requesterB->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $criticalTicket->timeEntries()->create([
+            'user_id' => $technician->id,
+            'source' => TicketTimeEntrySource::TIMER,
+            'approval_status' => TicketTimeEntryApprovalStatus::APPROVED,
+            'started_at' => now()->subDay(),
+            'ended_at' => now()->subDay()->addHours(2),
+            'duration_seconds' => 7200,
+        ]);
+
+        $criticalTicket->timeEntries()->create([
+            'user_id' => $technician->id,
+            'source' => TicketTimeEntrySource::MANUAL,
+            'approval_status' => TicketTimeEntryApprovalStatus::PENDING,
+            'started_at' => now()->subHours(3),
+            'ended_at' => now()->subHours(2),
+            'duration_seconds' => 3600,
+        ]);
+
+        $license = License::query()->create([
+            'sector_id' => $sectorA->id,
+            'vendor_name' => 'SAP',
+            'product_name' => 'Suite Dashboard',
+            'plan_name' => 'Operacional',
+            'seats_total' => 1,
+            'status' => LicenseStatus::ACTIVE,
+            'renewal_date' => now()->addDays(10)->toDateString(),
+            'created_by' => $superAdmin->id,
+        ]);
+
+        $license->assignments()->create([
+            'user_id' => $requesterA->id,
+            'status' => LicenseAssignmentStatus::ACTIVE,
+            'assigned_at' => now(),
+            'created_by' => $superAdmin->id,
+        ]);
+
+        Asset::query()->create([
+            'uuid' => (string) Str::uuid(),
+            'asset_code' => 'PAT-DASH-001',
+            'name' => 'Notebook Dashboard',
+            'status' => AssetStatus::MANUTENCAO,
+            'allocation_status' => AssetAllocationStatus::PENDING_REVIEW,
+            'current_sector_id' => $sectorA->id,
+            'current_room_id' => $roomA->id,
+            'current_user_id' => $requesterA->id,
+            'created_by' => $superAdmin->id,
+        ]);
+
+        $article = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => $superAdmin->id,
+            'generated_from_ticket_id' => $criticalTicket->id,
+            'title' => 'Artigo Dashboard publicado',
+            'summary' => 'Resumo do artigo.',
+            'content' => 'Conteudo do artigo.',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+        ]);
+
+        $article->feedback()->create([
+            'user_id' => $requesterA->id,
+            'is_helpful' => true,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => $superAdmin->id,
+            'title' => 'Rascunho Dashboard',
+            'summary' => 'Resumo pendente.',
+            'content' => 'Conteudo pendente.',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::DRAFT,
+            'is_active' => false,
+        ]);
+
+        $response = $this->actingAs($superAdmin)->get(route('dashboard', [
+            'period' => 30,
+            'sector_id' => $sectorA->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertSeeText('SLA critico setor A');
+        $response->assertDontSeeText('Chamado setor B fora do filtro');
+        $response->assertSeeText('Suite Dashboard');
+        $response->assertSeeText('Notebook Dashboard');
+        $response->assertSeeText('Rascunho Dashboard');
+        $response->assertSeeText('2h 0min');
+        $response->assertSeeText('SLA em atraso');
+        $response->assertSeeText('Sem responsavel');
+        $response->assertSeeText('Alta ou urgente');
+        $response->assertSee('dashboard/export?period=30&amp;sector_id='.$sectorA->id, false);
+    }
+
+    public function test_dashboard_hides_restricted_module_actions_for_requesters(): void
+    {
+        ['sector' => $sector, 'room' => $room] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+
+        $response = $this->actingAs($requester)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertDontSee('href="'.route('assets.index').'"', false);
+        $response->assertDontSee('href="'.route('licenses.index').'"', false);
+        $response->assertSee(route('tickets.central', absolute: false), false);
     }
 
     private function ticketContext(): array

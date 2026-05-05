@@ -16,15 +16,14 @@ class DashboardController extends Controller
     public function __construct(
         private readonly DashboardDataBuilder $dashboardDataBuilder,
         private readonly SpreadsheetExporter $spreadsheetExporter,
-    ) {
-    }
+    ) {}
 
     public function __invoke(Request $request): View
     {
         /** @var User $user */
         $user = auth()->user();
         $period = $this->resolvePeriod($request->string('period')->toString());
-        $data = $this->dashboardDataBuilder->build($user, $period);
+        $data = $this->dashboardDataBuilder->build($user, $period, $request->integer('sector_id') ?: null);
 
         return view('modules.dashboard.index', $data);
     }
@@ -34,7 +33,9 @@ class DashboardController extends Controller
         /** @var User $user */
         $user = auth()->user();
         $period = $this->resolvePeriod($request->string('period')->toString());
-        $export = new DashboardExport($this->dashboardDataBuilder->build($user, $period));
+        $export = new DashboardExport(
+            $this->dashboardDataBuilder->build($user, $period, $request->integer('sector_id') ?: null),
+        );
 
         return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
