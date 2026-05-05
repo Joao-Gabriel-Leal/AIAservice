@@ -346,18 +346,20 @@ new #[Title('Meu perfil')] class extends Component {
 
         <div class="space-y-6 pt-6">
             <form wire:submit="updatePassword" class="space-y-4">
-                <div class="grid gap-4 lg:grid-cols-3">
-                    <label class="block text-sm text-slate-600">
-                        <span class="mb-2 block font-medium">Senha atual</span>
-                        <input
-                            type="password"
-                            wire:model="current_password"
-                            class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
-                            autocomplete="current-password"
-                            required
-                        >
-                        @error('current_password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                    </label>
+                <div class="grid gap-4 {{ auth()->user()->must_change_password ? 'lg:grid-cols-2' : 'lg:grid-cols-3' }}">
+                    @unless (auth()->user()->must_change_password)
+                        <label class="block text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Senha atual</span>
+                            <input
+                                type="password"
+                                wire:model="current_password"
+                                class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"
+                                autocomplete="current-password"
+                                required
+                            >
+                            @error('current_password') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+                    @endunless
 
                     <label class="block text-sm text-slate-600">
                         <span class="mb-2 block font-medium">Nova senha</span>

@@ -136,7 +136,6 @@ class ProfileUpdateTest extends TestCase
     {
         $user = User::factory()->create([
             'password' => Hash::make('password'),
-            'must_change_password' => true,
         ]);
 
         $this->actingAs($user);
@@ -151,6 +150,42 @@ class ProfileUpdateTest extends TestCase
 
         $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
         $this->assertFalse($user->must_change_password);
+    }
+
+    public function test_pending_password_change_can_be_completed_without_current_password(): void
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('temporary-password'),
+            'must_change_password' => true,
+        ]);
+
+        $this->actingAs($user);
+
+        $response = Livewire::test('pages::settings.profile')
+            ->set('password', 'new-password')
+            ->set('password_confirmation', 'new-password')
+            ->call('updatePassword');
+
+        $response->assertHasNoErrors();
+
+        $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertFalse($user->must_change_password);
+    }
+
+    public function test_current_password_is_required_when_password_change_is_not_pending(): void
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('password'),
+            'must_change_password' => false,
+        ]);
+
+        $this->actingAs($user);
+
+        Livewire::test('pages::settings.profile')
+            ->set('password', 'new-password')
+            ->set('password_confirmation', 'new-password')
+            ->call('updatePassword')
+            ->assertHasErrors(['current_password']);
     }
 
     public function test_user_can_delete_their_account(): void

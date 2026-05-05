@@ -12,18 +12,24 @@ trait UpdatesUserPassword
      */
     protected function updateAuthenticatedUserPassword(): void
     {
+        $user = Auth::user();
+        $rules = [
+            'password' => $this->passwordRules(),
+        ];
+
+        if (! $user?->must_change_password) {
+            $rules['current_password'] = $this->currentPasswordRules();
+        }
+
         try {
-            $validated = $this->validate([
-                'current_password' => $this->currentPasswordRules(),
-                'password' => $this->passwordRules(),
-            ]);
+            $validated = $this->validate($rules);
         } catch (ValidationException $exception) {
             $this->resetPasswordFormFields();
 
             throw $exception;
         }
 
-        Auth::user()->update([
+        $user->update([
             'password' => $validated['password'],
             'must_change_password' => false,
         ]);
