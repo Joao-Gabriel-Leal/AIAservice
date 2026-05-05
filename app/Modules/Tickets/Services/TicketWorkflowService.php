@@ -31,9 +31,11 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class TicketWorkflowService
 {
@@ -411,21 +413,18 @@ class TicketWorkflowService
 
         $ticketMessage->load('user');
 
-        $event = new TicketMessageCreated($ticketMessage);
-        $socketId = request()->header('X-Socket-ID');
+        $this->broadcastMessageCreated($ticketMessage);
 
-        if (is_string($socketId) && $socketId !== '' && $socketId !== 'undefined') {
-            broadcast($event)->toOthers();
-        } else {
-            event($event);
-        }
-
-        $this->ticketAutomationEngine->handleEvent($ticket->fresh(['group', 'status', 'requester', 'assignee']), TicketAutomationTrigger::TICKET_MESSAGE_CREATED, [
-            ...$context,
-            'event' => [
-                'message_id' => $ticketMessage->id,
+        $this->handleAutomationEventSafely(
+            $ticket->fresh(['group', 'status', 'requester', 'assignee']),
+            TicketAutomationTrigger::TICKET_MESSAGE_CREATED,
+            [
+                ...$context,
+                'event' => [
+                    'message_id' => $ticketMessage->id,
+                ],
             ],
-        ]);
+        );
 
         return $ticketMessage;
     }
@@ -531,7 +530,11 @@ class TicketWorkflowService
             return;
         }
 
-        Notification::send($recipients, $notification);
+        try {
+            Notification::send($recipients, $notification);
+        } catch (Throwable $throwable) {
+            $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
     }
 
     private function notifyPendingManualTimeEntry(TicketTimeEntry $timeEntry, array $exceptUserIds = []): void
@@ -556,7 +559,13 @@ class TicketWorkflowService
             return;
         }
 
-        Notification::send($recipients, new TicketManualTimeEntryPendingApprovalNotification($ticket));
+        $notification = new TicketManualTimeEntryPendingApprovalNotification($ticket);
+
+        try {
+            Notification::send($recipients, $notification);
+        } catch (Throwable $throwable) {
+            $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
     }
 
     private function notifyTimeEntryReviewed(TicketTimeEntry $timeEntry, TicketTimeEntryApprovalStatus $status, array $exceptUserIds = []): void
@@ -568,7 +577,13 @@ class TicketWorkflowService
             return;
         }
 
-        $recipient->notify(new TicketTimeEntryReviewedNotification($ticket, strtolower($status->label())));
+        $notification = new TicketTimeEntryReviewedNotification($ticket, strtolower($status->label()));
+
+        try {
+            $recipient->notify($notification);
+        } catch (Throwable $throwable) {
+            $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
     }
 
     private function notifyRequesterToRate(Ticket $ticket): void
@@ -577,11 +592,62 @@ class TicketWorkflowService
             return;
         }
 
-        $ticket->requester->notify(new TicketRatingRequestNotification(
+        $notification = new TicketRatingRequestNotification(
             $ticket,
             'Chamado encerrado',
             "O chamado #{$ticket->id} foi encerrado. Avalie o atendimento quando puder.",
-        ));
+        );
+
+        try {
+            $ticket->requester->notify($notification);
+        } catch (Throwable $throwable) {
+            $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
+    }
+
+    private function broadcastMessageCreated(TicketMessage $ticketMessage): void
+    {
+        try {
+            $event = new TicketMessageCreated($ticketMessage);
+            $socketId = request()->header('X-Socket-ID');
+
+            if (is_string($socketId) && $socketId !== '' && $socketId !== 'undefined') {
+                broadcast($event)->toOthers();
+            } else {
+                event($event);
+            }
+        } catch (Throwable $throwable) {
+            Log::warning('Ticket message broadcast failed.', [
+                'ticket_id' => $ticketMessage->ticket_id,
+                'message_id' => $ticketMessage->id,
+                'exception' => $throwable::class,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function handleAutomationEventSafely(Ticket $ticket, TicketAutomationTrigger $trigger, array $context): void
+    {
+        try {
+            $this->ticketAutomationEngine->handleEvent($ticket, $trigger, $context);
+        } catch (Throwable $throwable) {
+            Log::error('Ticket automation event failed.', [
+                'ticket_id' => $ticket->id,
+                'trigger' => $trigger->value,
+                'exception' => $throwable::class,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+    }
+
+    private function logNotificationFailure(Throwable $throwable, Ticket $ticket, object $notification): void
+    {
+        Log::warning('Ticket notification delivery failed.', [
+            'ticket_id' => $ticket->id,
+            'notification' => $notification::class,
+            'exception' => $throwable::class,
+            'message' => $throwable->getMessage(),
+        ]);
     }
 
     private function ticketRecipients(Ticket $ticket, array $exceptUserIds = []): Collection
@@ -722,7 +788,7 @@ class TicketWorkflowService
         try {
             $startedAt = Carbon::parse($startedAt);
             $endedAt = Carbon::parse($endedAt);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             throw ValidationException::withMessages([
                 'timeTracking' => 'Informe inicio e fim validos para a sessao.',
             ]);

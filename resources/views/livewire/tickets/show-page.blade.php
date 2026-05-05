@@ -927,6 +927,9 @@
                 return {
                     started: false,
                     livewireId: null,
+                    channelName: null,
+                    refreshing: false,
+                    refreshQueued: false,
 
                     boot() {
                         if (this.started) {
@@ -942,7 +945,9 @@
                             return;
                         }
 
-                        window.Echo.private(`tickets.${ticketId}`)
+                        this.channelName = `tickets.${ticketId}`;
+
+                        window.Echo.private(this.channelName)
                             .listen('.ticket.message.created', () => {
                                 this.refreshComponent();
                                 window.setTimeout(() => this.scrollToLatest(), 80);
@@ -954,7 +959,29 @@
                             return;
                         }
 
-                        window.Livewire.find(this.livewireId)?.$refresh();
+                        if (this.refreshing) {
+                            this.refreshQueued = true;
+                            return;
+                        }
+
+                        const component = window.Livewire.find(this.livewireId);
+
+                        if (! component) {
+                            return;
+                        }
+
+                        this.refreshing = true;
+
+                        Promise.resolve(component.$refresh())
+                            .catch(() => {})
+                            .finally(() => {
+                                this.refreshing = false;
+
+                                if (this.refreshQueued) {
+                                    this.refreshQueued = false;
+                                    this.refreshComponent();
+                                }
+                            });
                     },
 
                     scrollToLatest() {
@@ -967,6 +994,14 @@
 
                             container.scrollTop = container.scrollHeight;
                         });
+                    },
+
+                    destroy() {
+                        if (! this.channelName || ! window.Echo) {
+                            return;
+                        }
+
+                        window.Echo.private(this.channelName).stopListening('.ticket.message.created');
                     },
                 };
             };

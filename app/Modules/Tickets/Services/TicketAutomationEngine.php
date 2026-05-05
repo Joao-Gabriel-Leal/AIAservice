@@ -8,6 +8,7 @@ use App\Enums\TicketAutomationTrigger;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAutomationExecution;
 use App\Modules\Tickets\Models\TicketAutomationRule;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class TicketAutomationEngine
@@ -17,8 +18,7 @@ class TicketAutomationEngine
         private readonly TicketAutomationActionExecutor $actionExecutor,
         private readonly TicketAutomationIdempotencyService $idempotencyService,
         private readonly TicketAutomationAuditService $auditService,
-    ) {
-    }
+    ) {}
 
     public function handleEvent(Ticket $ticket, TicketAutomationTrigger $trigger, array $context = []): void
     {
@@ -40,7 +40,17 @@ class TicketAutomationEngine
             ->get();
 
         foreach ($rules as $rule) {
-            $this->runRule($rule, $ticket, $trigger, $context);
+            try {
+                $this->runRule($rule, $ticket, $trigger, $context);
+            } catch (Throwable $throwable) {
+                Log::error('Ticket automation rule failed before completion.', [
+                    'ticket_id' => $ticket->id,
+                    'automation_rule_id' => $rule->id,
+                    'trigger' => $trigger->value,
+                    'exception' => $throwable::class,
+                    'message' => $throwable->getMessage(),
+                ]);
+            }
         }
     }
 

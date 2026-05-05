@@ -142,10 +142,20 @@ class ExcelExportTest extends TestCase
             $this->actingAs($requester)->get(route('dashboard.export', ['period' => 30])),
         );
 
-        $this->assertSame(['Resumo', 'Chamados recentes', 'Volume por dia', 'Distribuicao por status', 'Saude operacional'], $spreadsheet->getSheetNames());
+        $this->assertSame([
+            'Resumo',
+            'Fila de atencao',
+            'Chamados recentes',
+            'Volume por dia',
+            'Distribuicao por status',
+            'Distribuicao por prioridade',
+            'Licencas',
+            'Ativos',
+            'Base de conhecimento',
+        ], $spreadsheet->getSheetNames());
         $summaryRows = $this->sheetValues($spreadsheet->getSheet(0));
         $this->assertContains('Periodo | 30 dias', $summaryRows);
-        $this->assertStringContainsString('Chamado exportado', implode("\n", $this->sheetValues($spreadsheet->getSheet(1))));
+        $this->assertStringContainsString('Chamado exportado', implode("\n", $this->sheetValues($spreadsheet->getSheet(2))));
     }
 
     public function test_tickets_export_respects_selected_sector(): void

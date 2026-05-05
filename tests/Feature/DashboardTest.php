@@ -359,6 +359,121 @@ class DashboardTest extends TestCase
         $response->assertSee('dashboard/export?period=30&amp;sector_id='.$sectorA->id, false);
     }
 
+    public function test_operational_dashboard_ignores_requested_tickets_outside_operator_or_manager_sectors(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Carol',
+            'is_active' => true,
+        ]);
+
+        $managedSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Setor Gerenciado Carol',
+            'slug' => 'setor-gerenciado-carol',
+            'is_active' => true,
+        ]);
+        $operatedSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Setor Operado Carol',
+            'slug' => 'setor-operado-carol',
+            'is_active' => true,
+        ]);
+        $outsideSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Setor Fora Carol',
+            'slug' => 'setor-fora-carol',
+            'is_active' => true,
+        ]);
+
+        $managedRoom = Room::query()->create(['sector_id' => $managedSector->id, 'name' => 'Sala Gestao Carol', 'is_active' => true]);
+        $operatedRoom = Room::query()->create(['sector_id' => $operatedSector->id, 'name' => 'Sala Operacao Carol', 'is_active' => true]);
+        $outsideRoom = Room::query()->create(['sector_id' => $outsideSector->id, 'name' => 'Sala Fora Carol', 'is_active' => true]);
+
+        $managedBoard = app(SectorProvisioningService::class)->provision($managedSector);
+        $operatedBoard = app(SectorProvisioningService::class)->provision($operatedSector);
+        $outsideBoard = app(SectorProvisioningService::class)->provision($outsideSector);
+
+        $carol = User::factory()->create([
+            'name' => 'Carol',
+            'email' => 'carol@teste.com',
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $managedSector->id,
+            'room_id' => $managedRoom->id,
+        ]);
+        $carol->sectorAccesses()->updateOrCreate(
+            ['sector_id' => $operatedSector->id],
+            ['access_level' => 'technician'],
+        );
+        $carol->sectorAccesses()->updateOrCreate(
+            ['sector_id' => $outsideSector->id],
+            ['access_level' => 'requester'],
+        );
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $managedSector->id,
+            'room_id' => $managedRoom->id,
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $managedSector->id,
+            'ticket_board_id' => $managedBoard->id,
+            'ticket_group_id' => $managedBoard->groups()->firstOrFail()->id,
+            'ticket_status_id' => $managedBoard->statuses()->where('is_closed', false)->firstOrFail()->id,
+            'room_id' => $managedRoom->id,
+            'title' => 'Chamado permitido gestor',
+            'description' => 'Dentro do setor gerenciado.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $operatedSector->id,
+            'ticket_board_id' => $operatedBoard->id,
+            'ticket_group_id' => $operatedBoard->groups()->firstOrFail()->id,
+            'ticket_status_id' => $operatedBoard->statuses()->where('is_closed', false)->firstOrFail()->id,
+            'room_id' => $operatedRoom->id,
+            'title' => 'Chamado permitido operador',
+            'description' => 'Dentro do setor operado.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::HIGH,
+            'last_activity_at' => now(),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $outsideSector->id,
+            'ticket_board_id' => $outsideBoard->id,
+            'ticket_group_id' => $outsideBoard->groups()->firstOrFail()->id,
+            'ticket_status_id' => $outsideBoard->statuses()->where('is_closed', false)->firstOrFail()->id,
+            'room_id' => $outsideRoom->id,
+            'title' => 'Chamado fora dos acessos operacionais',
+            'description' => 'Carol e solicitante, mas nao operadora nem gestora deste setor.',
+            'requester_id' => $carol->id,
+            'priority' => TicketPriority::URGENT,
+            'last_activity_at' => now(),
+        ]);
+
+        $response = $this->actingAs($carol)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertViewHas('selectedSectorId', null);
+        $response->assertViewHas('stats', fn (array $stats) => $stats['tickets_total'] === 2 && $stats['sectors'] === 2);
+        $response->assertViewHas('availableSectors', function ($sectors) use ($managedSector, $operatedSector, $outsideSector) {
+            return $sectors->pluck('id')->sort()->values()->all() === collect([$managedSector->id, $operatedSector->id])->sort()->values()->all()
+                && ! $sectors->pluck('id')->contains($outsideSector->id);
+        });
+        $response->assertSeeText('Chamado permitido gestor');
+        $response->assertSeeText('Chamado permitido operador');
+        $response->assertDontSeeText('Chamado fora dos acessos operacionais');
+
+        $this->actingAs($carol)
+            ->get(route('dashboard', ['sector_id' => $outsideSector->id]))
+            ->assertOk()
+            ->assertViewHas('selectedSectorId', null)
+            ->assertDontSeeText('Chamado fora dos acessos operacionais');
+    }
+
     public function test_dashboard_hides_restricted_module_actions_for_requesters(): void
     {
         ['sector' => $sector, 'room' => $room] = $this->ticketContext();

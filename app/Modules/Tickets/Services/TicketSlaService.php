@@ -12,7 +12,9 @@ use App\Modules\Tickets\Models\TicketSlaTarget;
 use App\Modules\Tickets\Notifications\TicketSlaNotification;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 class TicketSlaService
 {
@@ -249,7 +251,15 @@ class TicketSlaService
             return;
         }
 
-        Notification::send($recipients, new TicketSlaNotification($ticket, $title, $message));
+        try {
+            Notification::send($recipients, new TicketSlaNotification($ticket, $title, $message));
+        } catch (Throwable $throwable) {
+            Log::warning('Ticket SLA notification delivery failed.', [
+                'ticket_id' => $ticket->id,
+                'exception' => $throwable::class,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
     }
 
     private function notificationRecipients(Ticket $ticket): Collection

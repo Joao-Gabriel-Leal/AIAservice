@@ -197,8 +197,12 @@ class DashboardDataBuilder
                 ->get();
         }
 
-        $sectorIds = collect($user->allSectorIds())
-            ->merge(Ticket::query()->visibleTo($user)->pluck('sector_id'))
+        $sectorIds = $this->usesOperationalDashboardScope($user)
+            ? collect($user->operationalSectorIds())
+            : collect($user->allSectorIds())
+                ->merge(Ticket::query()->visibleTo($user)->pluck('sector_id'));
+
+        $sectorIds = $sectorIds
             ->filter()
             ->map(fn ($sectorId) => (int) $sectorId)
             ->unique()
@@ -226,9 +230,32 @@ class DashboardDataBuilder
 
     private function ticketQuery(User $user, ?int $sectorId = null): Builder
     {
-        return Ticket::query()
-            ->visibleTo($user)
+        $query = Ticket::query();
+
+        if ($this->usesOperationalDashboardScope($user)) {
+            $this->applyDashboardSectorScope($query, $user);
+        } else {
+            $query->visibleTo($user);
+        }
+
+        return $query
             ->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('sector_id', $selectedSectorId));
+    }
+
+    private function usesOperationalDashboardScope(User $user): bool
+    {
+        return ! $user->isSuperAdmin() && $user->hasOperationalAccess();
+    }
+
+    private function applyDashboardSectorScope(Builder $query, User $user, string $column = 'sector_id'): Builder
+    {
+        $sectorIds = $user->operationalSectorIds();
+
+        if ($sectorIds === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn($column, $sectorIds);
     }
 
     private function applyOverdueSlaFilter(Builder $query): Builder
@@ -392,9 +419,13 @@ class DashboardDataBuilder
     {
         return TicketTimeEntry::query()
             ->whereHas('ticket', function (Builder $query) use ($user, $sectorId) {
-                $query
-                    ->visibleTo($user)
-                    ->when($sectorId, fn (Builder $ticketQuery, int $selectedSectorId) => $ticketQuery->where('sector_id', $selectedSectorId));
+                if ($this->usesOperationalDashboardScope($user)) {
+                    $this->applyDashboardSectorScope($query, $user);
+                } else {
+                    $query->visibleTo($user);
+                }
+
+                $query->when($sectorId, fn (Builder $ticketQuery, int $selectedSectorId) => $ticketQuery->where('sector_id', $selectedSectorId));
             });
     }
 
@@ -573,9 +604,17 @@ class DashboardDataBuilder
 
     private function assetQuery(User $user, ?int $sectorId): Builder
     {
-        return Asset::query()
-            ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->where('current_user_id', $user->id))
-            ->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('current_sector_id', $selectedSectorId));
+        $query = Asset::query();
+
+        if (! $user->isSuperAdmin()) {
+            $query->where('current_user_id', $user->id);
+
+            if ($this->usesOperationalDashboardScope($user)) {
+                $this->applyDashboardSectorScope($query, $user, 'current_sector_id');
+            }
+        }
+
+        return $query->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('current_sector_id', $selectedSectorId));
     }
 
     private function knowledgeBaseSummary(User $user, ?int $sectorId): array
@@ -662,6 +701,10 @@ class DashboardDataBuilder
                     });
                 }
             })
+            ->when(
+                $this->usesOperationalDashboardScope($user) && ! $sectorId,
+                fn (Builder $sectorQuery) => $this->applyDashboardSectorScope($sectorQuery, $user),
+            )
             ->when($sectorId, fn (Builder $sectorQuery, int $selectedSectorId) => $sectorQuery->where('sector_id', $selectedSectorId));
     }
 
@@ -905,7 +948,9 @@ class DashboardDataBuilder
             return $query->count();
         }
 
-        $sectorIds = $sectorId ? [$sectorId] : $user->allSectorIds();
+        $sectorIds = $sectorId
+            ? [$sectorId]
+            : ($this->usesOperationalDashboardScope($user) ? $user->operationalSectorIds() : $user->allSectorIds());
 
         if ($sectorIds === []) {
             return 0;

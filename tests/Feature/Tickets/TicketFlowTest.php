@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Tickets;
 
-use App\Enums\TicketFieldType;
 use App\Enums\KnowledgeBaseArticleStatus;
 use App\Enums\KnowledgeBaseVisibility;
+use App\Enums\TicketFieldType;
 use App\Enums\TicketPriority;
 use App\Enums\TicketTimeEntryApprovalStatus;
 use App\Enums\UserRole;
@@ -16,12 +16,12 @@ use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Livewire\CreatePage;
 use App\Modules\Tickets\Livewire\IndexPage;
 use App\Modules\Tickets\Livewire\ShowPage;
-use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAttachment;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketFieldValue;
+use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Notifications\TicketCreatedNotification;
@@ -1844,6 +1844,51 @@ class TicketFlowTest extends TestCase
 
         Notification::assertSentTo($requester, TicketMessageNotification::class);
         Notification::assertNotSentTo($technician, TicketMessageNotification::class);
+    }
+
+    public function test_new_message_stays_saved_when_notification_delivery_fails(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Mensagem com notificacao indisponivel',
+            'description' => 'O chat precisa continuar mesmo se um canal externo falhar.',
+            'requester_id' => $requester->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Notification::shouldReceive('send')
+            ->once()
+            ->andThrow(new \RuntimeException('mail transport unavailable'));
+
+        Livewire::actingAs($technician)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->set('message', 'A mensagem nao pode virar erro 500.')
+            ->call('sendMessage')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_messages', [
+            'ticket_id' => $ticket->id,
+            'user_id' => $technician->id,
+            'message' => 'A mensagem nao pode virar erro 500.',
+        ]);
     }
 
     public function test_closed_ticket_suggests_creating_article_when_none_exists(): void
