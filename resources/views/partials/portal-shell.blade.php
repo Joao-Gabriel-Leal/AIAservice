@@ -29,8 +29,26 @@
                     <div class="flex items-center gap-3">
                         <x-user-avatar :user="$user" size="md" class="ring-2 ring-white/10" />
 
-                        <div class="min-w-0">
-                            <p class="truncate text-sm font-semibold text-white">{{ $user->name }}</p>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="min-w-0 truncate text-sm font-semibold text-white">{{ $user->name }}</p>
+
+                                <a
+                                    href="{{ route('notifications.index') }}"
+                                    class="portal-notification-link {{ request()->routeIs('notifications.*') ? 'portal-notification-link-active' : '' }}"
+                                    aria-label="Notificacoes"
+                                    title="Notificacoes"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4.5 w-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                                        <path d="M10 20a2 2 0 0 0 4 0" />
+                                    </svg>
+
+                                    @if ($unreadNotificationsCount > 0)
+                                        <span class="portal-notification-badge">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
+                                    @endif
+                                </a>
+                            </div>
                             <p class="mt-1 truncate text-xs text-slate-300/78">{{ $user->global_role?->label() ?? 'Colaborador' }}</p>
                             <p class="mt-1 text-xs text-slate-400/80">{{ $user->accessSummary() }}</p>
                             <p class="mt-1 truncate text-xs text-slate-400/80">{{ $user->email }}</p>
@@ -52,14 +70,6 @@
                                 <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.board', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Quadro</a>
                                 <a href="{{ route('licenses.index') }}" class="portal-nav-link {{ request()->routeIs('licenses.*') ? 'portal-nav-link-active' : '' }}">Licencas</a>
                             @endif
-                            <a href="{{ route('notifications.index') }}" class="portal-nav-link {{ request()->routeIs('notifications.*') ? 'portal-nav-link-active' : '' }}">
-                                <span class="flex items-center justify-between gap-3">
-                                    <span>Notificacoes</span>
-                                    @if ($unreadNotificationsCount > 0)
-                                        <span class="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white">{{ $unreadNotificationsCount }}</span>
-                                    @endif
-                                </span>
-                            </a>
                         </div>
                     </div>
 
