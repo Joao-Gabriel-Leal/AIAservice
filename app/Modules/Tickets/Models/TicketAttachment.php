@@ -15,7 +15,9 @@ class TicketAttachment extends Model
 
     protected $fillable = [
         'ticket_id',
+        'ticket_message_id',
         'uploaded_by_id',
+        'source',
         'disk',
         'path',
         'original_name',
@@ -40,9 +42,35 @@ class TicketAttachment extends Model
         return $this->belongsTo(Ticket::class);
     }
 
+    public function message(): BelongsTo
+    {
+        return $this->belongsTo(TicketMessage::class, 'ticket_message_id');
+    }
+
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by_id');
+    }
+
+    public function isImage(): bool
+    {
+        return str_starts_with((string) $this->mime_type, 'image/');
+    }
+
+    public function isVideo(): bool
+    {
+        return str_starts_with((string) $this->mime_type, 'video/');
+    }
+
+    public function displaySize(): string
+    {
+        $size = (int) ($this->size ?? 0);
+
+        if ($size >= 1024 * 1024) {
+            return number_format($size / 1024 / 1024, 1).' MB';
+        }
+
+        return number_format($size / 1024, 1).' KB';
     }
 
     public function binaryContent(): ?string

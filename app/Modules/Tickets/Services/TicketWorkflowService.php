@@ -389,13 +389,21 @@ class TicketWorkflowService
         return $fieldValue;
     }
 
-    public function addMessage(User $actor, Ticket $ticket, string $message, array $context = []): TicketMessage
+    public function addMessage(User $actor, Ticket $ticket, string $message, array $attachments = [], array $context = []): TicketMessage
     {
-        $ticketMessage = $ticket->messages()->create([
-            'user_id' => $actor->id,
-            'message' => $message,
-            'is_system' => false,
-        ]);
+        /** @var TicketMessage $ticketMessage */
+        $ticketMessage = DB::transaction(function () use ($actor, $ticket, $message, $attachments) {
+            /** @var TicketMessage $createdMessage */
+            $createdMessage = $ticket->messages()->create([
+                'user_id' => $actor->id,
+                'message' => $message,
+                'is_system' => false,
+            ]);
+
+            $this->storeAttachments($ticket, $actor, $attachments, $createdMessage, 'chat');
+
+            return $createdMessage;
+        });
 
         $ticket->updateQuietly(['last_activity_at' => now()]);
         $this->ticketSlaService->captureFirstResponse($actor, $ticket);
@@ -411,7 +419,7 @@ class TicketWorkflowService
             [$actor->id],
         );
 
-        $ticketMessage->load('user');
+        $ticketMessage->load(['user', 'attachments']);
 
         $this->broadcastMessageCreated($ticketMessage);
 
@@ -427,6 +435,116 @@ class TicketWorkflowService
         );
 
         return $ticketMessage;
+    }
+
+    public function closeByRequester(User $actor, Ticket $ticket): Ticket
+    {
+        Gate::forUser($actor)->authorize('closeOwn', $ticket);
+
+        $closedGroup = $this->targetGroup($ticket, true);
+        $closedStatus = $closedGroup
+            ? $this->legacyStatusForGroup($ticket->ticket_board_id, $closedGroup) ?? $this->targetStatus($ticket, true)
+            : $this->targetStatus($ticket, true);
+
+        if (! $closedGroup && ! $closedStatus) {
+            throw ValidationException::withMessages([
+                'ticketLifecycle' => 'Este quadro nao possui uma etapa finalizada ativa.',
+            ]);
+        }
+
+        $ticket = DB::transaction(function () use ($actor, $ticket, $closedGroup, $closedStatus) {
+            $ticket->forceFill([
+                'ticket_group_id' => $closedGroup?->id ?? $ticket->ticket_group_id,
+                'ticket_status_id' => $closedStatus?->id ?? $ticket->ticket_status_id,
+                'resolved_at' => now(),
+                'last_activity_at' => now(),
+            ])->save();
+
+            $this->closeOpenTimeEntries($actor, $ticket, $ticket->resolved_at ?? now());
+
+            $this->activityLogService->log($actor, $ticket, 'ticket.closed_by_requester', 'Chamado finalizado pelo solicitante.', [
+                'sector_id' => $ticket->sector_id,
+                'ticket_group_id' => $ticket->ticket_group_id,
+                'ticket_status_id' => $ticket->ticket_status_id,
+            ]);
+
+            $this->createSystemMessage($ticket, 'Chamado finalizado pelo solicitante.');
+
+            return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
+        });
+
+        $this->ticketSlaService->evaluateTicket($ticket);
+        $this->notifyUsers(
+            $ticket,
+            new TicketUpdateNotification($ticket, 'Chamado finalizado pelo solicitante', "O chamado #{$ticket->id} foi finalizado pelo solicitante."),
+            [$actor->id],
+        );
+        $this->handleAutomationEventSafely($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
+            'event' => [
+                'changes' => [
+                    'resolved_at' => $ticket->resolved_at?->toIso8601String(),
+                    'ticket_group_id' => $ticket->ticket_group_id,
+                    'ticket_status_id' => $ticket->ticket_status_id,
+                ],
+                'source' => 'requester_close',
+            ],
+        ]);
+
+        return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
+    }
+
+    public function reopenByRequester(User $actor, Ticket $ticket): Ticket
+    {
+        Gate::forUser($actor)->authorize('reopenOwn', $ticket);
+
+        $openGroup = $this->targetGroup($ticket, false);
+        $openStatus = $openGroup
+            ? $this->legacyStatusForGroup($ticket->ticket_board_id, $openGroup) ?? $this->targetStatus($ticket, false)
+            : $this->targetStatus($ticket, false);
+
+        if (! $openGroup && ! $openStatus) {
+            throw ValidationException::withMessages([
+                'ticketLifecycle' => 'Este quadro nao possui uma etapa aberta ativa.',
+            ]);
+        }
+
+        $ticket = DB::transaction(function () use ($actor, $ticket, $openGroup, $openStatus) {
+            $ticket->forceFill([
+                'ticket_group_id' => $openGroup?->id ?? $ticket->ticket_group_id,
+                'ticket_status_id' => $openStatus?->id ?? $ticket->ticket_status_id,
+                'resolved_at' => null,
+                'last_activity_at' => now(),
+            ])->save();
+
+            $this->activityLogService->log($actor, $ticket, 'ticket.reopened_by_requester', 'Chamado reaberto pelo solicitante.', [
+                'sector_id' => $ticket->sector_id,
+                'ticket_group_id' => $ticket->ticket_group_id,
+                'ticket_status_id' => $ticket->ticket_status_id,
+            ]);
+
+            $this->createSystemMessage($ticket, 'Chamado reaberto pelo solicitante.');
+
+            return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
+        });
+
+        $this->ticketSlaService->evaluateTicket($ticket);
+        $this->notifyUsers(
+            $ticket,
+            new TicketUpdateNotification($ticket, 'Chamado reaberto pelo solicitante', "O chamado #{$ticket->id} foi reaberto pelo solicitante."),
+            [$actor->id],
+        );
+        $this->handleAutomationEventSafely($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
+            'event' => [
+                'changes' => [
+                    'resolved_at' => null,
+                    'ticket_group_id' => $ticket->ticket_group_id,
+                    'ticket_status_id' => $ticket->ticket_status_id,
+                ],
+                'source' => 'requester_reopen',
+            ],
+        ]);
+
+        return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
     }
 
     public function submitRating(User $actor, Ticket $ticket, array $data): TicketRating
@@ -494,11 +612,16 @@ class TicketWorkflowService
         }
     }
 
-    public function storeAttachments(Ticket $ticket, User $actor, array $attachments): Collection
-    {
+    public function storeAttachments(
+        Ticket $ticket,
+        User $actor,
+        array $attachments,
+        ?TicketMessage $message = null,
+        string $source = 'opening',
+    ): Collection {
         return collect($attachments)
             ->filter(fn ($file) => $file instanceof UploadedFile)
-            ->map(function (UploadedFile $file) use ($ticket, $actor) {
+            ->map(function (UploadedFile $file) use ($ticket, $actor, $message, $source) {
                 $content = file_get_contents($file->getRealPath());
 
                 if ($content === false) {
@@ -511,7 +634,9 @@ class TicketWorkflowService
 
                 return TicketAttachment::query()->create([
                     'ticket_id' => $ticket->id,
+                    'ticket_message_id' => $message?->id,
                     'uploaded_by_id' => $actor->id,
+                    'source' => $source,
                     'disk' => 'database',
                     'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
@@ -772,6 +897,57 @@ class TicketWorkflowService
                 ->where('is_closed', $group->is_closed)
                 ->when($group->is_closed, fn ($query) => $query->orderByDesc('sort_order'), fn ($query) => $query->orderBy('sort_order'))
                 ->first();
+    }
+
+    private function targetGroup(Ticket $ticket, bool $closed): ?TicketGroup
+    {
+        if (! $ticket->ticket_board_id) {
+            return null;
+        }
+
+        return TicketGroup::query()
+            ->where('ticket_board_id', $ticket->ticket_board_id)
+            ->where('is_active', true)
+            ->where('is_closed', $closed)
+            ->when(
+                ! $closed,
+                fn (Builder $query) => $query->orderByDesc('is_default')->orderBy('sort_order')->orderBy('id'),
+                fn (Builder $query) => $query->orderBy('sort_order')->orderBy('id'),
+            )
+            ->first();
+    }
+
+    private function targetStatus(Ticket $ticket, bool $closed): ?TicketStatus
+    {
+        if (! $ticket->ticket_board_id) {
+            return null;
+        }
+
+        return TicketStatus::query()
+            ->where('ticket_board_id', $ticket->ticket_board_id)
+            ->where('is_active', true)
+            ->where('is_closed', $closed)
+            ->when(
+                ! $closed,
+                fn (Builder $query) => $query->orderByDesc('is_default')->orderBy('sort_order')->orderBy('id'),
+                fn (Builder $query) => $query->orderBy('sort_order')->orderBy('id'),
+            )
+            ->first();
+    }
+
+    private function createSystemMessage(Ticket $ticket, string $message): TicketMessage
+    {
+        /** @var TicketMessage $ticketMessage */
+        $ticketMessage = $ticket->messages()->create([
+            'user_id' => null,
+            'message' => $message,
+            'is_system' => true,
+        ]);
+
+        $ticketMessage->load(['user', 'attachments']);
+        $this->broadcastMessageCreated($ticketMessage);
+
+        return $ticketMessage;
     }
 
     private function normalizeTimeEntryTimestamps(array $data): array

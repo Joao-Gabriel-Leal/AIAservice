@@ -29,6 +29,16 @@ class TicketPolicy
         return $user->isSuperAdmin() || $user->hasOperationalAccess($ticket->sector_id);
     }
 
+    public function closeOwn(User $user, Ticket $ticket): bool
+    {
+        return $ticket->requester_id === $user->id && ! $ticket->isClosed();
+    }
+
+    public function reopenOwn(User $user, Ticket $ticket): bool
+    {
+        return $ticket->requester_id === $user->id && $ticket->isClosed();
+    }
+
     public function comment(User $user, Ticket $ticket): bool
     {
         return $this->view($user, $ticket);

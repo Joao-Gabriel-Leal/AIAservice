@@ -74,6 +74,8 @@
                         @forelse ($messages as $ticketMessage)
                             @php
                                 $isOwnMessage = $ticketMessage->user_id === auth()->id();
+                                $messageAttachments = $ticketMessage->attachments ?? collect();
+                                $hasMessageText = trim((string) $ticketMessage->message) !== '';
                             @endphp
                             <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
                                 <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
@@ -86,7 +88,40 @@
                                         </div>
                                         <span class="ticket-chat-time">{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
                                     </div>
-                                    <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
+
+                                    @if ($hasMessageText)
+                                        <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
+                                    @endif
+
+                                    @if ($messageAttachments->isNotEmpty())
+                                        <div class="mt-3 grid gap-2">
+                                            @foreach ($messageAttachments as $attachment)
+                                                @if ($attachment->isImage())
+                                                    <a href="{{ route('tickets.attachments.show', $attachment) }}" class="block overflow-hidden rounded-2xl border border-white/40 bg-white/95">
+                                                        <img
+                                                            src="{{ route('tickets.attachments.inline', $attachment) }}"
+                                                            alt="{{ $attachment->original_name }}"
+                                                            class="max-h-80 w-full bg-slate-100 object-contain"
+                                                        >
+                                                    </a>
+                                                @elseif ($attachment->isVideo())
+                                                    <div class="overflow-hidden rounded-2xl border border-white/40 bg-slate-950">
+                                                        <video controls preload="metadata" class="max-h-80 w-full">
+                                                            <source src="{{ route('tickets.attachments.inline', $attachment) }}" type="{{ $attachment->mime_type }}">
+                                                        </video>
+                                                    </div>
+                                                @else
+                                                    <a href="{{ route('tickets.attachments.show', $attachment) }}" class="flex items-center justify-between gap-3 rounded-2xl border border-white/40 bg-white/95 px-4 py-3 text-slate-700">
+                                                        <div class="min-w-0">
+                                                            <p class="truncate text-sm font-semibold text-slate-900">{{ $attachment->original_name }}</p>
+                                                            <p class="mt-1 text-xs text-slate-500">{{ $attachment->displaySize() }}</p>
+                                                        </div>
+                                                        <span class="shrink-0 text-sm font-medium text-sky-700">Baixar</span>
+                                                    </a>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </article>
                             </div>
                         @empty
@@ -106,6 +141,38 @@
                         <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
                         @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
 
+                        <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">Arquivos no chat</p>
+                                    <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por mensagem, com limite de 25 MB cada.</p>
+                                </div>
+
+                                <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
+                                    Selecionar arquivos
+                                    <input wire:model="chatFiles" type="file" multiple class="sr-only">
+                                </label>
+                            </div>
+
+                            <div wire:loading wire:target="chatFiles" class="mt-3 text-xs text-slate-500">
+                                Preparando arquivos...
+                            </div>
+
+                            @if (count($chatFiles) > 0)
+                                <div class="mt-3 grid gap-2">
+                                    @foreach ($chatFiles as $index => $file)
+                                        <div wire:key="chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                            <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
+                                            <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            @error('chatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            @error('chatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </div>
+
                         <div class="ticket-chat-composer-footer">
                             <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
 
@@ -113,11 +180,11 @@
                                 type="submit"
                                 wire:loading.attr="disabled"
                                 wire:loading.class="ui-loading"
-                                wire:target="sendMessage"
+                                wire:target="sendMessage,chatFiles"
                                 class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
                             >
-                                <span wire:loading.remove wire:target="sendMessage">Enviar mensagem</span>
-                                <span wire:loading wire:target="sendMessage">Enviando...</span>
+                                <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
+                                <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
                             </button>
                         </div>
                     </form>
@@ -130,7 +197,7 @@
                         <div>
                             <p class="ticket-panel-kicker">Arquivos do chamado</p>
                             <h3 class="ticket-panel-title text-[1.35rem]">Anexos</h3>
-                            <p class="ticket-panel-copy">Arquivos enviados na abertura do chamado.</p>
+                            <p class="ticket-panel-copy">Arquivos enviados na abertura ou no chat do chamado.</p>
                         </div>
 
                         <span class="portal-chip">{{ $attachmentCount }} {{ $attachmentLabel }}</span>
@@ -140,8 +207,13 @@
                         @forelse ($ticket->attachments as $attachment)
                             <a href="{{ route('tickets.attachments.show', $attachment) }}" class="ui-row-interactive flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
                                 <div class="min-w-0">
-                                    <p class="truncate font-medium text-slate-900">{{ $attachment->original_name }}</p>
-                                    <p class="text-xs text-slate-500">{{ number_format(($attachment->size ?? 0) / 1024, 1) }} KB</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="truncate font-medium text-slate-900">{{ $attachment->original_name }}</p>
+                                        <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                            {{ $attachment->source === 'chat' ? 'Chat' : 'Abertura' }}
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-slate-500">{{ $attachment->displaySize() }}</p>
                                 </div>
                                 <span class="text-sm text-sky-700">Baixar</span>
                             </a>
@@ -390,6 +462,45 @@
                         <p class="ticket-summary-value">{{ $ticket->created_at?->format('d/m/Y H:i') ?? 'Nao informado' }}</p>
                     </div>
                 </div>
+
+                @if ($canCloseOwn || $canReopenOwn)
+                    <div class="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p class="text-sm font-semibold text-slate-900">Acoes do solicitante</p>
+                        <p class="mt-1 text-sm text-slate-500">Voce pode encerrar quando a demanda estiver resolvida ou reabrir se ainda precisar de atendimento.</p>
+
+                        <div class="mt-3 flex flex-wrap gap-3">
+                            @if ($canCloseOwn)
+                                <button
+                                    type="button"
+                                    onclick="if (confirm('Deseja finalizar este chamado?')) { $wire.closeOwnTicket() }"
+                                    wire:loading.attr="disabled"
+                                    wire:loading.class="ui-loading"
+                                    wire:target="closeOwnTicket"
+                                    class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium"
+                                >
+                                    <span wire:loading.remove wire:target="closeOwnTicket">Finalizar chamado</span>
+                                    <span wire:loading wire:target="closeOwnTicket">Finalizando...</span>
+                                </button>
+                            @endif
+
+                            @if ($canReopenOwn)
+                                <button
+                                    type="button"
+                                    onclick="if (confirm('Deseja reabrir este chamado?')) { $wire.reopenOwnTicket() }"
+                                    wire:loading.attr="disabled"
+                                    wire:loading.class="ui-loading"
+                                    wire:target="reopenOwnTicket"
+                                    class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium"
+                                >
+                                    <span wire:loading.remove wire:target="reopenOwnTicket">Reabrir chamado</span>
+                                    <span wire:loading wire:target="reopenOwnTicket">Reabrindo...</span>
+                                </button>
+                            @endif
+                        </div>
+
+                        @error('ticketLifecycle') <span class="mt-3 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    </div>
+                @endif
 
                 <div class="mt-5 space-y-3">
                     <div>

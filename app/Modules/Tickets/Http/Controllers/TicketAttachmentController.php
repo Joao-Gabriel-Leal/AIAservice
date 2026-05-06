@@ -4,6 +4,7 @@ namespace App\Modules\Tickets\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Tickets\Models\TicketAttachment;
+use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TicketAttachmentController extends Controller
@@ -21,6 +22,21 @@ class TicketAttachmentController extends Controller
         }, $attachment->original_name, [
             'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
             'Content-Length' => (string) ($attachment->size ?? strlen($content)),
+        ]);
+    }
+
+    public function inline(TicketAttachment $attachment): Response
+    {
+        $this->authorize('view', $attachment->ticket);
+
+        $content = $attachment->binaryContent();
+
+        abort_if($content === null, 404);
+
+        return response($content, 200, [
+            'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
+            'Content-Length' => (string) ($attachment->size ?? strlen($content)),
+            'Content-Disposition' => 'inline; filename="'.$attachment->original_name.'"',
         ]);
     }
 }

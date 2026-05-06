@@ -2,11 +2,11 @@
 
 namespace App\Modules\Tickets\Livewire;
 
-use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Enums\TicketPriority;
 use App\Enums\TicketTimeEntryApprovalStatus;
 use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketTimeEntry;
@@ -14,18 +14,22 @@ use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class ShowPage extends Component
 {
     use AuthorizesRequests;
+    use WithFileUploads;
 
-    private const HELPFUL_FEEDBACK_COUNT_SQL = "(select count(*) from knowledge_base_article_feedback where knowledge_base_articles.id = knowledge_base_article_feedback.knowledge_base_article_id and is_helpful = true)";
+    private const HELPFUL_FEEDBACK_COUNT_SQL = '(select count(*) from knowledge_base_article_feedback where knowledge_base_articles.id = knowledge_base_article_feedback.knowledge_base_article_id and is_helpful = true)';
 
-    private const NOT_HELPFUL_FEEDBACK_COUNT_SQL = "(select count(*) from knowledge_base_article_feedback where knowledge_base_articles.id = knowledge_base_article_feedback.knowledge_base_article_id and is_helpful = false)";
+    private const NOT_HELPFUL_FEEDBACK_COUNT_SQL = '(select count(*) from knowledge_base_article_feedback where knowledge_base_articles.id = knowledge_base_article_feedback.knowledge_base_article_id and is_helpful = false)';
 
     public int $ticketId;
 
     public string $message = '';
+
+    public array $chatFiles = [];
 
     public ?int $ratingValue = null;
 
@@ -75,15 +79,51 @@ class ShowPage extends Component
 
     public function sendMessage(TicketWorkflowService $workflowService): void
     {
+        $hasFiles = collect($this->chatFiles)->filter()->isNotEmpty();
+
         $validated = $this->validate([
-            'message' => ['required', 'string', 'max:4000'],
+            'message' => [$hasFiles ? 'nullable' : 'required', 'string', 'max:4000'],
+            'chatFiles' => ['array', 'max:5'],
+            'chatFiles.*' => ['file', 'max:25600'],
+        ], [
+            'message.required' => 'Escreva uma mensagem ou anexe ao menos um arquivo.',
+            'chatFiles.max' => 'Envie no maximo 5 arquivos por mensagem.',
+            'chatFiles.*.max' => 'Cada arquivo pode ter no maximo 25 MB.',
         ]);
+
+        $message = trim((string) ($validated['message'] ?? ''));
+
+        if ($message === '' && ! $hasFiles) {
+            $this->addError('message', 'Escreva uma mensagem ou anexe ao menos um arquivo.');
+
+            return;
+        }
 
         $ticket = $this->ticket();
         $this->authorize('comment', $ticket);
-        $workflowService->addMessage(auth()->user(), $ticket, $validated['message']);
+        $workflowService->addMessage(auth()->user(), $ticket, $message, $this->chatFiles);
 
-        $this->reset('message');
+        $this->reset('message', 'chatFiles');
+    }
+
+    public function closeOwnTicket(TicketWorkflowService $workflowService): void
+    {
+        $ticket = $this->ticket();
+
+        $this->authorize('closeOwn', $ticket);
+        $workflowService->closeByRequester(auth()->user(), $ticket);
+
+        session()->flash('status', 'Chamado finalizado com sucesso.');
+    }
+
+    public function reopenOwnTicket(TicketWorkflowService $workflowService): void
+    {
+        $ticket = $this->ticket();
+
+        $this->authorize('reopenOwn', $ticket);
+        $workflowService->reopenByRequester(auth()->user(), $ticket);
+
+        session()->flash('status', 'Chamado reaberto com sucesso.');
     }
 
     public function submitRating(TicketWorkflowService $workflowService): void
@@ -234,6 +274,8 @@ class ShowPage extends Component
         $canRate = auth()->user()->can('rate', $ticket);
         $canViewTimeTracking = auth()->user()->can('viewTimeTracking', $ticket);
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
+        $canCloseOwn = auth()->user()->can('closeOwn', $ticket);
+        $canReopenOwn = auth()->user()->can('reopenOwn', $ticket);
         $activeOwnTimeEntry = $canViewTimeTracking ? $ticket->activeTimeEntryForUser(auth()->user()) : null;
         $timeEntriesByUser = $canViewTimeTracking ? $ticket->timeEntriesTotalByUser() : collect();
         $pendingTimeEntriesCount = $canViewTimeTracking
@@ -283,6 +325,8 @@ class ShowPage extends Component
                 ->get(),
             'priorities' => TicketPriority::cases(),
             'canRate' => $canRate,
+            'canCloseOwn' => $canCloseOwn,
+            'canReopenOwn' => $canReopenOwn,
             'canViewTimeTracking' => $canViewTimeTracking,
             'canTrackTime' => $canTrackTime,
             'activeOwnTimeEntry' => $activeOwnTimeEntry,
@@ -354,6 +398,7 @@ class ShowPage extends Component
                 'catalogItem.form',
                 'fieldValues.field.options',
                 'messages.user',
+                'messages.attachments.uploader',
                 'attachments.uploader',
                 'activityLogs.causer',
                 'rating.user',
