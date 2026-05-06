@@ -31,7 +31,7 @@ foreach ($processId in $processIds) {
 }
 
 if ((Test-Path $pgCtl) -and (Test-Path $pgData)) {
-    $listener = Get-NetTCPConnection -State Listen -LocalPort 55432 -ErrorAction SilentlyContinue
+    $listener = Get-NetTCPConnection -State Listen -LocalPort 55433 -ErrorAction SilentlyContinue
     if ($listener) {
         & $pgCtl -D $pgData stop -m fast | Out-Null
     }

@@ -124,7 +124,7 @@ function Ensure-StaleViteHotFileIsCleared {
 }
 
 function Ensure-StalePostmasterPidIsCleared {
-    if (Get-ListeningProcess -Port 55432) {
+    if (Get-ListeningProcess -Port 55433) {
         return
     }
 
@@ -165,22 +165,22 @@ function Start-PostgresCluster {
 
     Ensure-StalePostmasterPidIsCleared
 
-    if (Get-ListeningProcess -Port 55432) {
+    if (Get-ListeningProcess -Port 55433) {
         return
     }
 
-    & $pgCtl -D $pgData -l $pgLog -o ' -p 55432 -h 127.0.0.1' start | Out-Null
+    & $pgCtl -D $pgData -l $pgLog -o ' -p 55433 -h 127.0.0.1' start | Out-Null
 
     for ($attempt = 0; $attempt -lt 15; $attempt++) {
         Start-Sleep -Seconds 1
 
-        if (Get-ListeningProcess -Port 55432) {
+        if (Get-ListeningProcess -Port 55433) {
             return
         }
     }
 
     $tail = if (Test-Path $pgLog) { (Get-Content $pgLog -Tail 20) -join [Environment]::NewLine } else { 'sem log' }
-    throw "PostgreSQL nao subiu na porta 55432.`n$tail"
+    throw "PostgreSQL nao subiu na porta 55433.`n$tail"
 }
 
 function Invoke-PsqlQuery {
@@ -194,7 +194,7 @@ function Invoke-PsqlQuery {
     $env:PGPASSWORD = $adminPassword
 
     try {
-        $output = & $psql -h 127.0.0.1 -p 55432 -U postgres -d $Database -tA -v ON_ERROR_STOP=1 -c $Sql 2>&1
+        $output = & $psql -h 127.0.0.1 -p 55433 -U postgres -d $Database -tA -v ON_ERROR_STOP=1 -c $Sql 2>&1
         $exitCode = $LASTEXITCODE
 
         if ($StopOnError -and $exitCode -ne 0) {
@@ -238,7 +238,7 @@ function Ensure-AppRoleAndDatabase {
         $env:PGPASSWORD = $adminPassword
 
         try {
-            & $createdb -h 127.0.0.1 -p 55432 -U postgres -O $appUser $appDatabase 2>&1 | Out-Null
+            & $createdb -h 127.0.0.1 -p 55433 -U postgres -O $appUser $appDatabase 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 0) {
                 throw "Falha ao criar o banco '$appDatabase'."
             }
@@ -386,4 +386,4 @@ if ($lanIp) {
     Write-Host "Aplicacao na rede: http://$lanIp`:8004/login"
 }
 Write-Host 'Reverb: 127.0.0.1:8080'
-Write-Host 'PostgreSQL local: 127.0.0.1:55432'
+Write-Host 'PostgreSQL local: 127.0.0.1:55433'

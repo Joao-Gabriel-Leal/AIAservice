@@ -18,7 +18,7 @@ Se quiser o passo a passo completo com restore do dump e validacoes, leia tambem
 
 - aplicacao web: `http://127.0.0.1:8004/login`
 - Reverb/WebSocket: `127.0.0.1:8080`
-- PostgreSQL local do projeto: `127.0.0.1:55432`
+- PostgreSQL local do projeto: `127.0.0.1:55433`
 - banco da aplicacao: `aiaservice`
 - usuario da aplicacao: `aiaservice`
 
@@ -49,15 +49,15 @@ C:\Users\<usuario>\AppData\Local\Microsoft\WinGet\Packages\PHP.PHP.8.3_Microsoft
 
 ```powershell
 Test-Path .local\postgres-data
-Get-NetTCPConnection -State Listen -LocalPort 55432 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -State Listen -LocalPort 55433 -ErrorAction SilentlyContinue
 ```
 
 ## Passo 2: verificar se o banco e o usuario da aplicacao ja existem
 
 ```powershell
 $env:PGPASSWORD='postgres'
-& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "SELECT datname FROM pg_database WHERE datname = 'aiaservice';"
-& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "SELECT rolname FROM pg_roles WHERE rolname = 'aiaservice';"
+& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55433 -U postgres -d postgres -c "SELECT datname FROM pg_database WHERE datname = 'aiaservice';"
+& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55433 -U postgres -d postgres -c "SELECT rolname FROM pg_roles WHERE rolname = 'aiaservice';"
 ```
 
 ## Passo 3: se o PostgreSQL local do projeto ainda nao existir, criar a estrutura
@@ -73,15 +73,15 @@ Remove-Item .local\postgres-password.txt -Force
 Depois suba o PostgreSQL local:
 
 ```powershell
-& 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D .local\postgres-data -l .local\run\postgres.log -o " -p 55432 -h 127.0.0.1" start
+& 'C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe' -D .local\postgres-data -l .local\run\postgres.log -o " -p 55433 -h 127.0.0.1" start
 ```
 
 ## Passo 4: se o usuario e o banco ainda nao existirem, criar
 
 ```powershell
 $env:PGPASSWORD='postgres'
-& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "CREATE ROLE aiaservice WITH LOGIN PASSWORD 'aiaservice_local';"
-& 'C:\Program Files\PostgreSQL\18\bin\createdb.exe' -h 127.0.0.1 -p 55432 -U postgres -O aiaservice aiaservice
+& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55433 -U postgres -d postgres -c "CREATE ROLE aiaservice WITH LOGIN PASSWORD 'aiaservice_local';"
+& 'C:\Program Files\PostgreSQL\18\bin\createdb.exe' -h 127.0.0.1 -p 55433 -U postgres -O aiaservice aiaservice
 ```
 
 ## Passo 5: conferir a `.env`
@@ -91,7 +91,7 @@ APP_URL=http://127.0.0.1:8004
 ASSET_QR_BASE_URL=http://127.0.0.1:8004
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
-DB_PORT=55432
+DB_PORT=55433
 DB_DATABASE=aiaservice
 DB_USERNAME=aiaservice
 DB_PASSWORD=aiaservice_local
@@ -155,7 +155,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\tools\start-local.ps1
 
 Esse script sobe:
 
-- PostgreSQL local na porta `55432`
+- PostgreSQL local na porta `55433`
 - aplicacao HTTP na porta `8004`
 - Reverb na porta `8080`
 - worker de fila
@@ -183,7 +183,7 @@ Se o banco vier de seed local:
 ## Como validar se subiu certo
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8004,8080,55432 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -State Listen -LocalPort 8004,8080,55433 -ErrorAction SilentlyContinue
 curl.exe -I http://127.0.0.1:8004/login
 ```
 
@@ -207,7 +207,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\tools\stop-local.ps1
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*serve-http.ps1*' -or $_.CommandLine -like '*127.0.0.1:8004*' }
 ```
 
-### A porta 55432 nao sobe
+### A porta 55433 nao sobe
 
 ```powershell
 Get-Content .local\run\postgres.log -Tail 100
@@ -217,7 +217,7 @@ Get-Content .local\run\postgres.log -Tail 100
 
 ```powershell
 $env:PGPASSWORD='aiaservice_local'
-& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55432 -U aiaservice -d aiaservice -c "SELECT current_database(), current_user;"
+& 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -h 127.0.0.1 -p 55433 -U aiaservice -d aiaservice -c "SELECT current_database(), current_user;"
 ```
 
 ### Quero zerar o banco e recriar tudo
