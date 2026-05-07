@@ -1,8 +1,9 @@
 <x-layouts::auth.split
     :title="'Entrar'"
-    panel-eyebrow="Acesso ao sistema"
-    panel-title="Bem-vindo de volta"
-    panel-description="Entre com seu email corporativo para acompanhar solicitacoes, prioridades e atualizacoes do atendimento."
+    panel-eyebrow=""
+    panel-title="Entrar"
+    panel-description="Use seu email corporativo e senha para acessar."
+    hero-description="Acesso seguro ao portal interno."
 >
     @if (session('status'))
         <div class="auth-status">
@@ -11,7 +12,7 @@
     @endif
 
     @if (! empty($loginHints))
-        <div
+        <details
             class="auth-login-hints"
             x-data="{
                 copiedKey: null,
@@ -37,13 +38,10 @@
                 },
             }"
         >
-            <div class="auth-login-hints-header">
-                <p class="auth-login-hints-eyebrow">Acesso rapido temporario</p>
-                <h3 class="auth-login-hints-title">Logins principais para validacao</h3>
-                <p class="auth-login-hints-copy">
-                    Exibido apenas em ambiente local/debug e somente para contas encontradas no banco atual.
-                </p>
-            </div>
+            <summary class="auth-login-hints-summary">
+                <span>Dados de teste</span>
+                <span class="auth-login-hints-pill">Local</span>
+            </summary>
 
             <div class="auth-login-hints-list">
                 @foreach ($loginHints as $loginHint)
@@ -92,7 +90,7 @@
             </div>
 
             <p class="auth-login-hints-feedback" x-text="feedback" x-bind:data-visible="feedback ? 'true' : 'false'" aria-live="polite"></p>
-        </div>
+        </details>
     @endif
 
     <form method="POST" action="{{ route('login.store') }}" class="auth-form-grid" x-data="{ showPassword: false }">
@@ -193,7 +191,4 @@
         </button>
     </form>
 
-    <div class="auth-helper-card">
-        O acesso e liberado pelo time administrador. Permissoes novas ou ajustadas aparecem no proximo login.
-    </div>
 </x-layouts::auth.split>
