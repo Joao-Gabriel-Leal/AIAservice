@@ -95,6 +95,39 @@ class AdministrationFlowTest extends TestCase
         );
     }
 
+    public function test_developer_can_manage_rooms_without_full_super_admin_access(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Dev Rooms',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Infra',
+            'slug' => 'infra',
+            'is_active' => true,
+        ]);
+        $developer = User::factory()->developer()->create();
+
+        $this->actingAs($developer)
+            ->get(route('rooms.index'))
+            ->assertOk();
+
+        $this->post(route('rooms.store'), [
+            'sector_id' => $sector->id,
+            'name' => 'Sala Dev',
+            'description' => 'Criada por perfil Dev',
+            'is_active' => '1',
+        ])->assertRedirect(route('rooms.index', absolute: false));
+
+        $this->assertDatabaseHas('rooms', [
+            'sector_id' => $sector->id,
+            'name' => 'Sala Dev',
+        ]);
+
+        $this->get(route('users.index'))->assertForbidden();
+    }
+
     public function test_sector_admin_cannot_access_other_sector_records(): void
     {
         $company = Company::query()->create([
@@ -144,9 +177,6 @@ class AdministrationFlowTest extends TestCase
 
         $this->get(route('companies.index'))->assertForbidden();
         $this->get(route('users.edit', $foreignUser))->assertForbidden();
-        $this->get(route('rooms.index'))
-            ->assertOk()
-            ->assertSee('Sala A')
-            ->assertDontSee('Sala B');
+        $this->get(route('rooms.index'))->assertForbidden();
     }
 }

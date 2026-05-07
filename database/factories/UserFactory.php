@@ -24,11 +24,23 @@ class UserFactory extends Factory
                 if ($user->role === UserRole::SUPER_ADMIN) {
                     $user->global_role = GlobalUserRole::SUPER_ADMIN;
                 }
+
+                if ($user->role === UserRole::DEV) {
+                    $user->global_role = GlobalUserRole::DEV;
+                }
             })
             ->afterCreating(function (User $user) {
                 if ($user->role === UserRole::SUPER_ADMIN) {
                     if ($user->global_role !== GlobalUserRole::SUPER_ADMIN) {
                         $user->forceFill(['global_role' => GlobalUserRole::SUPER_ADMIN])->save();
+                    }
+
+                    return;
+                }
+
+                if ($user->role === UserRole::DEV) {
+                    if ($user->global_role !== GlobalUserRole::DEV) {
+                        $user->forceFill(['global_role' => GlobalUserRole::DEV])->save();
                     }
 
                     return;
@@ -92,6 +104,16 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::SUPER_ADMIN,
             'global_role' => GlobalUserRole::SUPER_ADMIN,
+            'sector_id' => null,
+            'room_id' => null,
+        ]);
+    }
+
+    public function developer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => UserRole::DEV,
+            'global_role' => GlobalUserRole::DEV,
             'sector_id' => null,
             'room_id' => null,
         ]);

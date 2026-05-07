@@ -21,7 +21,11 @@ class RoomIndexQuery
 
     public function build(User $user, array $filters): Builder
     {
-        return AccessScope::applySectorScope(Room::query()->with('sector.company'), $user)
+        $query = $user->canManageRooms()
+            ? Room::query()->with('sector.company')
+            : AccessScope::applySectorScope(Room::query()->with('sector.company'), $user);
+
+        return $query
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $query->where(function (Builder $searchQuery) use ($filters) {
                     $searchQuery

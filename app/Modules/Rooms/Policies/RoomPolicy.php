@@ -9,26 +9,26 @@ class RoomPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin();
+        return $user->canManageRooms();
     }
 
     public function view(User $user, Room $room): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($room->sector_id);
+        return $user->canManageRooms();
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin();
+        return $user->canManageRooms();
     }
 
     public function update(User $user, Room $room): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($room->sector_id);
+        return $user->canManageRooms();
     }
 
     public function delete(User $user, Room $room): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($room->sector_id);
+        return $user->canManageRooms();
     }
 }

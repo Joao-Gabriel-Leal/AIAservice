@@ -130,7 +130,7 @@ class UserController extends Controller
             ? GlobalUserRole::from((string) $request->input('global_role'))
             : GlobalUserRole::COLLABORATOR;
 
-        $sectorAccesses = $globalRole === GlobalUserRole::SUPER_ADMIN
+        $sectorAccesses = in_array($globalRole, [GlobalUserRole::SUPER_ADMIN, GlobalUserRole::DEV], true)
             ? collect()
             : $this->normalizedSectorAccesses($request);
 
@@ -214,6 +214,14 @@ class UserController extends Controller
         if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
             return [
                 'role' => UserRole::SUPER_ADMIN,
+                'sector_id' => null,
+                'room_id' => null,
+            ];
+        }
+
+        if ($globalRole === GlobalUserRole::DEV) {
+            return [
+                'role' => UserRole::DEV,
                 'sector_id' => null,
                 'room_id' => null,
             ];

@@ -74,7 +74,7 @@
                         </div>
                     </div>
 
-                    @if ($user->isSuperAdmin() || $user->isSectorAdmin())
+                    @if ($user->canManageRooms())
                         <div>
                             <p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400/72">Administracao</p>
                             <div class="space-y-2">
@@ -85,7 +85,9 @@
                                     <a href="{{ route('users.index') }}" class="portal-nav-link {{ request()->routeIs('users.*') ? 'portal-nav-link-active' : '' }}">Usuarios</a>
                                     <a href="{{ route('assets.index') }}" class="portal-nav-link {{ request()->routeIs('assets.*') ? 'portal-nav-link-active' : '' }}">Patrimonios</a>
                                 @endif
-                                <a href="{{ route('rooms.index') }}" class="portal-nav-link {{ request()->routeIs('rooms.*') ? 'portal-nav-link-active' : '' }}">Salas</a>
+                                @if ($user->canManageRooms())
+                                    <a href="{{ route('rooms.index') }}" class="portal-nav-link {{ request()->routeIs('rooms.*') ? 'portal-nav-link-active' : '' }}">Salas</a>
+                                @endif
                             </div>
                         </div>
                     @endif

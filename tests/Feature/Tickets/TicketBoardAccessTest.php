@@ -8,9 +8,11 @@ use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Services\SectorProvisioningService;
+use App\Enums\TicketFieldType;
 use App\Enums\TicketPriority;
 use App\Enums\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class TicketBoardAccessTest extends TestCase
@@ -94,6 +96,126 @@ class TicketBoardAccessTest extends TestCase
             ->assertOk()
             ->assertDontSeeText('Buscar em tudo')
             ->assertDontSee(route('search', absolute: false), false);
+    }
+
+    public function test_configure_action_is_available_in_list_mode_without_switching_views(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+        $company = Company::query()->create([
+            'name' => 'Empresa Config Lista',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI Config Lista',
+            'slug' => 'ti-config-lista',
+            'is_active' => true,
+        ]);
+        $board = app(SectorProvisioningService::class)->provision($sector);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('tickets.index', ['view' => 'list']));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('Configurar')
+            ->assertSee(route('tickets.settings', $board, absolute: false), false)
+            ->assertSeeText('Nova demanda')
+            ->assertDontSeeText('Abrir demanda manualmente');
+
+        $this->assertSame(1, substr_count($response->getContent(), 'Central de formularios'));
+    }
+
+    public function test_operator_with_board_access_can_open_manual_creation_without_configure_access(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Operador Manual',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI Operador Manual',
+            'slug' => 'ti-operador-manual',
+            'is_active' => true,
+        ]);
+        $board = app(SectorProvisioningService::class)->provision($sector);
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $this->assertTrue($operator->canOperateBoard($board));
+
+        $this->actingAs($operator)
+            ->get(route('tickets.index', ['view' => 'list']))
+            ->assertOk()
+            ->assertSeeText('Nova demanda')
+            ->assertDontSeeText('Configurar')
+            ->assertDontSee(route('tickets.settings', $board, absolute: false), false);
+    }
+
+    public function test_manual_board_modal_creates_ticket_without_public_catalog_item(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Manual',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI Manual',
+            'slug' => 'ti-manual',
+            'is_active' => true,
+        ]);
+        $board = app(SectorProvisioningService::class)->provision($sector)->load(['groups', 'statuses']);
+        $manager = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+        ]);
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $assignee = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $field = $board->fields()->create([
+            'name' => 'Ambiente',
+            'slug' => 'ambiente',
+            'type' => TicketFieldType::TEXT,
+            'sort_order' => 10,
+            'is_required' => false,
+            'show_on_board' => true,
+            'is_active' => true,
+        ]);
+
+        $group = $board->groups->first();
+
+        Livewire::actingAs($manager)
+            ->test(\App\Modules\Tickets\Livewire\IndexPage::class)
+            ->set('selectedSectorId', $sector->id)
+            ->set('selectedBoardId', $board->id)
+            ->call('openManualTicketModal')
+            ->assertSet('showManualTicketModal', true)
+            ->set('manualTicketForm.title', 'Demanda criada no quadro')
+            ->set('manualTicketForm.description', 'Criada sem passar pela central.')
+            ->set('manualTicketForm.priority', TicketPriority::HIGH->value)
+            ->set('manualTicketForm.ticket_group_id', (string) $group->id)
+            ->set('manualTicketForm.requester_id', (string) $requester->id)
+            ->set('manualTicketForm.assignee_id', (string) $assignee->id)
+            ->set("manualTicketForm.dynamic_values.{$field->id}", 'Homolog')
+            ->call('createManualTicket')
+            ->assertSet('showManualTicketModal', false);
+
+        $ticket = Ticket::query()->where('title', 'Demanda criada no quadro')->firstOrFail();
+
+        $this->assertSame($board->id, $ticket->ticket_board_id);
+        $this->assertSame($group->id, $ticket->ticket_group_id);
+        $this->assertNull($ticket->service_catalog_item_id);
+        $this->assertSame($requester->id, $ticket->requester_id);
+        $this->assertSame($assignee->id, $ticket->assignee_id);
+        $this->assertSame('Homolog', $ticket->fieldValues()->where('ticket_field_id', $field->id)->first()?->primitive_value);
     }
 
     public function test_user_without_operational_access_is_redirected_to_central(): void

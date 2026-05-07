@@ -17,6 +17,7 @@ class EnsureRole
         $isAllowed = collect($roles)->contains(function (string $role) use ($user) {
             return match ($role) {
                 'super_admin' => $user->isSuperAdmin(),
+                'dev' => $user->isDeveloper(),
                 'collaborator' => ! $user->isSuperAdmin(),
                 'sector_admin' => $user->isSectorAdmin(),
                 'technician' => $user->isTechnician(),

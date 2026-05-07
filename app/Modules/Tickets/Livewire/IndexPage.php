@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -56,6 +57,20 @@ class IndexPage extends Component
     public array $fieldFilters = [];
 
     public array $collapsedGroups = [];
+
+    public bool $showManualTicketModal = false;
+
+    public ?int $lastManualTicketId = null;
+
+    public array $manualTicketForm = [
+        'title' => '',
+        'description' => '',
+        'priority' => 'medium',
+        'ticket_group_id' => '',
+        'assignee_id' => '',
+        'requester_id' => '',
+        'dynamic_values' => [],
+    ];
 
     public function mount(): void
     {
@@ -199,6 +214,102 @@ class IndexPage extends Component
         $this->collapsedGroups[$groupId] = ! ($this->collapsedGroups[$groupId] ?? false);
     }
 
+    public function openManualTicketModal(): void
+    {
+        $board = $this->manualBoard();
+
+        abort_unless($board && auth()->user()->canOperateBoard($board), 403);
+
+        $this->selectedSectorId = $board->sector_id;
+        $this->selectedBoardId = $board->id;
+        $this->lastManualTicketId = null;
+
+        $this->manualTicketForm = [
+            'title' => '',
+            'description' => '',
+            'priority' => TicketPriority::MEDIUM->value,
+            'ticket_group_id' => (string) ($board->defaultGroup()?->id ?? ''),
+            'assignee_id' => '',
+            'requester_id' => (string) auth()->id(),
+            'dynamic_values' => $this->manualFields($board)
+                ->mapWithKeys(fn (TicketField $field) => [$field->id => $field->type->value === 'checkbox' ? false : ''])
+                ->all(),
+        ];
+
+        $this->resetValidation();
+        $this->showManualTicketModal = true;
+    }
+
+    public function closeManualTicketModal(): void
+    {
+        $this->showManualTicketModal = false;
+        $this->resetValidation();
+    }
+
+    public function createManualTicket(TicketWorkflowService $workflowService): void
+    {
+        $board = $this->manualBoard();
+
+        abort_unless($board && auth()->user()->canOperateBoard($board), 403);
+
+        $manualFields = $this->manualFields($board);
+        $validated = $this->validate($this->manualTicketRules($board, $manualFields));
+        $form = $validated['manualTicketForm'];
+        $groupId = $this->normalizeGroupId($form['ticket_group_id'] ?? null)
+            ?? $board->defaultGroup()?->id;
+
+        if ($groupId !== null) {
+            abort_unless($board->groups->pluck('id')->contains($groupId), 404);
+        }
+
+        $assigneeId = $this->normalizeNullableId($form['assignee_id'] ?? null);
+
+        if ($assigneeId !== null) {
+            $allowedAssigneeIds = $this->boardAssignees($board)->pluck('id')->all();
+
+            if (! in_array($assigneeId, $allowedAssigneeIds, true)) {
+                $this->addError('manualTicketForm.assignee_id', 'Selecione um responsavel que tenha acesso a este quadro.');
+
+                return;
+            }
+        }
+
+        $requesterId = $this->normalizeNullableId($form['requester_id'] ?? null) ?? auth()->id();
+        $dynamicValues = collect($form['dynamic_values'] ?? [])
+            ->only($manualFields->pluck('id')->map(fn (int $fieldId) => (string) $fieldId)->all())
+            ->mapWithKeys(function (mixed $value, string|int $fieldId) use ($manualFields): array {
+                $field = $manualFields->firstWhere('id', (int) $fieldId);
+                $normalized = $field ? $field->normalizeMaskedValue($value) : $value;
+
+                return [(int) $fieldId => $normalized];
+            })
+            ->reject(fn (mixed $value) => $value === null || $value === '')
+            ->all();
+
+        $ticket = $workflowService->createTicket(auth()->user(), [
+            'sector_id' => $board->sector_id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $groupId,
+            'ticket_status_id' => $this->legacyStatusIdForGroup($board, $groupId),
+            'service_catalog_item_id' => null,
+            'room_id' => null,
+            'title' => $form['title'],
+            'description' => $form['description'] ?? null,
+            'requester_id' => $requesterId,
+            'assignee_id' => $assigneeId,
+            'priority' => $form['priority'],
+        ], $dynamicValues, [], [
+            'source' => 'manual_board',
+        ]);
+
+        $this->lastManualTicketId = $ticket->id;
+        $this->showManualTicketModal = false;
+        $this->resetPage();
+        $this->syncCollapsedGroups();
+
+        session()->flash('status', "Chamado #{$ticket->id} criado manualmente no quadro {$board->name}.");
+    }
+
     public function render(): View
     {
         /** @var User $user */
@@ -217,6 +328,11 @@ class IndexPage extends Component
         $boardOptions = $this->boardOptions();
         $groupOptions = $this->groupOptions();
         $fieldOptions = $this->fieldOptions();
+        $configBoard = $this->configBoard();
+        $manualBoard = $this->manualBoard();
+        $manualFields = $manualBoard ? $this->manualFields($manualBoard) : collect();
+        $manualAssignees = $manualBoard ? $this->boardAssignees($manualBoard) : collect();
+        $manualRequesters = $manualBoard ? $this->manualRequesterOptions($manualBoard) : collect();
 
         $normalizedFieldFilters = collect($this->fieldFilters)
             ->mapWithKeys(fn ($value, $fieldId) => [(int) $fieldId => is_string($value) ? trim($value) : $value])
@@ -309,9 +425,13 @@ class IndexPage extends Component
             'boardOptions' => $boardOptions,
             'groupOptions' => $groupOptions,
             'fieldOptions' => $fieldOptions,
+            'configBoard' => $configBoard,
+            'manualBoard' => $manualBoard,
+            'manualFields' => $manualFields,
+            'manualAssignees' => $manualAssignees,
+            'manualRequesters' => $manualRequesters,
             'priorities' => TicketPriority::cases(),
             'canUpdate' => true,
-            'manualCreateUrl' => $this->manualCreateUrl(),
             'exportParams' => array_filter([
                 'sector' => $this->selectedSectorId,
                 'board' => $this->selectedBoardId,
@@ -390,6 +510,7 @@ class IndexPage extends Component
 
         $board = TicketBoard::query()
             ->with(['sector.company', 'groups', 'fields.options'])
+            ->with('statuses')
             ->where('is_active', true)
             ->find($this->selectedBoardId);
 
@@ -402,6 +523,54 @@ class IndexPage extends Component
         }
 
         return $board;
+    }
+
+    private function configBoard(): ?TicketBoard
+    {
+        $selectedBoard = $this->board();
+
+        if ($selectedBoard && auth()->user()->can('update', $selectedBoard)) {
+            return $selectedBoard;
+        }
+
+        $boards = $this->selectedSectorId
+            ? $this->boardOptions($this->selectedSectorId, false)
+            : $this->boardOptions(null, false);
+
+        $board = $boards->first(fn (TicketBoard $board) => auth()->user()->can('update', $board));
+
+        if (! $board) {
+            return null;
+        }
+
+        return TicketBoard::query()
+            ->with(['sector.company', 'groups', 'statuses', 'fields.options'])
+            ->where('is_active', true)
+            ->find($board->id);
+    }
+
+    private function manualBoard(): ?TicketBoard
+    {
+        $selectedBoard = $this->board();
+
+        if ($selectedBoard) {
+            return $selectedBoard;
+        }
+
+        $boards = $this->selectedSectorId
+            ? $this->boardOptions($this->selectedSectorId, false)
+            : $this->boardOptions(null, false);
+
+        $board = $boards->first();
+
+        if (! $board) {
+            return null;
+        }
+
+        return TicketBoard::query()
+            ->with(['sector.company', 'groups', 'statuses', 'fields.options'])
+            ->where('is_active', true)
+            ->find($board->id);
     }
 
     private function availableBoardSectors(): Collection
@@ -623,22 +792,92 @@ class IndexPage extends Component
         abort(404);
     }
 
-    private function manualCreateUrl(): string
+    private function normalizeNullableId(mixed $value): ?int
     {
-        $sectorId = $this->selectedSectorId;
-        $boardId = $this->selectedBoardId;
-
-        if (! $sectorId || ! $this->availableBoardSectors()->pluck('id')->contains($sectorId)) {
-            $sectorId = $this->availableBoardSectors()->first()?->id;
+        if ($value === null || $value === '') {
+            return null;
         }
 
-        if (! $boardId && $sectorId) {
-            $boardId = $this->boardOptions($sectorId, false)->first()?->id;
+        if (is_int($value)) {
+            return $value;
         }
 
-        return route('tickets.create', array_filter([
-            'sector' => $sectorId,
-            'board' => $boardId,
-        ]));
+        if (is_string($value) && ctype_digit($value)) {
+            return (int) $value;
+        }
+
+        return null;
+    }
+
+    private function manualFields(TicketBoard $board): Collection
+    {
+        return $board->fields
+            ->where('is_active', true)
+            ->where('show_on_board', true)
+            ->values();
+    }
+
+    private function manualRequesterOptions(TicketBoard $board): Collection
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($board): void {
+                $query
+                    ->withSectorAccess($board->sector_id)
+                    ->orWhere('id', auth()->id());
+            })
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function manualTicketRules(TicketBoard $board, Collection $fields): array
+    {
+        $rules = [
+            'manualTicketForm.title' => ['required', 'string', 'max:160'],
+            'manualTicketForm.description' => ['nullable', 'string'],
+            'manualTicketForm.priority' => ['required', Rule::enum(TicketPriority::class)],
+            'manualTicketForm.ticket_group_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('ticket_groups', 'id')->where('ticket_board_id', $board->id),
+            ],
+            'manualTicketForm.assignee_id' => ['nullable', 'integer', 'exists:users,id'],
+            'manualTicketForm.requester_id' => ['required', 'integer', 'exists:users,id'],
+            'manualTicketForm.dynamic_values' => ['array'],
+        ];
+
+        foreach ($fields as $field) {
+            $fieldRules = [$field->is_required ? 'required' : 'nullable'];
+
+            $fieldRules[] = match ($field->type->value) {
+                'number' => 'numeric',
+                'date' => 'date',
+                'checkbox' => 'boolean',
+                default => 'string',
+            };
+
+            $rules["manualTicketForm.dynamic_values.{$field->id}"] = $fieldRules;
+        }
+
+        return $rules;
+    }
+
+    private function legacyStatusIdForGroup(TicketBoard $board, ?int $groupId): ?int
+    {
+        if (! $groupId) {
+            return $board->statuses->firstWhere('is_default', true)?->id
+                ?? $board->statuses->first()?->id;
+        }
+
+        $group = $board->groups->firstWhere('id', $groupId);
+
+        if (! $group) {
+            return $board->statuses->firstWhere('is_default', true)?->id
+                ?? $board->statuses->first()?->id;
+        }
+
+        return $board->statuses->firstWhere('sort_order', $group->sort_order)?->id
+            ?? $board->statuses->firstWhere('is_closed', $group->is_closed)?->id
+            ?? $board->statuses->first()?->id;
     }
 }

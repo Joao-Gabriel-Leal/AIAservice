@@ -184,6 +184,16 @@ class User extends Authenticatable
         return $this->global_role === GlobalUserRole::SUPER_ADMIN;
     }
 
+    public function isDeveloper(): bool
+    {
+        return $this->global_role === GlobalUserRole::DEV;
+    }
+
+    public function canManageRooms(): bool
+    {
+        return $this->isSuperAdmin() || $this->isDeveloper();
+    }
+
     public function isSectorAdmin(?int $sectorId = null): bool
     {
         if ($this->isSuperAdmin()) {
@@ -358,6 +368,10 @@ class User extends Authenticatable
     {
         if ($this->isSuperAdmin()) {
             return 'Acesso total';
+        }
+
+        if ($this->isDeveloper()) {
+            return 'Acesso tecnico global';
         }
 
         $count = count($this->allSectorIds());

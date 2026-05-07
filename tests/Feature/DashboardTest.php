@@ -65,11 +65,12 @@ class DashboardTest extends TestCase
         $response->assertSee('data-chart=', false);
     }
 
-    public function test_dashboard_shows_rooms_menu_only_for_administrative_profiles(): void
+    public function test_dashboard_shows_rooms_menu_only_for_dev_and_super_admin_profiles(): void
     {
         ['sector' => $sector, 'room' => $room] = $this->ticketContext();
 
         $superAdmin = User::factory()->superAdmin()->create();
+        $developer = User::factory()->developer()->create();
         $sectorAdmin = User::factory()->create([
             'role' => UserRole::SECTOR_ADMIN,
             'sector_id' => $sector->id,
@@ -86,15 +87,28 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee(route('rooms.index', absolute: false), false);
 
-        $this->actingAs($sectorAdmin)
+        $this->actingAs($developer)
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee(route('rooms.index', absolute: false), false);
+
+        $this->actingAs($sectorAdmin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertDontSee(route('rooms.index', absolute: false), false);
 
         $this->actingAs($collaborator)
             ->get(route('dashboard'))
             ->assertOk()
             ->assertDontSee(route('rooms.index', absolute: false), false);
+
+        $this->actingAs($sectorAdmin)
+            ->get(route('rooms.index'))
+            ->assertForbidden();
+
+        $this->actingAs($developer)
+            ->get(route('rooms.index'))
+            ->assertOk();
     }
 
     public function test_dashboard_shows_global_search_menu_only_for_super_admin(): void

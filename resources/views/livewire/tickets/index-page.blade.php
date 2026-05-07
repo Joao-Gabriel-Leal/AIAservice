@@ -60,17 +60,16 @@
                     Buscar em tudo
                 </a>
             @endif
-            <a href="{{ route('tickets.central') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
-                Central de formularios
-            </a>
-            <a href="{{ $manualCreateUrl }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                Abrir demanda manualmente
-            </a>
+            @if ($manualBoard)
+                <button type="button" wire:click="openManualTicketModal" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
+                    Nova demanda
+                </button>
+            @endif
             <a href="{{ route('tickets.export', $exportParams) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                 Exportar Excel
             </a>
-            @if ($board && auth()->user()->can('update', $board))
-                <a href="{{ route('tickets.settings', $board) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+            @if ($configBoard && auth()->user()->can('update', $configBoard))
+                <a href="{{ route('tickets.settings', $configBoard) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                     Configurar
                 </a>
             @endif
@@ -187,6 +186,15 @@
         @endif
     </x-portal.section-hero>
 
+    @if ($lastManualTicketId)
+        <div class="ui-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <span>Chamado #{{ $lastManualTicketId }} criado direto no quadro.</span>
+            <a href="{{ route('tickets.show', $lastManualTicketId) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">
+                Abrir chamado
+            </a>
+        </div>
+    @endif
+
     @if ($this->viewMode === 'list')
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -273,6 +281,146 @@
     @endif
 
     <div x-ref="dragLayer" class="pointer-events-none fixed inset-0 z-[80] hidden"></div>
+
+    @if ($showManualTicketModal && $manualBoard)
+        <div class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+            <div class="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                <form wire:submit.prevent="createManualTicket" class="max-h-[88vh] overflow-y-auto">
+                    <div class="border-b border-slate-100 px-6 py-5">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Criacao manual</p>
+                                <h2 class="mt-2 text-xl font-semibold text-slate-950">{{ $manualBoard->name }}</h2>
+                                <p class="mt-1 text-sm text-slate-500">{{ $manualBoard->sector?->name }} - sem formulario publico</p>
+                            </div>
+
+                            <button type="button" wire:click="closeManualTicketModal" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50">
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-5 px-6 py-6 md:grid-cols-2">
+                        <label class="md:col-span-2 text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Titulo</span>
+                            <input wire:model="manualTicketForm.title" type="text" class="ui-input w-full" placeholder="Resumo curto da demanda">
+                            @error('manualTicketForm.title') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="md:col-span-2 text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Descricao</span>
+                            <textarea wire:model="manualTicketForm.description" rows="4" class="ui-input w-full" placeholder="Contexto, impacto e qualquer detalhe util"></textarea>
+                            @error('manualTicketForm.description') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Solicitante</span>
+                            <select wire:model="manualTicketForm.requester_id" class="ui-native-select w-full">
+                                @foreach ($manualRequesters as $requesterOption)
+                                    <option value="{{ $requesterOption->id }}">{{ $requesterOption->name }} - {{ $requesterOption->email }}</option>
+                                @endforeach
+                            </select>
+                            @error('manualTicketForm.requester_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Prioridade</span>
+                            <select wire:model="manualTicketForm.priority" class="ui-native-select w-full">
+                                @foreach ($priorities as $priority)
+                                    <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
+                                @endforeach
+                            </select>
+                            @error('manualTicketForm.priority') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Etapa inicial</span>
+                            <select wire:model="manualTicketForm.ticket_group_id" class="ui-native-select w-full">
+                                <option value="">Sem etapa</option>
+                                @foreach ($manualBoard->groups->where('is_active', true) as $groupOption)
+                                    <option value="{{ $groupOption->id }}">{{ $groupOption->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('manualTicketForm.ticket_group_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Responsavel</span>
+                            <select wire:model="manualTicketForm.assignee_id" class="ui-native-select w-full">
+                                <option value="">Nao atribuido</option>
+                                @foreach ($manualAssignees as $assigneeOption)
+                                    <option value="{{ $assigneeOption->id }}">{{ $assigneeOption->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('manualTicketForm.assignee_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        @if ($manualFields->isNotEmpty())
+                            <div class="md:col-span-2 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+                                <div class="md:col-span-2">
+                                    <p class="text-sm font-semibold text-slate-900">Campos do quadro</p>
+                                    <p class="mt-1 text-xs text-slate-500">Apenas campos ativos e marcados para aparecer no quadro entram aqui.</p>
+                                </div>
+
+                                @foreach ($manualFields as $field)
+                                    <label wire:key="manual-field-{{ $field->id }}" class="{{ $field->type->value === 'text' ? 'md:col-span-2' : '' }} text-sm text-slate-600">
+                                        <span class="mb-1 block font-medium">
+                                            {{ $field->name }}
+                                            @if ($field->is_required)
+                                                <span class="text-rose-500">*</span>
+                                            @endif
+                                        </span>
+
+                                        @if (in_array($field->type->value, ['select', 'status'], true) && $field->options->isNotEmpty())
+                                            <select wire:model="manualTicketForm.dynamic_values.{{ $field->id }}" class="ui-native-select w-full">
+                                                <option value="">Selecione</option>
+                                                @foreach ($field->options as $option)
+                                                    <option value="{{ $option->value }}">{{ $option->label }}</option>
+                                                @endforeach
+                                            </select>
+                                        @elseif ($field->type->value === 'user')
+                                            <select wire:model="manualTicketForm.dynamic_values.{{ $field->id }}" class="ui-native-select w-full">
+                                                <option value="">Selecione</option>
+                                                @foreach ($manualRequesters as $requesterOption)
+                                                    <option value="{{ $requesterOption->id }}">{{ $requesterOption->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        @elseif ($field->type->value === 'checkbox')
+                                            <span class="flex min-h-[44px] items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3">
+                                                <input wire:model="manualTicketForm.dynamic_values.{{ $field->id }}" type="checkbox" class="size-4 rounded border-slate-300">
+                                                <span>Sim</span>
+                                            </span>
+                                        @elseif ($field->type->value === 'date')
+                                            <input wire:model="manualTicketForm.dynamic_values.{{ $field->id }}" type="date" class="ui-input w-full">
+                                        @elseif ($field->type->value === 'number')
+                                            <input wire:model="manualTicketForm.dynamic_values.{{ $field->id }}" type="number" class="ui-input w-full" placeholder="{{ $field->placeholder ?: 'Valor' }}">
+                                        @else
+                                            <textarea wire:model="manualTicketForm.dynamic_values.{{ $field->id }}" rows="3" class="ui-input w-full" placeholder="{{ $field->placeholder ?: 'Informe o valor' }}"></textarea>
+                                        @endif
+
+                                        @if ($field->help_text)
+                                            <span class="mt-1 block text-xs text-slate-400">{{ $field->help_text }}</span>
+                                        @endif
+
+                                        @error("manualTicketForm.dynamic_values.{$field->id}") <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    </label>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+                        <button type="button" wire:click="closeManualTicketModal" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
+                            Criar demanda
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>
 
 @include('livewire.tickets.partials.board-script')

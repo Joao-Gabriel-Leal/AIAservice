@@ -62,7 +62,7 @@ class RoomController extends Controller
 
         $payload = $request->validated();
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->canManageRooms()) {
             abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
         }
 
@@ -90,7 +90,7 @@ class RoomController extends Controller
 
         $payload = $request->validated();
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->canManageRooms()) {
             abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
         }
 
@@ -115,7 +115,7 @@ class RoomController extends Controller
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->canManageRooms()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
 
