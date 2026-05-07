@@ -12,16 +12,22 @@
             @error('email') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
         </label>
 
-        <label class="block">
-            <span class="mb-2 block text-sm font-medium text-slate-700">Senha {{ $userModel->exists ? '(deixe em branco para manter)' : '' }}</span>
-            <input type="password" name="password" class="w-full rounded-2xl border border-slate-300 px-4 py-3" {{ $userModel->exists ? '' : 'required' }}>
-            @error('password') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
-        </label>
+        @if ($userModel->exists)
+            <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Senha (deixe em branco para manter)</span>
+                <input type="password" name="password" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
+                @error('password') <span class="mt-1 block text-sm text-rose-600">{{ $message }}</span> @enderror
+            </label>
 
-        <label class="block">
-            <span class="mb-2 block text-sm font-medium text-slate-700">Confirmar senha</span>
-            <input type="password" name="password_confirmation" class="w-full rounded-2xl border border-slate-300 px-4 py-3" {{ $userModel->exists ? '' : 'required' }}>
-        </label>
+            <label class="block">
+                <span class="mb-2 block text-sm font-medium text-slate-700">Confirmar senha</span>
+                <input type="password" name="password_confirmation" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
+            </label>
+        @else
+            <div class="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                O usuario sera criado com a senha temporaria <strong>123456</strong> e vai trocar a senha no primeiro acesso.
+            </div>
+        @endif
 
         @if (auth()->user()->isSuperAdmin())
             <label class="block md:col-span-2">
@@ -92,10 +98,17 @@
     </section>
 
     <div class="grid gap-4 md:grid-cols-2">
-        <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <input type="checkbox" name="must_change_password" value="1" @checked(old('must_change_password', $userModel->must_change_password ?? ! $userModel->exists)) class="size-4 rounded border-slate-300">
-            <span class="text-sm text-slate-700">Obrigar troca de senha no primeiro acesso</span>
-        </label>
+        @if ($userModel->exists)
+            <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <input type="checkbox" name="must_change_password" value="1" @checked(old('must_change_password', $userModel->must_change_password ?? false)) class="size-4 rounded border-slate-300">
+                <span class="text-sm text-slate-700">Obrigar troca de senha no proximo acesso</span>
+            </label>
+        @else
+            <input type="hidden" name="must_change_password" value="1">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                Troca obrigatoria ativada para o primeiro acesso.
+            </div>
+        @endif
 
         <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $userModel->is_active ?? true)) class="size-4 rounded border-slate-300">

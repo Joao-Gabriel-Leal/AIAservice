@@ -22,7 +22,7 @@
         :description="$board?->description ?: 'Ajuste etapas, SLA, automacoes, campos e formularios do setor.'"
         :badge="$board ? ($board->groups->count().' etapa(s)') : 'Sem setor'"
     >
-        @if ($sectorOptions->count() > 1 || $board)
+        @if ($sectorOptions->count() > 1 || $boardOptions->count() > 1 || $board)
             <div class="portal-toolbar">
                 <div>
                     @if ($board)
@@ -46,8 +46,19 @@
                         </label>
                     @endif
 
+                    @if ($boardOptions->isNotEmpty())
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Quadro</span>
+                            <select wire:model.live="selectedBoardId" class="ui-native-select min-w-[240px]">
+                                @foreach ($boardOptions as $boardOption)
+                                    <option value="{{ $boardOption->id }}">{{ $boardOption->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    @endif
+
                     @if ($board)
-                        <a href="{{ route('tickets.board', $board->sector_id) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar ao quadro</a>
+                        <a href="{{ route('tickets.index', ['view' => 'stages', 'sector' => $board->sector_id, 'board' => $board->id]) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar aos quadros</a>
                     @endif
                 </div>
             </div>
@@ -103,6 +114,54 @@
                             <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Salvar quadro</button>
                         </div>
                     </form>
+
+                    <div class="mt-6 grid gap-4 lg:grid-cols-2">
+                        <form wire:submit="saveBoardOperators" class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                            <div>
+                                <h4 class="text-base font-semibold text-slate-900">Operadores com acesso</h4>
+                                <p class="mt-1 text-sm text-slate-500">Gestores do setor sempre acessam. Marque abaixo somente os operadores que atuam neste quadro.</p>
+                            </div>
+
+                            <div class="mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1">
+                                @forelse ($boardOperatorOptions as $operator)
+                                    <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                                        <span class="min-w-0 truncate">{{ $operator->name }}</span>
+                                        <input type="checkbox" wire:model="boardOperatorIds" value="{{ $operator->id }}" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                                    </label>
+                                @empty
+                                    <p class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm text-slate-500">Nenhum operador ativo neste setor.</p>
+                                @endforelse
+                            </div>
+
+                            <button type="submit" class="ui-action ui-action-primary mt-4 rounded-2xl px-4 py-3 text-sm">Salvar acessos</button>
+                        </form>
+
+                        <form wire:submit="createBoard" class="rounded-3xl border border-slate-200 bg-white p-5">
+                            <div>
+                                <h4 class="text-base font-semibold text-slate-900">Novo quadro neste setor</h4>
+                                <p class="mt-1 text-sm text-slate-500">Crie fluxos separados para tipos diferentes de formulario, como Desenvolvimento e Suporte.</p>
+                            </div>
+
+                            <div class="mt-4 space-y-3">
+                                <input type="text" wire:model="newBoardName" class="ui-input w-full" placeholder="Nome do novo quadro">
+                                @error('newBoardName') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                <textarea wire:model="newBoardDescription" rows="3" class="ui-textarea w-full" placeholder="Descricao opcional"></textarea>
+                            </div>
+
+                            @if ($boardOperatorOptions->isNotEmpty())
+                                <div class="mt-4 grid max-h-44 gap-2 overflow-y-auto pr-1">
+                                    @foreach ($boardOperatorOptions as $operator)
+                                        <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                                            <span class="min-w-0 truncate">{{ $operator->name }}</span>
+                                            <input type="checkbox" wire:model="newBoardOperatorIds" value="{{ $operator->id }}" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                                        </label>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            <button type="submit" class="ui-action ui-action-secondary mt-4 rounded-2xl px-4 py-3 text-sm">Criar quadro</button>
+                        </form>
+                    </div>
                 </div>
         </section>
 

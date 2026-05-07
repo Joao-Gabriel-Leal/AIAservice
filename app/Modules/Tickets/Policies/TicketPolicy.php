@@ -16,7 +16,7 @@ class TicketPolicy
     {
         return $user->isSuperAdmin()
             || $ticket->requester_id === $user->id
-            || $user->hasOperationalAccess($ticket->sector_id);
+            || $user->canOperateBoard($ticket->board);
     }
 
     public function create(User $user): bool
@@ -26,7 +26,7 @@ class TicketPolicy
 
     public function update(User $user, Ticket $ticket): bool
     {
-        return $user->isSuperAdmin() || $user->hasOperationalAccess($ticket->sector_id);
+        return $user->canOperateBoard($ticket->board);
     }
 
     public function closeOwn(User $user, Ticket $ticket): bool
@@ -51,7 +51,7 @@ class TicketPolicy
 
     public function viewTimeTracking(User $user, Ticket $ticket): bool
     {
-        return $user->hasOperationalAccess($ticket->sector_id);
+        return $user->canOperateBoard($ticket->board);
     }
 
     public function trackTime(User $user, Ticket $ticket): bool

@@ -76,7 +76,12 @@ class Sector extends Model
 
     public function board(): HasOne
     {
-        return $this->hasOne(TicketBoard::class);
+        return $this->hasOne(TicketBoard::class)->where('is_default', true)->orderBy('id');
+    }
+
+    public function boards(): HasMany
+    {
+        return $this->hasMany(TicketBoard::class)->orderByDesc('is_default')->orderBy('name');
     }
 
     public function tickets(): HasMany

@@ -36,7 +36,7 @@ abstract class BaseTicketNotification extends Notification
             'ticket_id' => $this->ticket->id,
             'title' => $this->title,
             'message' => $this->message,
-            'url' => route('tickets.show', $this->ticket),
+            'url' => route('tickets.show', $this->ticket, absolute: false),
             'type' => static::class,
         ];
     }

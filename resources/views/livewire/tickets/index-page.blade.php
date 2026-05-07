@@ -2,6 +2,7 @@
     class="space-y-6"
     x-data="ticketBoard({
         selectedSectorId: $wire.entangle('selectedSectorId').live,
+        selectedBoardId: $wire.entangle('selectedBoardId').live,
         viewMode: $wire.entangle('viewMode').live,
     })"
     x-init="init()"
@@ -21,7 +22,7 @@
 
     <x-portal.section-hero
         eyebrow="Quadro operacional"
-        title="Quadro"
+        title="Quadros"
         description="Filtre tudo em um so lugar e alterne entre lista, etapas e kanban sem perder o contexto."
     >
         <x-slot:actions>
@@ -68,6 +69,11 @@
             <a href="{{ route('tickets.export', $exportParams) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                 Exportar Excel
             </a>
+            @if ($board && auth()->user()->can('update', $board))
+                <a href="{{ route('tickets.settings', $board) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                    Configurar
+                </a>
+            @endif
         </x-slot:actions>
 
         <div class="portal-toolbar">
@@ -94,6 +100,23 @@
                         <option value="">Todos os setores</option>
                         @foreach ($sectorOptions as $sectorOption)
                             <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            @endif
+
+            @if ($boardOptions->isNotEmpty())
+                <label class="text-sm text-slate-600">
+                    <span class="mb-1 block font-medium">Quadro</span>
+                    <select wire:model.live="selectedBoardId" class="ui-native-select w-full">
+                        <option value="">Todos os quadros</option>
+                        @foreach ($boardOptions as $boardOption)
+                            <option value="{{ $boardOption->id }}">
+                                {{ $boardOption->name }}
+                                @if (! $selectedSectorId)
+                                    - {{ $boardOption->sector?->name }}
+                                @endif
+                            </option>
                         @endforeach
                     </select>
                 </label>

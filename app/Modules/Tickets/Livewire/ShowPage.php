@@ -271,6 +271,7 @@ class ShowPage extends Component
     {
         $ticket = $this->ticket();
         $board = $ticket->board()->with(['groups', 'fields.options'])->first();
+        $assignees = $board ? $this->boardAssignees($board) : collect();
         $canRate = auth()->user()->can('rate', $ticket);
         $canViewTimeTracking = auth()->user()->can('viewTimeTracking', $ticket);
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
@@ -313,11 +314,7 @@ class ShowPage extends Component
             'board' => $board,
             'fields' => $board?->fields->where('is_active', true)->values() ?? collect(),
             'groups' => $board?->groups ?? collect(),
-            'assignees' => User::query()
-                ->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician'])
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(),
+            'assignees' => $assignees,
             'sectorUsers' => User::query()
                 ->withSectorAccess($ticket->sector_id)
                 ->where('is_active', true)
@@ -426,6 +423,23 @@ class ShowPage extends Component
         $this->authorize('view', $timeEntry);
 
         return $timeEntry;
+    }
+
+    private function boardAssignees($board)
+    {
+        $operatorIds = $board->operators()->pluck('users.id')->all();
+
+        return User::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($board, $operatorIds): void {
+                $query->withSectorAccess($board->sector_id, ['sector_admin']);
+
+                if ($operatorIds !== []) {
+                    $query->orWhereIn('id', $operatorIds);
+                }
+            })
+            ->orderBy('name')
+            ->get();
     }
 
     /**

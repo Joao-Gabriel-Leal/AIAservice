@@ -26,6 +26,12 @@
                             Formulario: {{ $selectedForm->name }}
                         </span>
                     @endif
+
+                    @if ($selectedBoard)
+                        <span class="inline-flex items-center rounded-full px-3.5 py-1.5 text-xs font-medium" style="background-color: {{ $selectedSector?->softColor() ?? '#EEF2FF' }}; color: {{ $selectedSector?->displayColor() ?? '#31428C' }};">
+                            Quadro: {{ $selectedBoard->name }}
+                        </span>
+                    @endif
                 </div>
             @endif
         </div>
@@ -38,7 +44,7 @@
                     <p class="mt-1.5 text-sm leading-6 text-slate-500">O formulario define os campos da abertura. Se houver catalogo vinculado, ele complementa a triagem automaticamente.</p>
                 </div>
 
-                <div class="grid gap-5 sm:grid-cols-2">
+                <div class="grid gap-5 sm:grid-cols-3">
                     <label class="block">
                         <span class="mb-2 block text-[1rem] font-semibold text-slate-900">Setor <span class="text-rose-500">*</span></span>
                         <select wire:model.live="selectedSectorId" class="ui-native-select h-14 w-full rounded-2xl border-slate-200 text-[0.96rem] text-slate-800">
@@ -51,11 +57,30 @@
                     </label>
 
                     <label class="block">
-                        <span class="mb-2 block text-[1rem] font-semibold text-slate-900">Formulario <span class="text-rose-500">*</span></span>
-                        <select wire:model.live="selectedFormId" @disabled(! $selectedSectorId || $formOptions->isEmpty()) class="ui-native-select h-14 w-full rounded-2xl border-slate-200 text-[0.96rem] text-slate-800 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                        <span class="mb-2 block text-[1rem] font-semibold text-slate-900">Quadro <span class="text-rose-500">*</span></span>
+                        <select wire:model.live="selectedBoardId" @disabled(! $selectedSectorId || $boardOptions->isEmpty()) class="ui-native-select h-14 w-full rounded-2xl border-slate-200 text-[0.96rem] text-slate-800 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
                             <option value="">
                                 @if (! $selectedSectorId)
                                     Selecione primeiro um setor
+                                @elseif ($boardOptions->isEmpty())
+                                    Nenhum quadro disponivel
+                                @else
+                                    Selecione um quadro
+                                @endif
+                            </option>
+                            @foreach ($boardOptions as $boardOption)
+                                <option value="{{ $boardOption->id }}">{{ $boardOption->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('selectedBoardId') <span class="mt-2 block text-xs font-medium text-rose-600">{{ $message }}</span> @enderror
+                    </label>
+
+                    <label class="block">
+                        <span class="mb-2 block text-[1rem] font-semibold text-slate-900">Formulario <span class="text-rose-500">*</span></span>
+                        <select wire:model.live="selectedFormId" @disabled(! $selectedBoardId || $formOptions->isEmpty()) class="ui-native-select h-14 w-full rounded-2xl border-slate-200 text-[0.96rem] text-slate-800 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                            <option value="">
+                                @if (! $selectedBoardId)
+                                    Selecione primeiro um quadro
                                 @elseif ($formOptions->isEmpty())
                                     Nenhum formulario disponivel
                                 @else
@@ -328,7 +353,7 @@
 
             <button
                 type="submit"
-                @disabled(! $selectedSectorId || ! $selectedFormId)
+                @disabled(! $selectedSectorId || ! $selectedBoardId || ! $selectedFormId)
                 wire:loading.attr="disabled"
                 wire:loading.class="ui-loading"
                 wire:target="submit"

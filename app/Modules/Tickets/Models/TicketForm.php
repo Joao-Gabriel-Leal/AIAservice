@@ -44,17 +44,17 @@ class TicketForm extends Model
             return $query;
         }
 
-        $operatorSectorIds = $user->operationalSectorIds();
+        $operatorBoardIds = $user->operationalBoardIds();
         $managerSectorIds = $user->adminSectorIds();
 
-        return $query->where(function (Builder $accessQuery) use ($operatorSectorIds, $managerSectorIds) {
+        return $query->where(function (Builder $accessQuery) use ($operatorBoardIds, $managerSectorIds) {
             $accessQuery->where('opening_access_level', TicketFormOpeningAccessLevel::PUBLIC->value);
 
-            if ($operatorSectorIds !== []) {
-                $accessQuery->orWhere(function (Builder $operatorQuery) use ($operatorSectorIds) {
+            if ($operatorBoardIds !== []) {
+                $accessQuery->orWhere(function (Builder $operatorQuery) use ($operatorBoardIds) {
                     $operatorQuery
                         ->where('opening_access_level', TicketFormOpeningAccessLevel::OPERATOR->value)
-                        ->whereHas('board', fn (Builder $boardQuery) => $boardQuery->whereIn('sector_id', $operatorSectorIds));
+                        ->whereIn('ticket_board_id', $operatorBoardIds);
                 });
             }
 
@@ -98,12 +98,19 @@ class TicketForm extends Model
 
     public function canBeOpenedBy(User $user): bool
     {
-        $sectorId = $this->board?->sector_id ?? $this->board()->value('sector_id');
+        $board = $this->board;
+        $sectorId = $board?->sector_id ?? $this->board()->value('sector_id');
 
         if (! $sectorId) {
             return false;
         }
 
-        return ($this->opening_access_level ?? TicketFormOpeningAccessLevel::PUBLIC)->allows($user, (int) $sectorId);
+        $accessLevel = $this->opening_access_level ?? TicketFormOpeningAccessLevel::PUBLIC;
+
+        if ($accessLevel === TicketFormOpeningAccessLevel::OPERATOR) {
+            return $user->canOperateBoard($board ?? $this->ticket_board_id);
+        }
+
+        return $accessLevel->allows($user, (int) $sectorId);
     }
 }

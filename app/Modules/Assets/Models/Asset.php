@@ -98,10 +98,16 @@ class Asset extends Model
 
     public function qrCodeUrl(): string
     {
-        $baseUrl = rtrim((string) config('app.asset_qr_base_url'), '/');
         $path = route('assets.public.show', $this, absolute: false);
+        $baseUrl = null;
 
-        return $baseUrl.$path;
+        if ((! app()->runningInConsole() || app()->runningUnitTests()) && app()->bound('request') && request()->getHost()) {
+            $baseUrl = request()->getSchemeAndHttpHost();
+        }
+
+        $baseUrl ??= (string) config('app.asset_qr_base_url', config('app.url'));
+
+        return rtrim($baseUrl, '/').$path;
     }
 
     public function qrCodeSvg(int $size = 180): string

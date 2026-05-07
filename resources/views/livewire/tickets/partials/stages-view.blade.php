@@ -1,6 +1,13 @@
 <div class="space-y-6">
     @foreach ($groups as $group)
-        <section class="ui-panel ui-board-lane" style="--ui-lane-color: {{ $group->color ?: '#2563eb' }}" wire:key="group-stages-{{ $group->id }}">
+        <section
+            class="ui-panel ui-board-lane"
+            style="--ui-lane-color: {{ $group->color ?: '#2563eb' }}"
+            wire:key="group-stages-{{ $group->id }}"
+            data-board-drop-zone="true"
+            data-board-group-id="{{ $group->id }}"
+            x-bind:class="{ 'ui-kanban-column-dragover': isDragTarget({{ $group->id }}) }"
+        >
             <button
                 type="button"
                 wire:click="toggleGroup({{ $group->id }})"
@@ -68,7 +75,15 @@
                                     $slaMeta = $this->slaMeta($ticket);
                                 @endphp
 
-                                <tr class="ui-row-interactive align-top hover:bg-slate-50" wire:key="ticket-row-stages-{{ $ticket->id }}">
+                                <tr
+                                    class="ui-row-interactive align-top hover:bg-slate-50"
+                                    wire:key="ticket-row-stages-{{ $ticket->id }}"
+                                    x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, {{ $ticket->ticket_group_id ?? 'null' }})"
+                                    x-bind:class="{
+                                        'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
+                                        'ui-kanban-card-lifted': isPointerCandidate({{ $ticket->id }})
+                                    }"
+                                >
                                     <td>
                                         <div wire:key="ticket-title-stages-{{ $ticket->id }}">
                                             <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
@@ -189,7 +204,13 @@
     @endforeach
 
     @if ($ungroupedTickets->isNotEmpty())
-        <section class="ui-panel rounded-3xl border border-slate-200 bg-white shadow-sm" wire:key="ungrouped-stages">
+        <section
+            class="ui-panel rounded-3xl border border-slate-200 bg-white shadow-sm"
+            wire:key="ungrouped-stages"
+            data-board-drop-zone="true"
+            data-board-group-id="__null__"
+            x-bind:class="{ 'ui-kanban-column-dragover': isDragTarget(null) }"
+        >
             <div class="border-b border-slate-200 px-6 py-4">
                 <h3 class="text-lg font-semibold text-slate-900">Sem etapa</h3>
                 <p class="text-sm text-slate-500">Chamados sem etapa definida no quadro.</p>
@@ -201,7 +222,15 @@
                         $slaMeta = $this->slaMeta($ticket);
                     @endphp
 
-                    <a href="{{ route('tickets.show', $ticket) }}" class="ui-row-interactive flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50" wire:key="ticket-ungrouped-stages-{{ $ticket->id }}">
+                    <div
+                        class="ui-row-interactive flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50"
+                        wire:key="ticket-ungrouped-stages-{{ $ticket->id }}"
+                        x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, null)"
+                        x-bind:class="{
+                            'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
+                            'ui-kanban-card-lifted': isPointerCandidate({{ $ticket->id }})
+                        }"
+                    >
                         <div>
                             <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
                             <p class="text-sm text-slate-500">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
@@ -213,8 +242,9 @@
                                 <span class="ui-tone-dot"></span>
                                 {{ $slaMeta['label'] }}
                             </span>
+                            <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" data-no-drag>Ver</a>
                         </div>
-                    </a>
+                    </div>
                 @endforeach
             </div>
         </section>

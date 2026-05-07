@@ -15,6 +15,7 @@ class TicketIndexQuery
     {
         return [
             'sector_id' => $selectedSectorId,
+            'board_id' => null,
             'title' => '',
             'group_id' => null,
             'requester' => '',
@@ -29,6 +30,7 @@ class TicketIndexQuery
     {
         return [
             'sector_id' => $request->integer('sector') ?: null,
+            'board_id' => $request->integer('board') ?: null,
             'title' => trim((string) $request->string('title')),
             'group_id' => $request->integer('group') ?: null,
             'requester' => trim((string) $request->string('requester')),
@@ -48,6 +50,7 @@ class TicketIndexQuery
             ->visibleTo($user)
             ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem', 'fieldValues.field.options'])
             ->when($filters['sector_id'], fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
+            ->when($filters['board_id'] ?? null, fn (Builder $query, int $boardId) => $query->where('ticket_board_id', $boardId))
             ->when(($filters['title'] ?? '') !== '', fn (Builder $query) => $query->where('title', 'like', '%'.$filters['title'].'%'))
             ->when($filters['group_id'] ?? null, fn (Builder $query, int $groupId) => $query->where('ticket_group_id', $groupId))
             ->when(($filters['requester'] ?? '') !== '', function (Builder $query) use ($filters) {

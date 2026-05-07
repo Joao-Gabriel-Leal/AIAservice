@@ -13,9 +13,11 @@ use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
 use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketTimeEntry;
+use App\Modules\Tickets\Models\TicketBoardUserAccess;
 use App\Modules\Users\Models\UserSectorAccess;
 use App\Support\DatabaseBinary;
 use Database\Factories\UserFactory;
@@ -120,6 +122,11 @@ class User extends Authenticatable
     public function sectorAccesses(): HasMany
     {
         return $this->hasMany(UserSectorAccess::class)->with('sector');
+    }
+
+    public function ticketBoardAccesses(): HasMany
+    {
+        return $this->hasMany(TicketBoardUserAccess::class)->with('board');
     }
 
     public function assignedTickets(): HasMany
@@ -261,6 +268,45 @@ class User extends Authenticatable
         return $this->sectorIds([SectorAccessLevel::SECTOR_ADMIN, SectorAccessLevel::TECHNICIAN]);
     }
 
+    public function operationalBoardIds(): array
+    {
+        if ($this->isSuperAdmin()) {
+            return TicketBoard::query()
+                ->where('is_active', true)
+                ->pluck('id')
+                ->map(fn ($boardId) => (int) $boardId)
+                ->all();
+        }
+
+        $adminSectorIds = $this->adminSectorIds();
+        $technicianSectorIds = $this->sectorIds([SectorAccessLevel::TECHNICIAN]);
+
+        if ($adminSectorIds === [] && $technicianSectorIds === []) {
+            return [];
+        }
+
+        return TicketBoard::query()
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($adminSectorIds, $technicianSectorIds): void {
+                if ($adminSectorIds !== []) {
+                    $query->orWhereIn('sector_id', $adminSectorIds);
+                }
+
+                if ($technicianSectorIds !== []) {
+                    $query->orWhere(function (Builder $technicianQuery) use ($technicianSectorIds): void {
+                        $technicianQuery
+                            ->whereIn('sector_id', $technicianSectorIds)
+                            ->whereHas('userAccesses', fn (Builder $accessQuery) => $accessQuery->where('user_id', $this->id));
+                    });
+                }
+            })
+            ->pluck('id')
+            ->map(fn ($boardId) => (int) $boardId)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function allSectorIds(): array
     {
         return $this->sectorIds();
@@ -279,6 +325,33 @@ class User extends Authenticatable
         }
 
         return $this->hasAnySectorAccess($levels);
+    }
+
+    public function canOperateBoard(TicketBoard|int|null $board): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $board instanceof TicketBoard) {
+            $board = $board ? TicketBoard::query()->find($board) : null;
+        }
+
+        if (! $board || ! $board->is_active) {
+            return false;
+        }
+
+        if ($this->isSectorAdmin($board->sector_id)) {
+            return true;
+        }
+
+        if (! $this->isTechnician($board->sector_id)) {
+            return false;
+        }
+
+        return $board->userAccesses()
+            ->where('user_id', $this->id)
+            ->exists();
     }
 
     public function accessSummary(): string

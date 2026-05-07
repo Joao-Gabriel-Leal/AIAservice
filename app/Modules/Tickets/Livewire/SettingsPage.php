@@ -36,9 +36,14 @@ class SettingsPage extends Component
     use AuthorizesRequests;
 
     public ?int $selectedSectorId = null;
+    public ?int $selectedBoardId = null;
     public ?string $openSection = null;
     public string $boardName = '';
     public string $boardDescription = '';
+    public string $newBoardName = '';
+    public string $newBoardDescription = '';
+    public array $boardOperatorIds = [];
+    public array $newBoardOperatorIds = [];
     public bool $slaIsActive = true;
     public array $slaTargets = [];
     public array $groupForm = [
@@ -124,9 +129,16 @@ class SettingsPage extends Component
     public array $automationConditions = [];
     public array $automationActions = [];
 
-    public function mount(?Sector $sector = null): void
+    public function mount(?TicketBoard $board = null): void
     {
-        $this->selectedSectorId = $sector?->id ?? $this->availableSectors()->first()?->id;
+        if ($board?->exists) {
+            $this->authorize('update', $board);
+            $this->selectedSectorId = $board->sector_id;
+            $this->selectedBoardId = $board->id;
+        } else {
+            $this->selectedSectorId = $this->availableSectors()->first()?->id;
+            $this->selectedBoardId = $this->availableBoards()->first()?->id;
+        }
 
         if (! $this->selectedSectorId && $this->hasAnyActiveSector()) {
             abort(403);
@@ -139,6 +151,15 @@ class SettingsPage extends Component
     public function updatedSelectedSectorId(): void
     {
         abort_unless($this->availableSectors()->pluck('id')->contains($this->selectedSectorId), 403);
+        $this->selectedBoardId = $this->availableBoards()->first()?->id;
+        $this->loadBoardMeta();
+        $this->resetForms();
+    }
+
+    public function updatedSelectedBoardId(): void
+    {
+        abort_unless($this->availableBoards()->pluck('id')->contains($this->selectedBoardId), 403);
+        $this->selectedSectorId = $this->board()?->sector_id;
         $this->loadBoardMeta();
         $this->resetForms();
     }
@@ -185,6 +206,54 @@ class SettingsPage extends Component
 
         $this->keepSectionOpen('board');
         session()->flash('status', 'Quadro atualizado com sucesso.');
+    }
+
+    public function createBoard(SectorProvisioningService $provisioningService): void
+    {
+        $validated = $this->validate([
+            'newBoardName' => ['required', 'string', 'max:120'],
+            'newBoardDescription' => ['nullable', 'string'],
+            'newBoardOperatorIds' => ['array'],
+            'newBoardOperatorIds.*' => ['integer'],
+        ]);
+
+        $sector = Sector::query()->findOrFail($this->selectedSectorId);
+        abort_unless($this->availableSectors()->pluck('id')->contains($sector->id), 403);
+
+        $operatorIds = $this->validBoardOperatorIds($validated['newBoardOperatorIds'] ?? [], $sector->id);
+        $board = $provisioningService->createAdditionalBoard(
+            $sector,
+            $validated['newBoardName'],
+            $validated['newBoardDescription'] ?: null,
+            $operatorIds,
+        );
+
+        $this->selectedBoardId = $board->id;
+        $this->newBoardName = '';
+        $this->newBoardDescription = '';
+        $this->newBoardOperatorIds = [];
+        $this->loadBoardMeta();
+        $this->resetForms();
+        $this->keepSectionOpen('board');
+
+        session()->flash('status', 'Quadro criado com sucesso.');
+    }
+
+    public function saveBoardOperators(): void
+    {
+        $validated = $this->validate([
+            'boardOperatorIds' => ['array'],
+            'boardOperatorIds.*' => ['integer'],
+        ]);
+
+        $board = $this->board();
+        $this->authorize('update', $board);
+        $board->operators()->sync($this->validBoardOperatorIds($validated['boardOperatorIds'] ?? [], $board->sector_id));
+
+        $this->loadBoardMeta();
+        $this->keepSectionOpen('board');
+
+        session()->flash('status', 'Operadores do quadro atualizados.');
     }
 
     public function saveSlaPolicy(TicketSlaService $ticketSlaService): void
@@ -1433,6 +1502,8 @@ class SettingsPage extends Component
         return view('livewire.tickets.settings-page', [
             'board' => $board,
             'sectorOptions' => $this->availableSectors(),
+            'boardOptions' => $this->availableBoards(),
+            'boardOperatorOptions' => $this->boardOperatorOptions(),
             'fieldTypes' => TicketFieldType::cases(),
             'priorities' => TicketPriority::cases(),
             'formConditionUsers' => $this->formConditionUsers(),
@@ -1454,6 +1525,7 @@ class SettingsPage extends Component
         $board = $this->board();
         $this->boardName = $board?->name ?? '';
         $this->boardDescription = $board?->description ?? '';
+        $this->boardOperatorIds = $board?->operators()->pluck('users.id')->map(fn ($id) => (int) $id)->all() ?? [];
 
         if (! $this->editingCatalogItemId) {
             $this->catalogForm['ticket_form_id'] = $board?->forms()->where('is_default', true)->value('id');
@@ -1477,16 +1549,9 @@ class SettingsPage extends Component
 
     private function board(): ?TicketBoard
     {
-        if (! $this->selectedSectorId) {
+        if (! $this->selectedBoardId) {
             return null;
         }
-
-        $sector = Sector::query()->find($this->selectedSectorId);
-        if (! $sector) {
-            return null;
-        }
-
-        abort_unless($this->availableSectors()->pluck('id')->contains($sector->id), 403);
 
         $board = TicketBoard::query()->with([
             'sector.company',
@@ -1499,26 +1564,16 @@ class SettingsPage extends Component
             'slaPolicy.targets',
             'automationRules.conditions',
             'automationRules.actions',
-        ])->where('sector_id', $sector->id)->first();
+            'operators',
+        ])->find($this->selectedBoardId);
 
-        if ($board) {
-            return $board;
+        if (! $board) {
+            return null;
         }
 
-        app(SectorProvisioningService::class)->provision($sector);
+        abort_unless($this->availableSectors()->pluck('id')->contains($board->sector_id), 403);
 
-        return TicketBoard::query()->with([
-            'sector.company',
-            'groups',
-            'statuses',
-            'fields.options',
-            'forms.fields.options',
-            'catalogItems.form',
-            'catalogItems.defaultGroup',
-            'slaPolicy.targets',
-            'automationRules.conditions',
-            'automationRules.actions',
-        ])->where('sector_id', $sector->id)->first();
+        return $board;
     }
 
     private function availableSectors(): Collection
@@ -1531,14 +1586,83 @@ class SettingsPage extends Component
         return $query->where('is_active', true)->get();
     }
 
-    private function boardAssignees(): Collection
+    private function availableBoards(): Collection
     {
         if (! $this->selectedSectorId) {
             return collect();
         }
 
-        return User::query()->withSectorAccess($this->selectedSectorId, ['sector_admin', 'technician'])
+        $sector = Sector::query()->find($this->selectedSectorId);
+
+        if (! $sector || ! $this->availableSectors()->pluck('id')->contains($sector->id)) {
+            return collect();
+        }
+
+        if (! TicketBoard::query()->where('sector_id', $sector->id)->exists()) {
+            app(SectorProvisioningService::class)->provision($sector);
+        }
+
+        return TicketBoard::query()
+            ->where('sector_id', $sector->id)
             ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function boardOperatorOptions(): Collection
+    {
+        if (! $this->selectedSectorId) {
+            return collect();
+        }
+
+        return User::query()
+            ->withSectorAccess($this->selectedSectorId, ['technician'])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function validBoardOperatorIds(array $operatorIds, int $sectorId): array
+    {
+        $requestedIds = collect($operatorIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($requestedIds->isEmpty()) {
+            return [];
+        }
+
+        return User::query()
+            ->whereIn('id', $requestedIds->all())
+            ->withSectorAccess($sectorId, ['technician'])
+            ->where('is_active', true)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    private function boardAssignees(): Collection
+    {
+        $board = $this->board();
+
+        if (! $board) {
+            return collect();
+        }
+
+        $operatorIds = $board->operators->pluck('id')->all();
+
+        return User::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($board, $operatorIds): void {
+                $query->withSectorAccess($board->sector_id, ['sector_admin']);
+
+                if ($operatorIds !== []) {
+                    $query->orWhereIn('id', $operatorIds);
+                }
+            })
             ->orderBy('name')
             ->get();
     }

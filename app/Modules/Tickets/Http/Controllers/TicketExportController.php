@@ -27,9 +27,14 @@ class TicketExportController extends Controller
         $user = $request->user();
         $filters = $this->ticketIndexQuery->filtersFromRequest($request);
         $allowedSectorIds = $this->ticketIndexOptions->sectorOptions($user)->pluck('id');
+        $allowedBoardIds = $this->ticketIndexOptions->boardOptions($user, $filters['sector_id'])->pluck('id');
 
         if ($filters['sector_id']) {
             abort_unless($allowedSectorIds->contains($filters['sector_id']), 403);
+        }
+
+        if ($filters['board_id']) {
+            abort_unless($allowedBoardIds->contains($filters['board_id']), 403);
         }
 
         $fields = $this->ticketIndexOptions->fieldOptions($user, $filters['sector_id']);

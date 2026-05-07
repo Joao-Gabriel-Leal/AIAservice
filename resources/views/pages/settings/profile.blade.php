@@ -388,7 +388,7 @@ new #[Title('Meu perfil')] class extends Component {
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                    <p class="text-sm text-slate-500">Use pelo menos 12 caracteres, com letras maiusculas e minusculas, numeros e simbolos.</p>
+                    <p class="text-sm text-slate-500">Use pelo menos 8 caracteres, com letras maiusculas e minusculas, numeros e simbolos.</p>
                     <button
                         type="submit"
                         wire:loading.attr="disabled"

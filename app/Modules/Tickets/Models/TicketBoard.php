@@ -2,10 +2,12 @@
 
 namespace App\Modules\Tickets\Models;
 
+use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -17,13 +19,16 @@ class TicketBoard extends Model
     protected $fillable = [
         'sector_id',
         'name',
+        'slug',
         'description',
+        'is_default',
         'is_active',
     ];
 
     protected function casts(): array
     {
         return [
+            'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];
     }
@@ -61,6 +66,17 @@ class TicketBoard extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function userAccesses(): HasMany
+    {
+        return $this->hasMany(TicketBoardUserAccess::class);
+    }
+
+    public function operators(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'ticket_board_user_accesses')
+            ->withTimestamps();
     }
 
     public function slaPolicy(): HasOne

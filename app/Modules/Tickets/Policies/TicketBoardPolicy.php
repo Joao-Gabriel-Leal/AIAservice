@@ -9,7 +9,7 @@ class TicketBoardPolicy
 {
     public function view(User $user, TicketBoard $board): bool
     {
-        return $user->isSuperAdmin() || $user->hasOperationalAccess($board->sector_id);
+        return $user->canOperateBoard($board);
     }
 
     public function update(User $user, TicketBoard $board): bool

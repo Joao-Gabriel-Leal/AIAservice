@@ -73,13 +73,13 @@ class Ticket extends Model
             return $query;
         }
 
-        $operationalSectorIds = $user->operationalSectorIds();
+        $operationalBoardIds = $user->operationalBoardIds();
 
-        return $query->where(function (Builder $visibleQuery) use ($user, $operationalSectorIds) {
+        return $query->where(function (Builder $visibleQuery) use ($user, $operationalBoardIds) {
             $visibleQuery->where('requester_id', $user->id);
 
-            if ($operationalSectorIds !== []) {
-                $visibleQuery->orWhereIn('sector_id', $operationalSectorIds);
+            if ($operationalBoardIds !== []) {
+                $visibleQuery->orWhereIn('ticket_board_id', $operationalBoardIds);
             }
         });
     }

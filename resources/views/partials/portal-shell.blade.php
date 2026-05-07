@@ -66,9 +66,9 @@
                             @endif
                             <a href="{{ route('tickets.central') }}" class="portal-nav-link {{ request()->routeIs('tickets.central', 'tickets.create') ? 'portal-nav-link-active' : '' }}">Central de formularios</a>
                             <a href="{{ route('tickets.mine') }}" class="portal-nav-link {{ request()->routeIs('tickets.mine') ? 'portal-nav-link-active' : '' }}">Meus chamados</a>
-                            <a href="{{ route('knowledge-base.index') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.index', 'knowledge-base.show') ? 'portal-nav-link-active' : '' }}">Base de conhecimento</a>
+                            <a href="{{ route('knowledge-base.index') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.*') ? 'portal-nav-link-active' : '' }}">Base de conhecimento</a>
                             @if ($user->hasOperationalAccess())
-                                <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.board', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Quadro</a>
+                                <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.board', 'tickets.settings', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Quadros</a>
                                 <a href="{{ route('licenses.index') }}" class="portal-nav-link {{ request()->routeIs('licenses.*') ? 'portal-nav-link-active' : '' }}">Licencas</a>
                             @endif
                         </div>
@@ -86,8 +86,6 @@
                                     <a href="{{ route('assets.index') }}" class="portal-nav-link {{ request()->routeIs('assets.*') ? 'portal-nav-link-active' : '' }}">Patrimonios</a>
                                 @endif
                                 <a href="{{ route('rooms.index') }}" class="portal-nav-link {{ request()->routeIs('rooms.*') ? 'portal-nav-link-active' : '' }}">Salas</a>
-                                <a href="{{ route('knowledge-base.manage') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.manage', 'knowledge-base.create', 'knowledge-base.edit') ? 'portal-nav-link-active' : '' }}">Gerenciar base</a>
-                                <a href="{{ route('tickets.settings') }}" class="portal-nav-link {{ request()->routeIs('tickets.settings') ? 'portal-nav-link-active' : '' }}">Configurar quadro</a>
                             </div>
                         </div>
                     @endif
@@ -115,7 +113,7 @@
 
                             @if (auth()->user()?->hasOperationalAccess())
                                 <a href="{{ route('tickets.index') }}" class="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/8 px-4 py-2 text-sm font-medium text-white/92 backdrop-blur-sm transition hover:bg-white/12">
-                                    Quadro
+                                    Quadros
                                 </a>
                             @else
                                 <a href="{{ route('tickets.central') }}" class="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/8 px-4 py-2 text-sm font-medium text-white/92 backdrop-blur-sm transition hover:bg-white/12">

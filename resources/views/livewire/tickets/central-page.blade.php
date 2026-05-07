@@ -26,7 +26,7 @@
 
                 <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     @foreach ($sectors as $sector)
-                        @php($formCount = $sector->board?->forms?->count() ?? 0)
+                        @php($formCount = $sector->boards?->sum(fn ($board) => $board->forms?->count() ?? 0) ?? 0)
 
                         <button
                             type="button"
@@ -70,6 +70,7 @@
 
                     <div class="mt-6 grid gap-4 lg:grid-cols-2">
                         @forelse ($forms as $form)
+                            @php($formBoard = $form->board)
                             <article class="ui-panel ui-panel-interactive rounded-3xl border border-slate-200 bg-slate-50 p-5" style="border-color: {{ $selectedSector->borderColor() }}; background: linear-gradient(180deg, {{ $selectedSector->softColor() }} 0%, #ffffff 100%);">
                                 <div class="flex h-full flex-col gap-4">
                                     <div class="space-y-2">
@@ -87,6 +88,12 @@
                                         <p class="text-sm text-slate-500">
                                             {{ $form->description ?: 'Formulario configurado para este tipo de solicitacao no setor selecionado.' }}
                                         </p>
+
+                                        @if ($formBoard)
+                                            <span class="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+                                                Quadro: {{ $formBoard->name }}
+                                            </span>
+                                        @endif
                                     </div>
 
                                     <div class="mt-auto flex items-center justify-between gap-3 pt-3">
@@ -94,7 +101,7 @@
                                             Setor {{ $selectedSector->name }}
                                         </p>
 
-                                        <a href="{{ route('tickets.create', ['sector' => $selectedSector->id, 'form' => $form->id]) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm" style="border-color: {{ $selectedSector->borderColor() }}; color: {{ $selectedSector->displayColor() }};">
+                                        <a href="{{ route('tickets.create', ['sector' => $selectedSector->id, 'board' => $formBoard?->id, 'form' => $form->id]) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm" style="border-color: {{ $selectedSector->borderColor() }}; color: {{ $selectedSector->displayColor() }};">
                                             Usar formulario
                                         </a>
                                     </div>

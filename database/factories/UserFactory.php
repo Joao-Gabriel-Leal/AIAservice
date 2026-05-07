@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\GlobalUserRole;
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Modules\Tickets\Models\TicketBoard;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -47,6 +48,14 @@ class UserFactory extends Factory
                     ['sector_id' => $user->sector_id],
                     ['access_level' => $accessLevel],
                 );
+
+                if ($user->role === UserRole::TECHNICIAN) {
+                    TicketBoard::query()
+                        ->where('sector_id', $user->sector_id)
+                        ->where('is_active', true)
+                        ->get()
+                        ->each(fn (TicketBoard $board) => $board->operators()->syncWithoutDetaching([$user->id]));
+                }
             });
     }
 

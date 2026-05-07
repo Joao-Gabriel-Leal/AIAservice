@@ -4,6 +4,7 @@
             window.ticketBoard = function (config) {
                 return {
                     selectedSectorId: config.selectedSectorId,
+                    selectedBoardId: config.selectedBoardId,
                     viewMode: config.viewMode,
                     dragThreshold: 10,
                     drag: {
@@ -31,8 +32,13 @@
                             this.restoreViewMode();
                         });
 
+                        this.$watch('selectedBoardId', () => {
+                            this.cancelPointerDrag();
+                            this.restoreViewMode();
+                        });
+
                         this.$watch('viewMode', (value) => {
-                            if (value !== 'kanban') {
+                            if (! ['kanban', 'stages'].includes(value)) {
                                 this.cancelPointerDrag();
                             }
 
@@ -41,7 +47,11 @@
                     },
 
                     storageKey() {
-                        return this.selectedSectorId ? `tickets-board-view:${this.selectedSectorId}` : null;
+                        if (this.selectedBoardId) {
+                            return `tickets-board-view:board:${this.selectedBoardId}`;
+                        }
+
+                        return this.selectedSectorId ? `tickets-board-view:sector:${this.selectedSectorId}` : null;
                     },
 
                     restoreViewMode() {
@@ -135,7 +145,7 @@
                     },
 
                     beginPointerDrag(event, ticketId, groupId) {
-                        if (this.viewMode !== 'kanban') {
+                        if (! ['kanban', 'stages'].includes(this.viewMode)) {
                             return;
                         }
 
@@ -245,13 +255,13 @@
                             return undefined;
                         }
 
-                        const columnEl = document.elementFromPoint(x, y)?.closest('[data-kanban-column]');
+                        const columnEl = document.elementFromPoint(x, y)?.closest('[data-board-drop-zone], [data-kanban-column]');
 
                         if (! columnEl) {
                             return undefined;
                         }
 
-                        const rawGroupId = columnEl.dataset.kanbanGroupId;
+                        const rawGroupId = columnEl.dataset.boardGroupId ?? columnEl.dataset.kanbanGroupId;
 
                         return rawGroupId === '__null__'
                             ? null

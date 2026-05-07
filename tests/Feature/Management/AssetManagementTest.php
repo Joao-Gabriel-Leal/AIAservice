@@ -350,6 +350,32 @@ class AssetManagementTest extends TestCase
             ->assertSee($context['collaborator']->name);
     }
 
+    public function test_asset_qr_uses_current_request_host_on_management_pages(): void
+    {
+        $context = $this->assetContext();
+        $admin = User::factory()->superAdmin()->create();
+        $service = app(AssetMovementService::class);
+
+        $asset = $service->register([
+            'name' => 'Tablet externo',
+            'description' => null,
+            'serial_number' => 'QR-HOST',
+            'brand' => 'Samsung',
+            'model' => 'Tab',
+            'status' => AssetStatus::DISPONIVEL->value,
+            'current_sector_id' => $context['sectorA']->id,
+            'current_room_id' => $context['roomA']->id,
+            'current_user_id' => null,
+        ], $admin);
+
+        $expectedUrl = 'https://homolog-chamados.anadem.com.br'.route('assets.public.show', $asset, absolute: false);
+
+        $this->actingAs($admin)
+            ->get('https://homolog-chamados.anadem.com.br'.route('assets.show', $asset, absolute: false))
+            ->assertOk()
+            ->assertSee($expectedUrl, false);
+    }
+
     public function test_profile_shows_only_assets_assigned_to_authenticated_user(): void
     {
         $context = $this->assetContext();

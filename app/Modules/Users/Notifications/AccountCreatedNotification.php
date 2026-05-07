@@ -27,7 +27,7 @@ class AccountCreatedNotification extends Notification
             ->greeting("Ola, {$notifiable->name}!")
             ->line('Sua conta no sistema foi criada por um administrador.')
             ->line("Login de acesso: {$this->email}")
-            ->line('No primeiro acesso, entre com a senha informada pelo administrador.');
+            ->line('No primeiro acesso, entre com a senha temporaria 123456.');
 
         if ($this->mustChangePassword) {
             $mail->line('A troca de senha sera obrigatoria no primeiro acesso.');
@@ -45,7 +45,9 @@ class AccountCreatedNotification extends Notification
             'message' => $this->mustChangePassword
                 ? 'Sua conta esta pronta e exige troca de senha no primeiro acesso.'
                 : 'Sua conta esta pronta para uso.',
-            'url' => $this->mustChangePassword ? route('profile.edit').'#seguranca' : route('dashboard'),
+            'url' => $this->mustChangePassword
+                ? route('password.force-change', absolute: false)
+                : route('dashboard', absolute: false),
             'email' => $this->email,
             'must_change_password' => $this->mustChangePassword,
         ];

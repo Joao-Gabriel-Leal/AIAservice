@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserRequest extends FormRequest
 {
@@ -24,7 +25,7 @@ class UserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:120', Rule::unique('users', 'email')->ignore($user?->id)],
-            'password' => [$isUpdate ? 'nullable' : 'required', 'confirmed', 'min:8'],
+            'password' => ['nullable', 'confirmed', Password::default()],
             'global_role' => ['required', Rule::enum(GlobalUserRole::class)],
             'sector_accesses' => ['nullable', 'array'],
             'sector_accesses.*' => ['nullable', Rule::enum(SectorAccessLevel::class)],

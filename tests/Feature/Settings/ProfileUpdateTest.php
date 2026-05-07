@@ -144,13 +144,13 @@ class ProfileUpdateTest extends TestCase
 
         $response = Livewire::test('pages::settings.profile')
             ->set('current_password', 'password')
-            ->set('password', 'new-password')
-            ->set('password_confirmation', 'new-password')
+            ->set('password', 'NovaSenha@123')
+            ->set('password_confirmation', 'NovaSenha@123')
             ->call('updatePassword');
 
         $response->assertHasNoErrors();
 
-        $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertTrue(Hash::check('NovaSenha@123', $user->refresh()->password));
         $this->assertFalse($user->must_change_password);
     }
 
@@ -164,13 +164,13 @@ class ProfileUpdateTest extends TestCase
         $this->actingAs($user);
 
         $response = Livewire::test('pages::settings.profile')
-            ->set('password', 'new-password')
-            ->set('password_confirmation', 'new-password')
+            ->set('password', 'NovaSenha@123')
+            ->set('password_confirmation', 'NovaSenha@123')
             ->call('updatePassword');
 
         $response->assertHasNoErrors();
 
-        $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertTrue(Hash::check('NovaSenha@123', $user->refresh()->password));
         $this->assertFalse($user->must_change_password);
     }
 
@@ -198,12 +198,12 @@ class ProfileUpdateTest extends TestCase
                 'password_confirmation' => 'curta',
             ],
             [
-                'password' => ['required', 'string', Password::min(12), 'confirmed'],
+                'password' => ['required', 'string', Password::min(8), 'confirmed'],
             ],
         );
 
         $this->assertTrue($validator->fails());
-        $this->assertSame('O campo nova senha deve ter pelo menos 12 caracteres.', $validator->errors()->first('password'));
+        $this->assertSame('O campo nova senha deve ter pelo menos 8 caracteres.', $validator->errors()->first('password'));
     }
 
     public function test_current_password_is_required_when_password_change_is_not_pending(): void
@@ -216,8 +216,8 @@ class ProfileUpdateTest extends TestCase
         $this->actingAs($user);
 
         Livewire::test('pages::settings.profile')
-            ->set('password', 'new-password')
-            ->set('password_confirmation', 'new-password')
+            ->set('password', 'NovaSenha@123')
+            ->set('password_confirmation', 'NovaSenha@123')
             ->call('updatePassword')
             ->assertHasErrors(['current_password']);
     }

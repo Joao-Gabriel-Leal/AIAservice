@@ -123,27 +123,40 @@
 
         <div class="ui-panel space-y-4 rounded-3xl p-6">
             <div>
-                <h2 class="text-lg font-semibold text-slate-900">Guia rapido de automacoes</h2>
-                <p class="mt-1 text-sm text-slate-500">Use JSON nas regras para condicoes e acoes. As referencias de grupo e status devem usar slug.</p>
+                <h2 class="text-lg font-semibold text-slate-900">Montagem guiada</h2>
+                <p class="mt-1 text-sm text-slate-500">Preencha o essencial primeiro. Campos, catalogo, SLA e automacoes ficam separados para nao misturar configuracoes.</p>
             </div>
 
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-                <p><strong>Condicao</strong>: <code>[{"field":"priority","operator":"in","value":["high","urgent"]}]</code></p>
-                <p class="mt-2"><strong>Acao grupo</strong>: <code>[{"action":"change_group","payload":{"group_slug":"em-andamento"}}]</code></p>
-                <p class="mt-2"><strong>Acao status</strong>: <code>[{"action":"change_status","payload":{"status_slug":"em-atendimento"}}]</code></p>
-                <p class="mt-2"><strong>Reabrir</strong>: <code>[{"action":"reopen_ticket","payload":{"status_slug":"novo","message":"Chamado reaberto automaticamente."}}]</code></p>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-sm font-semibold text-slate-900">1. Dados</p>
+                    <p class="mt-1 text-sm text-slate-500">Nome do template e formulario base.</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-sm font-semibold text-slate-900">2. Campos</p>
+                    <p class="mt-1 text-sm text-slate-500">Perguntas que vao aparecer na abertura.</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-sm font-semibold text-slate-900">3. Catalogo</p>
+                    <p class="mt-1 text-sm text-slate-500">Tipos de chamado que o setor publica.</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-sm font-semibold text-slate-900">4. SLA</p>
+                    <p class="mt-1 text-sm text-slate-500">Metas por prioridade.</p>
+                </div>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-2 text-xs text-slate-600">
-                <div class="rounded-2xl border border-slate-200 p-4">
-                    <p class="font-semibold text-slate-700">Grupos disponiveis</p>
-                    <p class="mt-2">{{ implode(', ', array_keys($groupOptions)) }}</p>
+            <details class="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+                <summary class="cursor-pointer text-sm font-semibold text-slate-800">Modo avancado de automacoes</summary>
+                <div class="mt-4 space-y-2">
+                    <p><strong>Condicao</strong>: <code>[{"field":"priority","operator":"in","value":["high","urgent"]}]</code></p>
+                    <p><strong>Acao etapa</strong>: <code>[{"action":"change_group","payload":{"group_slug":"em-andamento"}}]</code></p>
+                    <p><strong>Acao status</strong>: <code>[{"action":"change_status","payload":{"status_slug":"em-atendimento"}}]</code></p>
+                    <p><strong>Reabrir</strong>: <code>[{"action":"reopen_ticket","payload":{"status_slug":"novo","message":"Chamado reaberto automaticamente."}}]</code></p>
+                    <p class="pt-2"><strong>Etapas</strong>: {{ implode(', ', array_keys($groupOptions)) }}</p>
+                    <p><strong>Status</strong>: {{ implode(', ', array_keys($statusOptions)) }}</p>
                 </div>
-                <div class="rounded-2xl border border-slate-200 p-4">
-                    <p class="font-semibold text-slate-700">Status disponiveis</p>
-                    <p class="mt-2">{{ implode(', ', array_keys($statusOptions)) }}</p>
-                </div>
-            </div>
+            </details>
         </div>
     </div>
 
@@ -174,7 +187,7 @@
                     </div>
                     <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-600">
                         <label class="flex items-center gap-2"><input type="checkbox" name="fields[{{ $index }}][is_required]" value="1" @checked($field['is_required'] ?? false)> Obrigatorio</label>
-                        <label class="flex items-center gap-2"><input type="checkbox" name="fields[{{ $index }}][show_on_board]" value="1" @checked($field['show_on_board'] ?? true)> Mostrar no board</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" name="fields[{{ $index }}][show_on_board]" value="1" @checked($field['show_on_board'] ?? true)> Mostrar no quadro</label>
                         <label class="flex items-center gap-2"><input type="checkbox" name="fields[{{ $index }}][is_active]" value="1" @checked($field['is_active'] ?? true)> Ativo</label>
                         <button type="button" class="text-rose-600" data-remove-row>Remover</button>
                     </div>
@@ -221,12 +234,16 @@
         </div>
     </div>
 
-    <div class="ui-panel rounded-3xl p-6">
-        <div class="mb-4 flex items-center justify-between gap-4">
+    <details class="ui-panel rounded-3xl p-6" @if (count($automationRows) > 1 || filled($automationRows[0]['name'] ?? '')) open @endif>
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4">
             <div>
-                <h2 class="text-lg font-semibold text-slate-900">Automacoes</h2>
-                <p class="mt-1 text-sm text-slate-500">Cadastre regras em JSON para reaproveitar fluxos operacionais.</p>
+                <h2 class="text-lg font-semibold text-slate-900">Automacoes avancadas</h2>
+                <p class="mt-1 text-sm text-slate-500">Opcional. Abra somente se o template precisar criar regras automaticas.</p>
             </div>
+            <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500">Abrir</span>
+        </summary>
+
+        <div class="mt-5 flex justify-end">
             <button type="button" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm" data-add-row="automation">Adicionar regra</button>
         </div>
 
@@ -265,12 +282,12 @@
                 </div>
             @endforeach
         </div>
-    </div>
+    </details>
 
     <div class="ui-panel rounded-3xl p-6">
         <div class="mb-4">
             <h2 class="text-lg font-semibold text-slate-900">SLA</h2>
-            <p class="mt-1 text-sm text-slate-500">Defina metas por prioridade para serem copiadas no board do setor novo.</p>
+            <p class="mt-1 text-sm text-slate-500">Defina metas por prioridade para serem copiadas no quadro do setor novo.</p>
         </div>
 
         <label class="mb-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -321,7 +338,7 @@
                                 </div>
                                 <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-600">
                                     <label class="flex items-center gap-2"><input type="checkbox" name="fields[${index}][is_required]" value="1" ${values.is_required ? 'checked' : ''}> Obrigatorio</label>
-                                    <label class="flex items-center gap-2"><input type="checkbox" name="fields[${index}][show_on_board]" value="1" ${values.show_on_board ? 'checked' : ''}> Mostrar no board</label>
+                                    <label class="flex items-center gap-2"><input type="checkbox" name="fields[${index}][show_on_board]" value="1" ${values.show_on_board ? 'checked' : ''}> Mostrar no quadro</label>
                                     <label class="flex items-center gap-2"><input type="checkbox" name="fields[${index}][is_active]" value="1" ${values.is_active ? 'checked' : ''}> Ativo</label>
                                     <button type="button" class="text-rose-600" data-remove-row>Remover</button>
                                 </div>

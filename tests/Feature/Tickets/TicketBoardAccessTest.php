@@ -28,7 +28,7 @@ class TicketBoardAccessTest extends TestCase
         $this->actingAs($superAdmin)
             ->get(route('tickets.index', ['view' => 'stages']))
             ->assertOk()
-            ->assertSeeText('Quadro')
+            ->assertSeeText('Quadros')
             ->assertSeeText('Nenhum chamado encontrado. Use a central para abrir a primeira solicitacao.');
     }
 
@@ -64,7 +64,7 @@ class TicketBoardAccessTest extends TestCase
         $this->actingAs($operator)
             ->get(route('tickets.index'))
             ->assertOk()
-            ->assertSee('>Quadro</a>', false)
+            ->assertSee('>Quadros</a>', false)
             ->assertDontSee('>Chamados</a>', false);
     }
 
@@ -171,5 +171,89 @@ class TicketBoardAccessTest extends TestCase
             ->get(route('tickets.show', $ticket))
             ->assertOk()
             ->assertSeeText('Chamado proprio');
+    }
+
+    public function test_operator_access_is_limited_by_selected_board(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Multi Quadro',
+            'is_active' => true,
+        ]);
+
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI',
+            'slug' => 'ti',
+            'is_active' => true,
+        ]);
+
+        $room = Room::query()->create([
+            'sector_id' => $sector->id,
+            'name' => 'Sala TI',
+            'is_active' => true,
+        ]);
+
+        $supportBoard = app(SectorProvisioningService::class)->provision($sector);
+        $devOperator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $supportOperator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $manager = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $supportBoard->operators()->detach([$devOperator->id, $supportOperator->id]);
+
+        $devBoard = app(SectorProvisioningService::class)->createAdditionalBoard($sector, 'Desenvolvimento', null, [$devOperator->id]);
+        $requester = User::factory()->create();
+
+        $supportTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $supportBoard->id,
+            'ticket_group_id' => $supportBoard->groups()->firstOrFail()->id,
+            'ticket_status_id' => $supportBoard->statuses()->firstOrFail()->id,
+            'room_id' => $room->id,
+            'title' => 'Chamado de suporte',
+            'description' => 'Fica no quadro de suporte.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $devTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $devBoard->id,
+            'ticket_group_id' => $devBoard->groups()->firstOrFail()->id,
+            'ticket_status_id' => $devBoard->statuses()->firstOrFail()->id,
+            'room_id' => $room->id,
+            'title' => 'Chamado de desenvolvimento',
+            'description' => 'Fica no quadro de desenvolvimento.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $this->assertTrue($devOperator->canOperateBoard($devBoard));
+        $this->assertFalse($supportOperator->canOperateBoard($devBoard));
+        $this->assertTrue($manager->canOperateBoard($devBoard));
+
+        $this->actingAs($devOperator)
+            ->get(route('tickets.show', $devTicket))
+            ->assertOk()
+            ->assertSeeText('Chamado de desenvolvimento');
+
+        $this->actingAs($devOperator)
+            ->get(route('tickets.show', $supportTicket))
+            ->assertForbidden();
+
+        $this->actingAs($manager)
+            ->get(route('tickets.show', $supportTicket))
+            ->assertOk()
+            ->assertSeeText('Chamado de suporte');
     }
 }

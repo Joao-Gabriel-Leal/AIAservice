@@ -13,6 +13,8 @@ use App\Modules\Tickets\Notifications\TicketActivityNotification;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Users\Notifications\AccountCreatedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class NotificationsTest extends TestCase
@@ -64,11 +66,11 @@ class NotificationsTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('notifications.open', $notification->id));
 
-        $response->assertRedirect(route('tickets.show', $ticket));
+        $response->assertRedirect(route('tickets.show', $ticket, absolute: false));
         $this->assertNotNull($notification->fresh()->read_at);
     }
 
-    public function test_opening_account_created_notification_with_password_change_redirects_to_security_form(): void
+    public function test_pending_password_change_blocks_notifications_until_force_change(): void
     {
         $user = User::factory()->create([
             'must_change_password' => true,
@@ -79,8 +81,48 @@ class NotificationsTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('notifications.open', $notification->id));
 
-        $response->assertRedirect(route('profile.edit').'#seguranca');
-        $this->assertNotNull($notification->fresh()->read_at);
+        $response->assertRedirect(route('password.force-change'));
+        $this->assertNull($notification->fresh()->read_at);
+    }
+
+    public function test_account_created_notification_points_to_force_change_screen(): void
+    {
+        $user = User::factory()->create();
+
+        $user->notify(new AccountCreatedNotification($user->email, true));
+        $notification = $user->notifications()->firstOrFail();
+
+        $this->assertSame(route('password.force-change', absolute: false), data_get($notification->data, 'url'));
+
+        $this->actingAs($user)
+            ->get(route('notifications.open', $notification->id))
+            ->assertRedirect(route('password.force-change'));
+    }
+
+    public function test_malformed_notification_data_does_not_break_inbox_or_open_action(): void
+    {
+        $user = User::factory()->create();
+        $notificationId = (string) Str::uuid();
+
+        DB::table('notifications')->insert([
+            'id' => $notificationId,
+            'type' => 'malformed',
+            'notifiable_type' => User::class,
+            'notifiable_id' => $user->id,
+            'data' => '"broken"',
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('notifications.index'))
+            ->assertOk()
+            ->assertSeeText('Atualizacao de chamado');
+
+        $this->actingAs($user)
+            ->get(route('notifications.open', $notificationId))
+            ->assertRedirect(route('notifications.index'));
     }
 
     public function test_user_can_mark_their_notification_as_read_explicitly(): void

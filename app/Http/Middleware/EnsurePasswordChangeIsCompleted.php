@@ -20,7 +20,7 @@ class EnsurePasswordChangeIsCompleted
             return $next($request);
         }
 
-        return redirect()->to(route('profile.edit').'#seguranca');
+        return redirect()->route('password.force-change');
     }
 
     private function isAllowedWhilePasswordChangeIsPending(Request $request): bool
@@ -35,9 +35,6 @@ class EnsurePasswordChangeIsCompleted
             'two-factor.*',
             'livewire.*',
             'default-livewire.*',
-            'profile.edit',
-            'notifications.open',
-            'users.profile-photo.show',
         ], $routeName)) {
             return true;
         }

@@ -131,7 +131,7 @@
     </form>
 
     <div class="auth-helper-card">
-        Escolha uma senha com pelo menos 12 caracteres, com letras maiusculas e minusculas, numeros e simbolos.
+        Escolha uma senha com pelo menos 8 caracteres, com letras maiusculas e minusculas, numeros e simbolos.
     </div>
 
     @if (Route::has('password.request'))

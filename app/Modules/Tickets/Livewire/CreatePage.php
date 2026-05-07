@@ -25,6 +25,8 @@ class CreatePage extends Component
 
     public ?int $selectedSectorId = null;
 
+    public ?int $selectedBoardId = null;
+
     public ?int $selectedCatalogId = null;
 
     public ?int $selectedFormId = null;
@@ -56,11 +58,24 @@ class CreatePage extends Component
             abort_unless($catalogItem->form?->canBeOpenedBy(auth()->user()), 403);
 
             $this->selectedSectorId = $catalogItem->board?->sector_id;
+            $this->selectedBoardId = $catalogItem->ticket_board_id;
             $this->selectedCatalogId = $catalogItem->id;
             $this->selectedFormId = $catalogItem->ticket_form_id;
             $this->priority = $catalogItem->default_priority?->value ?? TicketPriority::MEDIUM->value;
         } else {
-            $this->selectedSectorId = $this->resolveSectorId(request()->integer('sector'));
+            $requestedBoardId = request()->integer('board');
+            $requestedBoard = $requestedBoardId
+                ? TicketBoard::query()->where('is_active', true)->find($requestedBoardId)
+                : null;
+
+            if ($requestedBoard && $this->availableSectors()->pluck('id')->contains($requestedBoard->sector_id)) {
+                $this->selectedSectorId = $requestedBoard->sector_id;
+                $this->selectedBoardId = $requestedBoard->id;
+            } else {
+                $this->selectedSectorId = $this->resolveSectorId(request()->integer('sector'));
+                $this->selectedBoardId = $this->resolveBoardId($requestedBoardId);
+            }
+
             $this->selectedFormId = $this->resolveFormId(request()->integer('form'));
             $this->selectedCatalogId = $this->resolveCatalogIdForForm($this->selectedFormId);
         }
@@ -68,6 +83,20 @@ class CreatePage extends Component
 
     public function updatedSelectedSectorId(): void
     {
+        $this->selectedBoardId = $this->boardOptions()->first()?->id;
+        $this->selectedCatalogId = null;
+        $this->selectedFormId = null;
+        $this->dynamicValues = [];
+        $this->priority = TicketPriority::MEDIUM->value;
+        $this->refreshSuggestions();
+    }
+
+    public function updatedSelectedBoardId(): void
+    {
+        if ($this->selectedBoardId) {
+            abort_unless($this->boardOptions()->pluck('id')->contains($this->selectedBoardId), 403);
+        }
+
         $this->selectedCatalogId = null;
         $this->selectedFormId = null;
         $this->dynamicValues = [];
@@ -129,7 +158,7 @@ class CreatePage extends Component
 
         $this->sanitizeDynamicValuesForVisibility($allFields);
         $validated = $this->validate($this->rules($visibleFields));
-        $groupId = $catalog->default_ticket_group_id
+        $groupId = $catalog?->default_ticket_group_id
             ?? $board->defaultGroup()?->id;
         $legacyStatusId = $this->legacyStatusIdForGroup($board, $groupId);
 
@@ -161,11 +190,13 @@ class CreatePage extends Component
 
         return view('livewire.tickets.create-page', [
             'sectorOptions' => $sectorOptions,
+            'boardOptions' => $this->boardOptions(),
             'formOptions' => $this->formOptions(),
             'sectorUsers' => $this->sectorUsers(),
             'priorities' => TicketPriority::cases(),
             'formFields' => $formFields,
             'selectedSector' => $selectedSector,
+            'selectedBoard' => $this->board(),
             'selectedForm' => $form,
             'selectedCatalog' => $catalog,
             'suggestions' => $this->suggestions,
@@ -180,6 +211,7 @@ class CreatePage extends Component
     {
         $rules = [
             'selectedSectorId' => ['required', 'exists:sectors,id'],
+            'selectedBoardId' => ['required', 'exists:ticket_boards,id'],
             'selectedFormId' => ['required', 'exists:ticket_forms,id'],
             'selectedCatalogId' => ['nullable', 'exists:service_catalog_items,id'],
             'title' => ['required', 'string', 'max:160'],
@@ -222,7 +254,7 @@ class CreatePage extends Component
                 'board.groups',
                 'board.statuses',
             ])
-            ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
+            ->where('ticket_board_id', $this->selectedBoardId)
             ->where('is_active', true)
             ->find($this->selectedFormId);
     }
@@ -241,21 +273,21 @@ class CreatePage extends Component
                 'board.statuses',
             ])
             ->whereHas('form', fn ($query) => $query->accessibleTo(auth()->user(), $this->selectedSectorId))
-            ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
+            ->where('ticket_board_id', $this->selectedBoardId)
             ->where('is_active', true)
             ->find($this->selectedCatalogId);
     }
 
     private function board(): ?TicketBoard
     {
-        if (! $this->selectedSectorId) {
+        if (! $this->selectedBoardId) {
             return null;
         }
 
         $board = TicketBoard::query()
             ->with(['groups', 'statuses', 'catalogItems'])
-            ->where('sector_id', $this->selectedSectorId)
-            ->first();
+            ->where('is_active', true)
+            ->find($this->selectedBoardId);
 
         if ($board) {
             return $board;
@@ -269,10 +301,17 @@ class CreatePage extends Component
 
         app(SectorProvisioningService::class)->provision($sector);
 
-        return TicketBoard::query()
+        $fallbackBoard = TicketBoard::query()
             ->with(['groups', 'statuses', 'catalogItems'])
             ->where('sector_id', $this->selectedSectorId)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
             ->first();
+
+        $this->selectedBoardId = $fallbackBoard?->id;
+
+        return $fallbackBoard;
     }
 
     private function availableSectors(): Collection
@@ -284,15 +323,35 @@ class CreatePage extends Component
 
     private function formOptions(): Collection
     {
-        if (! $this->selectedSectorId) {
+        if (! $this->selectedSectorId || ! $this->selectedBoardId) {
             return collect();
         }
 
         return TicketForm::query()
             ->accessibleTo(auth()->user(), $this->selectedSectorId)
-            ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
+            ->where('ticket_board_id', $this->selectedBoardId)
             ->with(['catalogItems' => fn ($query) => $query->where('is_active', true)->orderBy('name')])
             ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function boardOptions(): Collection
+    {
+        if (! $this->selectedSectorId) {
+            return collect();
+        }
+
+        if (! TicketBoard::query()->where('sector_id', $this->selectedSectorId)->exists()) {
+            if ($sector = Sector::query()->find($this->selectedSectorId)) {
+                app(SectorProvisioningService::class)->provision($sector);
+            }
+        }
+
+        return TicketBoard::query()
+            ->where('sector_id', $this->selectedSectorId)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
             ->orderBy('name')
             ->get();
     }
@@ -319,15 +378,30 @@ class CreatePage extends Component
         return null;
     }
 
+    private function resolveBoardId(?int $requestedBoardId = null): ?int
+    {
+        if (! $this->selectedSectorId) {
+            return null;
+        }
+
+        $boards = $this->boardOptions();
+
+        if ($requestedBoardId && $boards->pluck('id')->contains($requestedBoardId)) {
+            return $requestedBoardId;
+        }
+
+        return $boards->first()?->id;
+    }
+
     private function resolveFormId(?int $requestedFormId = null): ?int
     {
-        if (! $requestedFormId || ! $this->selectedSectorId) {
+        if (! $requestedFormId || ! $this->selectedSectorId || ! $this->selectedBoardId) {
             return null;
         }
 
         return TicketForm::query()
             ->accessibleTo(auth()->user(), $this->selectedSectorId)
-            ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
+            ->where('ticket_board_id', $this->selectedBoardId)
             ->where('is_active', true)
             ->whereKey($requestedFormId)
             ->value('id');
@@ -335,13 +409,13 @@ class CreatePage extends Component
 
     private function resolveCatalogIdForForm(?int $formId = null): ?int
     {
-        if (! $formId || ! $this->selectedSectorId) {
+        if (! $formId || ! $this->selectedSectorId || ! $this->selectedBoardId) {
             return null;
         }
 
         return ServiceCatalogItem::query()
             ->whereHas('form', fn ($query) => $query->accessibleTo(auth()->user(), $this->selectedSectorId))
-            ->whereHas('board', fn ($query) => $query->where('sector_id', $this->selectedSectorId))
+            ->where('ticket_board_id', $this->selectedBoardId)
             ->where('ticket_form_id', $formId)
             ->where('is_active', true)
             ->orderBy('name')

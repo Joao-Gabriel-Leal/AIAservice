@@ -7,6 +7,7 @@ use App\Modules\Users\Notifications\AccountCreatedNotification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Str;
 
 class NotificationsController extends Controller
 {
@@ -66,13 +67,59 @@ class NotificationsController extends Controller
 
     private function resolveOpenUrl(DatabaseNotification $notification): string
     {
+        $data = is_array($notification->data) ? $notification->data : [];
+
         if ($notification->type === AccountCreatedNotification::class) {
-            return ($notification->data['must_change_password'] ?? false)
-                ? route('profile.edit').'#seguranca'
+            return (bool) data_get($data, 'must_change_password', false)
+                ? route('password.force-change')
                 : route('dashboard');
         }
 
-        return $notification->data['url'] ?? route('notifications.index');
+        return $this->normalizeNotificationUrl(data_get($data, 'url'));
+    }
+
+    private function normalizeNotificationUrl(mixed $url): string
+    {
+        $fallback = route('notifications.index');
+
+        if (! is_string($url)) {
+            return $fallback;
+        }
+
+        $url = trim($url);
+
+        if ($url === '') {
+            return $fallback;
+        }
+
+        if (Str::startsWith($url, '/') && ! Str::startsWith($url, '//')) {
+            return $url;
+        }
+
+        if (! filter_var($url, FILTER_VALIDATE_URL)) {
+            return $fallback;
+        }
+
+        $parts = parse_url($url);
+
+        if (! is_array($parts)) {
+            return $fallback;
+        }
+
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $currentHost = strtolower((string) request()->getHost());
+        $appHost = strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST));
+        $internalHosts = array_filter([$currentHost, $appHost, 'localhost', '127.0.0.1', '::1']);
+
+        if (! in_array($host, $internalHosts, true)) {
+            return $fallback;
+        }
+
+        $path = $parts['path'] ?? '/';
+        $query = isset($parts['query']) ? '?'.$parts['query'] : '';
+        $fragment = isset($parts['fragment']) ? '#'.$parts['fragment'] : '';
+
+        return $path.$query.$fragment;
     }
 
     private function notificationForCurrentUser(string $notificationId): DatabaseNotification

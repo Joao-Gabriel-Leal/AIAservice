@@ -9,6 +9,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
+use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketIndexQuery;
@@ -27,6 +28,9 @@ class IndexPage extends Component
 
     #[Url(as: 'sector')]
     public ?int $selectedSectorId = null;
+
+    #[Url(as: 'board')]
+    public ?int $selectedBoardId = null;
 
     #[Url(as: 'title')]
     public string $titleFilter = '';
@@ -65,7 +69,7 @@ class IndexPage extends Component
         $this->viewMode = $this->normalizeViewMode($this->viewMode);
 
         if ($this->isBoardView()) {
-            $this->ensureBoardSectorSelected();
+            $this->ensureBoardSelected();
         }
 
         $this->syncCollapsedGroups();
@@ -77,8 +81,10 @@ class IndexPage extends Component
             $this->selectedGroupId = null;
             $this->fieldFilters = [];
 
+            $this->selectedBoardId = null;
+
             if ($this->isBoardView()) {
-                $this->ensureBoardSectorSelected();
+                $this->ensureBoardSelected();
             }
 
             $this->syncCollapsedGroups();
@@ -92,10 +98,31 @@ class IndexPage extends Component
         $this->selectedGroupId = null;
         $this->fieldFilters = [];
 
+        if ($this->selectedBoardId && ! $this->boardOptions()->pluck('id')->contains($this->selectedBoardId)) {
+            $this->selectedBoardId = null;
+        }
+
         if ($this->isBoardView() && ! $this->availableBoardSectors()->pluck('id')->contains($this->selectedSectorId)) {
             $this->viewMode = 'list';
         }
 
+        if ($this->isBoardView()) {
+            $this->ensureBoardSelected();
+        }
+
+        $this->syncCollapsedGroups();
+        $this->resetPage();
+    }
+
+    public function updatedSelectedBoardId(): void
+    {
+        if ($this->selectedBoardId) {
+            abort_unless($this->boardOptions()->pluck('id')->contains($this->selectedBoardId), 403);
+            $this->selectedSectorId = $this->boardOptions()->firstWhere('id', $this->selectedBoardId)?->sector_id;
+        }
+
+        $this->selectedGroupId = null;
+        $this->fieldFilters = [];
         $this->syncCollapsedGroups();
         $this->resetPage();
     }
@@ -114,7 +141,7 @@ class IndexPage extends Component
         $this->viewMode = $this->normalizeViewMode($mode);
 
         if ($this->isBoardView()) {
-            $this->ensureBoardSectorSelected();
+            $this->ensureBoardSelected();
             $this->syncCollapsedGroups();
         }
     }
@@ -183,10 +210,11 @@ class IndexPage extends Component
         }
 
         if ($this->isBoardView()) {
-            $this->ensureBoardSectorSelected();
+            $this->ensureBoardSelected();
         }
 
         $sectorOptions = $this->availableBoardSectors();
+        $boardOptions = $this->boardOptions();
         $groupOptions = $this->groupOptions();
         $fieldOptions = $this->fieldOptions();
 
@@ -197,6 +225,7 @@ class IndexPage extends Component
 
         $filterPayload = [
             'sector_id' => $this->selectedSectorId,
+            'board_id' => $this->selectedBoardId,
             'title' => trim($this->titleFilter),
             'group_id' => $this->selectedGroupId,
             'requester' => trim($this->requesterFilter),
@@ -207,10 +236,10 @@ class IndexPage extends Component
         ];
 
         $ticketQuery = app(TicketIndexQuery::class)->build($user, $filterPayload);
-        $allowedSectorIds = $sectorOptions->pluck('id')->all();
+        $allowedBoardIds = $boardOptions->pluck('id')->all();
 
-        if ($allowedSectorIds !== []) {
-            $ticketQuery->whereIn('sector_id', $allowedSectorIds);
+        if ($allowedBoardIds !== []) {
+            $ticketQuery->whereIn('ticket_board_id', $allowedBoardIds);
         }
 
         $tickets = $this->viewMode === 'list'
@@ -247,11 +276,7 @@ class IndexPage extends Component
             ]);
             $ungroupedTickets = $boardTickets->whereNull('ticket_group_id')->values();
 
-            $assignees = User::query()
-                ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get();
+            $assignees = $this->boardAssignees($board);
 
             $kanbanColumns = $groups->map(fn ($group) => [
                 'key' => "group-{$group->id}",
@@ -281,6 +306,7 @@ class IndexPage extends Component
             'assignees' => $assignees,
             'sectorUsers' => $assignees,
             'sectorOptions' => $sectorOptions,
+            'boardOptions' => $boardOptions,
             'groupOptions' => $groupOptions,
             'fieldOptions' => $fieldOptions,
             'priorities' => TicketPriority::cases(),
@@ -288,6 +314,7 @@ class IndexPage extends Component
             'manualCreateUrl' => $this->manualCreateUrl(),
             'exportParams' => array_filter([
                 'sector' => $this->selectedSectorId,
+                'board' => $this->selectedBoardId,
                 'title' => trim($this->titleFilter),
                 'group' => $this->selectedGroupId,
                 'requester' => trim($this->requesterFilter),
@@ -297,7 +324,7 @@ class IndexPage extends Component
             ], fn ($value) => ! is_null($value) && $value !== ''),
             'fieldFiltersForExport' => $normalizedFieldFilters,
         ])->layout('layouts.portal', [
-            'title' => 'Quadro',
+            'title' => 'Quadros',
             'subtitle' => 'Acompanhe chamados em lista, etapas ou kanban no mesmo fluxo operacional.',
         ]);
     }
@@ -357,31 +384,24 @@ class IndexPage extends Component
 
     private function board(): ?TicketBoard
     {
-        if (! $this->selectedSectorId || ! $this->availableBoardSectors()->pluck('id')->contains($this->selectedSectorId)) {
+        if (! $this->selectedBoardId) {
             return null;
         }
 
         $board = TicketBoard::query()
             ->with(['sector.company', 'groups', 'fields.options'])
-            ->where('sector_id', $this->selectedSectorId)
-            ->first();
+            ->where('is_active', true)
+            ->find($this->selectedBoardId);
 
-        if ($board) {
-            return $board;
-        }
-
-        $sector = Sector::query()->find($this->selectedSectorId);
-
-        if (! $sector) {
+        if (! $board || ! auth()->user()->canOperateBoard($board)) {
             return null;
         }
 
-        app(SectorProvisioningService::class)->provision($sector);
+        if ($this->selectedSectorId && $board->sector_id !== $this->selectedSectorId) {
+            return null;
+        }
 
-        return TicketBoard::query()
-            ->with(['sector.company', 'groups', 'fields.options'])
-            ->where('sector_id', $this->selectedSectorId)
-            ->first();
+        return $board;
     }
 
     private function availableBoardSectors(): Collection
@@ -389,7 +409,16 @@ class IndexPage extends Component
         $query = Sector::query()->with('company')->orderBy('name');
 
         if (! auth()->user()->isSuperAdmin()) {
-            $query->whereIn('id', auth()->user()->operationalSectorIds());
+            $sectorIds = collect(auth()->user()->adminSectorIds())
+                ->merge(TicketBoard::query()
+                    ->whereIn('id', auth()->user()->operationalBoardIds())
+                    ->pluck('sector_id'))
+                ->map(fn ($sectorId) => (int) $sectorId)
+                ->unique()
+                ->values()
+                ->all();
+
+            $query->whereIn('id', $sectorIds);
         }
 
         return $query->where('is_active', true)->get();
@@ -412,6 +441,40 @@ class IndexPage extends Component
         }
     }
 
+    private function ensureBoardSelected(): void
+    {
+        $allBoards = $this->boardOptions(null, false);
+
+        if ($this->selectedBoardId && ! $allBoards->pluck('id')->contains($this->selectedBoardId)) {
+            $this->selectedBoardId = null;
+        }
+
+        if ($this->selectedBoardId && ! $this->selectedSectorId) {
+            $this->selectedSectorId = $allBoards->firstWhere('id', $this->selectedBoardId)?->sector_id;
+        }
+
+        $this->ensureBoardSectorSelected();
+
+        if (! $this->selectedSectorId) {
+            $this->selectedBoardId = null;
+
+            return;
+        }
+
+        $boards = $this->boardOptions($this->selectedSectorId, false);
+
+        if ($boards->isEmpty()) {
+            $this->selectedBoardId = null;
+            $this->viewMode = 'list';
+
+            return;
+        }
+
+        if (! $this->selectedBoardId || ! $boards->pluck('id')->contains($this->selectedBoardId)) {
+            $this->selectedBoardId = $boards->first()?->id;
+        }
+    }
+
     private function normalizeViewMode(string $mode): string
     {
         return in_array($mode, ['list', 'stages', 'kanban'], true) ? $mode : 'list';
@@ -424,18 +487,14 @@ class IndexPage extends Component
 
     private function groupOptions(): Collection
     {
-        $sectorIds = $this->availableBoardSectors()->pluck('id');
+        $boardIds = $this->boardIdsForFilters();
 
-        if ($this->selectedSectorId) {
-            $sectorIds = $sectorIds->filter(fn (int $id) => $id === $this->selectedSectorId)->values();
-        }
-
-        if ($sectorIds->isEmpty()) {
+        if ($boardIds->isEmpty()) {
             return collect();
         }
 
-        return \App\Modules\Tickets\Models\TicketGroup::query()
-            ->whereHas('board', fn (Builder $query) => $query->whereIn('sector_id', $sectorIds->all()))
+        return TicketGroup::query()
+            ->whereIn('ticket_board_id', $boardIds->all())
             ->where('is_active', true)
             ->with('board.sector')
             ->orderBy('sort_order')
@@ -445,20 +504,16 @@ class IndexPage extends Component
 
     private function fieldOptions(): Collection
     {
-        $sectorIds = $this->availableBoardSectors()->pluck('id');
+        $boardIds = $this->boardIdsForFilters();
 
-        if ($this->selectedSectorId) {
-            $sectorIds = $sectorIds->filter(fn (int $id) => $id === $this->selectedSectorId)->values();
-        }
-
-        if ($sectorIds->isEmpty()) {
+        if ($boardIds->isEmpty()) {
             return collect();
         }
 
         return TicketField::query()
             ->where('is_active', true)
             ->where('show_on_board', true)
-            ->whereHas('board', fn (Builder $query) => $query->whereIn('sector_id', $sectorIds->all()))
+            ->whereIn('ticket_board_id', $boardIds->all())
             ->with('options')
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -481,6 +536,70 @@ class IndexPage extends Component
             ->filter(fn ($group) => $group->is_collapsed_by_default)
             ->mapWithKeys(fn ($group) => [$group->id => true])
             ->all();
+    }
+
+    private function boardOptions(?int $sectorId = null, bool $useSelectedSector = true): Collection
+    {
+        $filterSectorId = $sectorId ?? ($useSelectedSector ? $this->selectedSectorId : null);
+
+        if ($filterSectorId && ! $this->availableBoardSectors()->pluck('id')->contains($filterSectorId)) {
+            return collect();
+        }
+
+        if ($filterSectorId && auth()->user()->isSectorAdmin($filterSectorId) && ! TicketBoard::query()->where('sector_id', $filterSectorId)->exists()) {
+            if ($sector = Sector::query()->find($filterSectorId)) {
+                app(SectorProvisioningService::class)->provision($sector);
+            }
+        }
+
+        $query = TicketBoard::query()
+            ->with('sector.company')
+            ->where('is_active', true);
+
+        if (! auth()->user()->isSuperAdmin()) {
+            $query->whereIn('id', auth()->user()->operationalBoardIds());
+        }
+
+        if ($filterSectorId) {
+            $query->where('sector_id', $filterSectorId);
+        }
+
+        return $query
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function boardIdsForFilters(): Collection
+    {
+        $boards = $this->boardOptions(null, false);
+
+        if ($this->selectedSectorId) {
+            $boards = $boards->where('sector_id', $this->selectedSectorId)->values();
+        }
+
+        if ($this->selectedBoardId) {
+            $boards = $boards->where('id', $this->selectedBoardId)->values();
+        }
+
+        return $boards->pluck('id')->map(fn ($boardId) => (int) $boardId)->values();
+    }
+
+    private function boardAssignees(TicketBoard $board): Collection
+    {
+        $operatorIds = $board->operators()->pluck('users.id')->all();
+
+        return User::query()
+            ->where('is_active', true)
+            ->where(function (Builder $query) use ($board, $operatorIds): void {
+                $query->withSectorAccess($board->sector_id, ['sector_admin']);
+
+                if ($operatorIds !== []) {
+                    $query->orWhereIn('id', $operatorIds);
+                }
+            })
+            ->orderBy('name')
+            ->get();
     }
 
     private function normalizeGroupId(mixed $groupId): ?int
@@ -507,13 +626,19 @@ class IndexPage extends Component
     private function manualCreateUrl(): string
     {
         $sectorId = $this->selectedSectorId;
+        $boardId = $this->selectedBoardId;
 
         if (! $sectorId || ! $this->availableBoardSectors()->pluck('id')->contains($sectorId)) {
             $sectorId = $this->availableBoardSectors()->first()?->id;
         }
 
+        if (! $boardId && $sectorId) {
+            $boardId = $this->boardOptions($sectorId, false)->first()?->id;
+        }
+
         return route('tickets.create', array_filter([
             'sector' => $sectorId,
+            'board' => $boardId,
         ]));
     }
 }

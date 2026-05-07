@@ -25,7 +25,7 @@
             </a>
 
             @if ($board && (auth()->user()->isSuperAdmin() || auth()->user()->isSectorAdmin($board->sector_id)))
-                <a href="{{ route('tickets.settings', $board->sector_id) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                <a href="{{ route('tickets.settings', $board) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                     Configurar quadro
                 </a>
             @endif

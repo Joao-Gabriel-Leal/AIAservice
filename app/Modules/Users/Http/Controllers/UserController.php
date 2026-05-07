@@ -141,13 +141,15 @@ class UserController extends Controller
         ]);
 
         $payload['global_role'] = $globalRole;
-        $payload['must_change_password'] = $request->boolean('must_change_password', ! $user);
+        $payload['must_change_password'] = $user
+            ? $request->boolean('must_change_password', false)
+            : true;
         $payload['is_active'] = $request->boolean('is_active', true);
 
-        if (filled($request->input('password'))) {
+        if (! $user) {
+            $payload['password'] = Hash::make('123456');
+        } elseif (filled($request->input('password'))) {
             $payload['password'] = Hash::make((string) $request->input('password'));
-        } elseif (! $user) {
-            $payload['password'] = Hash::make('password');
         }
 
         return [

@@ -10,6 +10,7 @@ use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Users\Notifications\AccountCreatedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -57,8 +58,6 @@ class AdministrationFlowTest extends TestCase
         $this->post(route('users.store'), [
             'name' => 'Tecnico Padrao',
             'email' => 'tecnico@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
             'global_role' => GlobalUserRole::COLLABORATOR->value,
             'sector_accesses' => [
                 $sector->id => 'technician',
@@ -68,6 +67,9 @@ class AdministrationFlowTest extends TestCase
         ])->assertRedirect(route('users.index', absolute: false));
 
         $createdUser = User::query()->where('email', 'tecnico@example.com')->firstOrFail();
+
+        $this->assertTrue(Hash::check('123456', $createdUser->password));
+        $this->assertTrue($createdUser->must_change_password);
 
         $this->assertDatabaseHas('users', [
             'id' => $createdUser->id,

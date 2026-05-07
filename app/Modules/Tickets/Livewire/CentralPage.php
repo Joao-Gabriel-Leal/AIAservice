@@ -31,7 +31,13 @@ class CentralPage extends Component
     {
         $sectors = $this->sectors();
         $selectedSector = $sectors->firstWhere('id', $this->selectedSectorId) ?? $sectors->first();
-        $forms = $selectedSector?->board?->forms ?? collect();
+        $forms = $selectedSector?->boards
+            ?->flatMap(fn ($board) => $board->forms->map(function (TicketForm $form) use ($board) {
+                $form->setRelation('board', $board);
+
+                return $form;
+            }))
+            ->values() ?? collect();
 
         return view('livewire.tickets.central-page', [
             'sectors' => $sectors,
@@ -48,7 +54,11 @@ class CentralPage extends Component
         return Sector::query()
             ->with([
                 'company',
-                'board.forms' => fn ($query) => $query
+                'boards' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderByDesc('is_default')
+                    ->orderBy('name'),
+                'boards.forms' => fn ($query) => $query
                     ->accessibleTo(auth()->user())
                     ->where('is_active', true)
                     ->with(['catalogItems' => fn ($catalogQuery) => $catalogQuery

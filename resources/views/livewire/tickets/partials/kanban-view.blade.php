@@ -5,14 +5,7 @@
             <p class="text-sm text-slate-500">{{ $board->description ?: 'Arraste cards entre as etapas e edite prioridade, responsavel e campos direto no quadro.' }}</p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-            <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
-            @if (auth()->user()->isSuperAdmin() || auth()->user()->isSectorAdmin($board->sector_id))
-                <a href="{{ route('tickets.settings', $board->sector_id) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                    Configurar quadro
-                </a>
-            @endif
-        </div>
+        <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
     </div>
 
     <div class="ui-kanban-grid">
@@ -29,7 +22,9 @@
                 style="--ui-lane-color: {{ $laneColor }}"
                 wire:key="kanban-column-{{ $column['key'] }}"
                 data-kanban-column="true"
+                data-board-drop-zone="true"
                 data-kanban-group-id="{{ $targetGroupId === null ? '__null__' : $targetGroupId }}"
+                data-board-group-id="{{ $targetGroupId === null ? '__null__' : $targetGroupId }}"
                 x-bind:class="{ 'ui-kanban-column-dragover': isDragTarget({{ $targetGroupId ?? 'null' }}) }"
             >
                 <div class="ui-kanban-column-header">

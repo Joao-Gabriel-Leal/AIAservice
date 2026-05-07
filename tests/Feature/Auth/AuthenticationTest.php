@@ -34,7 +34,7 @@ class AuthenticationTest extends TestCase
         $this->assertAuthenticated();
     }
 
-    public function test_users_with_pending_password_change_are_redirected_to_the_security_form(): void
+    public function test_users_with_pending_password_change_are_redirected_to_the_isolated_force_change_form(): void
     {
         $user = User::factory()->create([
             'must_change_password' => true,
@@ -42,12 +42,39 @@ class AuthenticationTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('dashboard'))
-            ->assertRedirect(route('profile.edit').'#seguranca');
+            ->assertRedirect(route('password.force-change'));
 
         $this->actingAs($user)
             ->get(route('profile.edit'))
+            ->assertRedirect(route('password.force-change'));
+
+        $this->actingAs($user)
+            ->get(route('password.force-change'))
             ->assertOk()
-            ->assertSee('Troca de senha obrigatoria');
+            ->assertSee('Troque sua senha');
+    }
+
+    public function test_pending_password_change_accepts_only_strong_new_password(): void
+    {
+        $user = User::factory()->create([
+            'must_change_password' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('password.force-change.update'), [
+                'password' => 'fraca',
+                'password_confirmation' => 'fraca',
+            ])
+            ->assertSessionHasErrors('password');
+
+        $this->actingAs($user)
+            ->post(route('password.force-change.update'), [
+                'password' => 'Senha@123',
+                'password_confirmation' => 'Senha@123',
+            ])
+            ->assertRedirect(route('dashboard'));
+
+        $this->assertFalse($user->fresh()->must_change_password);
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void
