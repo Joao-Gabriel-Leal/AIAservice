@@ -132,62 +132,70 @@
                         @endforelse
                     </div>
 
-                    <form wire:submit="sendMessage" class="ticket-chat-composer">
-                        <div>
-                            <p class="text-sm font-semibold text-slate-900">Responder</p>
-                            <p class="mt-1 text-sm text-slate-500">Sua mensagem fica registrada no atendimento para quem participa desta conversa.</p>
-                        </div>
-
-                        <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
-                        @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
-
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-900">Arquivos no chat</p>
-                                    <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por mensagem, com limite de 25 MB cada.</p>
-                                </div>
-
-                                <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
-                                    Selecionar arquivos
-                                    <input wire:model="chatFiles" type="file" multiple class="sr-only">
-                                </label>
+                    @if ($canComment)
+                        <form wire:submit="sendMessage" class="ticket-chat-composer">
+                            <div>
+                                <p class="text-sm font-semibold text-slate-900">Responder</p>
+                                <p class="mt-1 text-sm text-slate-500">Sua mensagem fica registrada no atendimento para quem participa desta conversa.</p>
                             </div>
 
-                            <div wire:loading wire:target="chatFiles" class="mt-3 text-xs text-slate-500">
-                                Preparando arquivos...
+                            <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
+                            @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                            <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-900">Arquivos no chat</p>
+                                        <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por mensagem, com limite de 25 MB cada.</p>
+                                    </div>
+
+                                    <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
+                                        Selecionar arquivos
+                                        <input wire:model="chatFiles" type="file" multiple class="sr-only">
+                                    </label>
+                                </div>
+
+                                <div wire:loading wire:target="chatFiles" class="mt-3 text-xs text-slate-500">
+                                    Preparando arquivos...
+                                </div>
+
+                                @if (count($chatFiles) > 0)
+                                    <div class="mt-3 grid gap-2">
+                                        @foreach ($chatFiles as $index => $file)
+                                            <div wire:key="chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                                <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
+                                                <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
+
+                                @error('chatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                @error('chatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
                             </div>
 
-                            @if (count($chatFiles) > 0)
-                                <div class="mt-3 grid gap-2">
-                                    @foreach ($chatFiles as $index => $file)
-                                        <div wire:key="chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                                            <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
-                                            <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endif
+                            <div class="ticket-chat-composer-footer">
+                                <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
 
-                            @error('chatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                            @error('chatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                <button
+                                    type="submit"
+                                    wire:loading.attr="disabled"
+                                    wire:loading.class="ui-loading"
+                                    wire:target="sendMessage,chatFiles"
+                                    class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
+                                >
+                                    <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
+                                    <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
+                                </button>
+                            </div>
+                        </form>
+                    @else
+                        <div class="ticket-chat-composer">
+                            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                                Este chamado esta finalizado. A conversa fica bloqueada e novas mensagens so serao liberadas se o chamado for reaberto.
+                            </div>
                         </div>
-
-                        <div class="ticket-chat-composer-footer">
-                            <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
-
-                            <button
-                                type="submit"
-                                wire:loading.attr="disabled"
-                                wire:loading.class="ui-loading"
-                                wire:target="sendMessage,chatFiles"
-                                class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
-                            >
-                                <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
-                                <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
-                            </button>
-                        </div>
-                    </form>
+                    @endif
                 </div>
             </section>
 

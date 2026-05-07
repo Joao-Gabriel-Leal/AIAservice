@@ -88,11 +88,17 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
                 @forelse ($tickets as $ticket)
-                    @php($slaMeta = $this->slaMeta($ticket))
+                    @php
+                        $slaMeta = $this->slaMeta($ticket);
+                        $needsRating = $ticket->canBeRatedBy(auth()->user());
+                    @endphp
                     <tr class="ui-row-interactive hover:bg-slate-50">
                         <td class="px-6 py-4">
                             <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
+                            @if ($needsRating)
+                                <span class="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Avalie o atendimento</span>
+                            @endif
                         </td>
                         <td class="px-6 py-4 text-slate-600">
                             <x-sector-badge :sector="$ticket->sector" mode="dot" />
@@ -129,7 +135,9 @@
                         </td>
                         <td class="px-6 py-4 text-slate-500">{{ $ticket->updated_at?->diffForHumans() }}</td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Abrir</a>
+                            <a href="{{ route('tickets.show', $ticket) }}" class="ui-action {{ $needsRating ? 'ui-action-primary' : 'ui-action-secondary' }} rounded-xl px-3 py-2 text-sm">
+                                {{ $needsRating ? 'Avalie o atendimento' : 'Abrir' }}
+                            </a>
                         </td>
                     </tr>
                 @empty

@@ -17,6 +17,7 @@ use App\Modules\Tickets\Models\TicketAutomationRule;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketAutomationEngine;
 use App\Modules\Tickets\Services\TicketWorkflowService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
@@ -150,7 +151,7 @@ class TicketAutomationTest extends TestCase
         ]);
     }
 
-    public function test_message_automation_can_reopen_closed_ticket(): void
+    public function test_message_automation_cannot_bypass_closed_ticket_chat_lock(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group] = $this->ticketContext();
         $openStatus = $board->statuses()->where('is_closed', false)->firstOrFail();
@@ -203,18 +204,22 @@ class TicketAutomationTest extends TestCase
             ],
         ]);
 
-        app(TicketWorkflowService::class)->addMessage($technician, $ticket, 'Voltei a ter problema.');
+        try {
+            app(TicketWorkflowService::class)->addMessage($technician, $ticket, 'Voltei a ter problema.');
+            $this->fail('Closed ticket accepted a human chat message.');
+        } catch (AuthorizationException) {
+            //
+        }
 
         $this->assertDatabaseHas('tickets', [
             'id' => $ticket->id,
-            'ticket_status_id' => $openStatus->id,
-            'resolved_at' => null,
+            'ticket_status_id' => $closedStatus->id,
         ]);
+        $this->assertNotNull($ticket->fresh()->resolved_at);
 
-        $this->assertDatabaseHas('ticket_messages', [
+        $this->assertDatabaseMissing('ticket_messages', [
             'ticket_id' => $ticket->id,
             'message' => 'Chamado reaberto automaticamente por nova mensagem.',
-            'is_system' => true,
         ]);
     }
 

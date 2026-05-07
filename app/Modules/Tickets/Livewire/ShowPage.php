@@ -273,6 +273,7 @@ class ShowPage extends Component
         $board = $ticket->board()->with(['groups', 'fields.options'])->first();
         $assignees = $board ? $this->boardAssignees($board) : collect();
         $canRate = auth()->user()->can('rate', $ticket);
+        $canComment = auth()->user()->can('comment', $ticket);
         $canViewTimeTracking = auth()->user()->can('viewTimeTracking', $ticket);
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
         $canCloseOwn = auth()->user()->can('closeOwn', $ticket);
@@ -322,6 +323,7 @@ class ShowPage extends Component
                 ->get(),
             'priorities' => TicketPriority::cases(),
             'canRate' => $canRate,
+            'canComment' => $canComment,
             'canCloseOwn' => $canCloseOwn,
             'canReopenOwn' => $canReopenOwn,
             'canViewTimeTracking' => $canViewTimeTracking,
@@ -392,6 +394,7 @@ class ShowPage extends Component
                 'requester',
                 'assignee',
                 'group',
+                'status',
                 'catalogItem.form',
                 'fieldValues.field.options',
                 'messages.user',

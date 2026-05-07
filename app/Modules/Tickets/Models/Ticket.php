@@ -180,7 +180,7 @@ class Ticket extends Model
 
     public function isClosed(): bool
     {
-        return (bool) ($this->group?->is_closed || ! is_null($this->resolved_at));
+        return (bool) ($this->group?->is_closed || $this->status?->is_closed || ! is_null($this->resolved_at));
     }
 
     public function canBeRatedBy(User $user): bool

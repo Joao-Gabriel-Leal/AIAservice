@@ -66,6 +66,7 @@ class MinePage extends Component
                 'status',
                 'assignee',
                 'catalogItem',
+                'rating',
             ])
             ->when(trim($this->titleFilter) !== '', function (Builder $query): void {
                 $query->where('title', 'like', '%'.trim($this->titleFilter).'%');
@@ -143,6 +144,11 @@ class MinePage extends Component
                     $statusQuery
                         ->whereDoesntHave('group')
                         ->orWhereHas('group', fn (Builder $groupQuery) => $groupQuery->where('is_closed', false));
+                })
+                ->where(function (Builder $statusQuery): void {
+                    $statusQuery
+                        ->whereDoesntHave('status')
+                        ->orWhereHas('status', fn (Builder $ticketStatusQuery) => $ticketStatusQuery->where('is_closed', false));
                 });
         }
 
@@ -150,7 +156,8 @@ class MinePage extends Component
             $query->where(function (Builder $statusQuery): void {
                 $statusQuery
                     ->whereNotNull('resolved_at')
-                    ->orWhereHas('group', fn (Builder $groupQuery) => $groupQuery->where('is_closed', true));
+                    ->orWhereHas('group', fn (Builder $groupQuery) => $groupQuery->where('is_closed', true))
+                    ->orWhereHas('status', fn (Builder $ticketStatusQuery) => $ticketStatusQuery->where('is_closed', true));
             });
         }
     }

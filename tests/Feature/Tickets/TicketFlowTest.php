@@ -1761,6 +1761,59 @@ class TicketFlowTest extends TestCase
         );
     }
 
+    public function test_rating_invitation_is_not_sent_when_ticket_already_has_rating(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
+        $openGroup = $board->groups()->where('is_closed', false)->orderBy('sort_order')->firstOrFail();
+        $openStatus = $board->statuses()->where('is_closed', false)->orderBy('sort_order')->firstOrFail();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Chamado ja avaliado',
+            'description' => 'Nao deve pedir nova avaliacao.',
+            'requester_id' => $requester->id,
+            'assignee_id' => $technician->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => now()->subMinutes(30),
+            'last_activity_at' => now()->subMinutes(30),
+        ]);
+        $ticket->rating()->create([
+            'user_id' => $requester->id,
+            'rating' => 5,
+            'comment' => 'Ja avaliado.',
+        ]);
+
+        $ticket->forceFill([
+            'ticket_group_id' => $openGroup->id,
+            'ticket_status_id' => $openStatus->id,
+            'resolved_at' => null,
+            'last_activity_at' => now(),
+        ])->save();
+
+        Notification::fake();
+
+        Livewire::actingAs($technician)
+            ->test(ShowPage::class, ['ticket' => $ticket->fresh(['group', 'status'])])
+            ->call('updateFixedField', 'ticket_group_id', (string) $closedGroup->id)
+            ->assertHasNoErrors();
+
+        Notification::assertNotSentTo($requester, TicketRatingRequestNotification::class);
+    }
+
     public function test_relevant_ticket_update_notifies_other_recipients_but_not_the_actor(): void
     {
         Notification::fake();

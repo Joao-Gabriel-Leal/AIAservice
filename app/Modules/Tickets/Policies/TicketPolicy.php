@@ -41,7 +41,7 @@ class TicketPolicy
 
     public function comment(User $user, Ticket $ticket): bool
     {
-        return $this->view($user, $ticket);
+        return $this->view($user, $ticket) && ! $ticket->isClosed();
     }
 
     public function rate(User $user, Ticket $ticket): bool

@@ -13,6 +13,7 @@ use App\Modules\Tickets\Livewire\ShowPage;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAttachment;
 use App\Modules\Tickets\Models\TicketMessage;
+use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
 use App\Modules\Tickets\Notifications\TicketUpdateNotification;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
@@ -156,7 +157,7 @@ class TicketMineAndChatFilesTest extends TestCase
     {
         Notification::fake();
 
-        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status, 'closedGroup' => $closedGroup] = $this->ticketContext();
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
 
         $requester = User::factory()->create([
             'role' => UserRole::REQUESTER,
@@ -182,7 +183,9 @@ class TicketMineAndChatFilesTest extends TestCase
         $ticket->refresh();
 
         $this->assertSame($closedGroup->id, $ticket->ticket_group_id);
+        $this->assertSame($closedStatus->id, $ticket->ticket_status_id);
         $this->assertNotNull($ticket->resolved_at);
+        $this->assertTrue($ticket->fresh(['group', 'status'])->isClosed());
         $this->assertDatabaseHas('ticket_messages', [
             'ticket_id' => $ticket->id,
             'user_id' => null,
@@ -195,6 +198,7 @@ class TicketMineAndChatFilesTest extends TestCase
             'event' => 'ticket.closed_by_requester',
         ]);
         Notification::assertSentTo($technician, TicketUpdateNotification::class);
+        Notification::assertSentTo($requester, TicketRatingRequestNotification::class);
 
         Notification::fake();
 
@@ -206,7 +210,9 @@ class TicketMineAndChatFilesTest extends TestCase
         $ticket->refresh();
 
         $this->assertSame($group->id, $ticket->ticket_group_id);
+        $this->assertSame($status->id, $ticket->ticket_status_id);
         $this->assertNull($ticket->resolved_at);
+        $this->assertFalse($ticket->fresh(['group', 'status'])->isClosed());
         $this->assertDatabaseHas('ticket_messages', [
             'ticket_id' => $ticket->id,
             'user_id' => null,
@@ -214,6 +220,54 @@ class TicketMineAndChatFilesTest extends TestCase
             'is_system' => true,
         ]);
         Notification::assertSentTo($technician, TicketUpdateNotification::class);
+    }
+
+    public function test_my_tickets_highlights_closed_tickets_pending_rating(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $pendingRating = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'title' => 'Chamado finalizado sem avaliacao',
+            'resolved_at' => now()->subMinutes(20),
+        ]);
+
+        $ratedTicket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'title' => 'Chamado finalizado ja avaliado',
+            'resolved_at' => now()->subMinutes(30),
+        ]);
+        $ratedTicket->rating()->create([
+            'user_id' => $requester->id,
+            'rating' => 5,
+            'comment' => 'Resolvido.',
+        ]);
+
+        $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'title' => 'Chamado aberto sem avaliacao',
+        ]);
+
+        Livewire::actingAs($requester)
+            ->test(MinePage::class)
+            ->set('titleFilter', $pendingRating->title)
+            ->assertSee('Avalie o atendimento')
+            ->set('titleFilter', $ratedTicket->title)
+            ->assertDontSee('Avalie o atendimento');
     }
 
     public function test_non_requester_cannot_close_or_reopen_someone_elses_ticket(): void
@@ -258,6 +312,46 @@ class TicketMineAndChatFilesTest extends TestCase
         } catch (AuthorizationException) {
             $this->assertNotNull($closedTicket->fresh()->resolved_at);
         }
+    }
+
+    public function test_closed_ticket_blocks_chat_for_requester_operator_and_manager(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $manager = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $closedGroup->id,
+            'ticket_status_id' => $closedStatus->id,
+            'title' => 'Chat bloqueado em chamado fechado',
+            'assignee_id' => $technician->id,
+            'resolved_at' => now()->subHour(),
+        ]);
+
+        foreach ([$requester, $technician, $manager] as $user) {
+            Livewire::actingAs($user)
+                ->test(ShowPage::class, ['ticket' => $ticket])
+                ->assertSee('A conversa fica bloqueada')
+                ->assertDontSee('Enviar mensagem')
+                ->set('message', "Tentativa de {$user->id}")
+                ->call('sendMessage')
+                ->assertForbidden();
+        }
+
+        $this->assertSame(0, TicketMessage::query()->where('ticket_id', $ticket->id)->where('is_system', false)->count());
     }
 
     public function test_chat_accepts_text_files_and_file_only_messages(): void

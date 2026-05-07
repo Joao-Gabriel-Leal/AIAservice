@@ -391,6 +391,8 @@ class TicketWorkflowService
 
     public function addMessage(User $actor, Ticket $ticket, string $message, array $attachments = [], array $context = []): TicketMessage
     {
+        Gate::forUser($actor)->authorize('comment', $ticket);
+
         /** @var TicketMessage $ticketMessage */
         $ticketMessage = DB::transaction(function () use ($actor, $ticket, $message, $attachments) {
             /** @var TicketMessage $createdMessage */
@@ -446,9 +448,9 @@ class TicketWorkflowService
             ? $this->legacyStatusForGroup($ticket->ticket_board_id, $closedGroup) ?? $this->targetStatus($ticket, true)
             : $this->targetStatus($ticket, true);
 
-        if (! $closedGroup && ! $closedStatus) {
+        if (! $closedGroup || ! $closedStatus) {
             throw ValidationException::withMessages([
-                'ticketLifecycle' => 'Este quadro nao possui uma etapa finalizada ativa.',
+                'ticketLifecycle' => 'Este quadro nao possui etapa e status finalizados ativos.',
             ]);
         }
 
@@ -479,6 +481,7 @@ class TicketWorkflowService
             new TicketUpdateNotification($ticket, 'Chamado finalizado pelo solicitante', "O chamado #{$ticket->id} foi finalizado pelo solicitante."),
             [$actor->id],
         );
+        $this->notifyRequesterToRate($ticket);
         $this->handleAutomationEventSafely($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
             'event' => [
                 'changes' => [
@@ -502,9 +505,9 @@ class TicketWorkflowService
             ? $this->legacyStatusForGroup($ticket->ticket_board_id, $openGroup) ?? $this->targetStatus($ticket, false)
             : $this->targetStatus($ticket, false);
 
-        if (! $openGroup && ! $openStatus) {
+        if (! $openGroup || ! $openStatus) {
             throw ValidationException::withMessages([
-                'ticketLifecycle' => 'Este quadro nao possui uma etapa aberta ativa.',
+                'ticketLifecycle' => 'Este quadro nao possui etapa e status abertos ativos.',
             ]);
         }
 
@@ -713,7 +716,7 @@ class TicketWorkflowService
 
     private function notifyRequesterToRate(Ticket $ticket): void
     {
-        if (! $ticket->requester) {
+        if (! $ticket->requester || $ticket->hasRating()) {
             return;
         }
 
