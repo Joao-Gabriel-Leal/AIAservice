@@ -25,13 +25,13 @@ class TicketBoardAccessTest extends TestCase
 
         $this->actingAs($superAdmin)
             ->get(route('tickets.board'))
-            ->assertRedirect(route('tickets.index', ['view' => 'stages']));
+            ->assertRedirect(route('tickets.index'));
 
         $this->actingAs($superAdmin)
-            ->get(route('tickets.index', ['view' => 'stages']))
+            ->get(route('tickets.index'))
             ->assertOk()
             ->assertSeeText('Quadros')
-            ->assertSeeText('Nenhum chamado encontrado. Use a central para abrir a primeira solicitacao.');
+            ->assertSeeText('Nenhum quadro disponivel para o seu usuario.');
     }
 
     public function test_super_admin_sees_empty_settings_state_when_no_active_sector_exists(): void
@@ -98,7 +98,86 @@ class TicketBoardAccessTest extends TestCase
             ->assertDontSee(route('search', absolute: false), false);
     }
 
-    public function test_configure_action_is_available_in_list_mode_without_switching_views(): void
+    public function test_board_directory_lists_only_accessible_boards(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Cards',
+            'is_active' => true,
+        ]);
+        $managedSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI Cards',
+            'slug' => 'ti-cards',
+            'is_active' => true,
+        ]);
+        $outsideSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Financeiro Cards',
+            'slug' => 'financeiro-cards',
+            'is_active' => true,
+        ]);
+
+        $supportBoard = app(SectorProvisioningService::class)->provision($managedSector);
+        $outsideBoard = app(SectorProvisioningService::class)->provision($outsideSector);
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $managedSector->id,
+        ]);
+        $manager = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $managedSector->id,
+        ]);
+        $devBoard = app(SectorProvisioningService::class)->createAdditionalBoard($managedSector, 'Desenvolvimento Cards', null, [$operator->id]);
+
+        $supportBoard->operators()->detach($operator->id);
+
+        $this->actingAs($manager)
+            ->get(route('tickets.index'))
+            ->assertOk()
+            ->assertSeeText($supportBoard->name)
+            ->assertSeeText($devBoard->name)
+            ->assertDontSeeText($outsideBoard->name);
+
+        $this->actingAs($operator)
+            ->get(route('tickets.index'))
+            ->assertOk()
+            ->assertSeeText($devBoard->name)
+            ->assertDontSeeText($supportBoard->name)
+            ->assertDontSeeText($outsideBoard->name);
+
+        $this->actingAs(User::factory()->superAdmin()->create())
+            ->get(route('tickets.index'))
+            ->assertOk()
+            ->assertSeeText($supportBoard->name)
+            ->assertSeeText($devBoard->name)
+            ->assertSeeText($outsideBoard->name);
+    }
+
+    public function test_board_card_opens_the_board_detail_route(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+        $company = Company::query()->create([
+            'name' => 'Empresa Abrir Card',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI Abrir Card',
+            'slug' => 'ti-abrir-card',
+            'is_active' => true,
+        ]);
+        $board = app(SectorProvisioningService::class)->provision($sector);
+
+        $this->actingAs($superAdmin)
+            ->get(route('tickets.index'))
+            ->assertOk()
+            ->assertSee(route('tickets.board.show', $board, absolute: false), false)
+            ->assertSeeText('Abrir')
+            ->assertDontSeeText('Nova demanda')
+            ->assertDontSeeText('Configurar');
+    }
+
+    public function test_configure_action_is_available_inside_board_detail_in_list_mode(): void
     {
         $superAdmin = User::factory()->superAdmin()->create();
         $company = Company::query()->create([
@@ -114,14 +193,17 @@ class TicketBoardAccessTest extends TestCase
         $board = app(SectorProvisioningService::class)->provision($sector);
 
         $response = $this->actingAs($superAdmin)
-            ->get(route('tickets.index', ['view' => 'list']));
+            ->get(route('tickets.board.show', ['board' => $board, 'view' => 'list']));
 
         $response
             ->assertOk()
             ->assertSeeText('Configurar')
             ->assertSee(route('tickets.settings', $board, absolute: false), false)
             ->assertSeeText('Nova demanda')
-            ->assertDontSeeText('Abrir demanda manualmente');
+            ->assertSeeText('Voltar aos quadros')
+            ->assertDontSeeText('Abrir demanda manualmente')
+            ->assertDontSeeText('Todos os setores')
+            ->assertDontSeeText('Todos os quadros');
 
         $this->assertSame(1, substr_count($response->getContent(), 'Central de formularios'));
     }
@@ -147,11 +229,39 @@ class TicketBoardAccessTest extends TestCase
         $this->assertTrue($operator->canOperateBoard($board));
 
         $this->actingAs($operator)
-            ->get(route('tickets.index', ['view' => 'list']))
+            ->get(route('tickets.board.show', ['board' => $board, 'view' => 'list']))
             ->assertOk()
             ->assertSeeText('Nova demanda')
             ->assertDontSeeText('Configurar')
             ->assertDontSee(route('tickets.settings', $board, absolute: false), false);
+    }
+
+    public function test_legacy_board_query_redirects_to_board_detail(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+        $company = Company::query()->create([
+            'name' => 'Empresa Redirect',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'TI Redirect',
+            'slug' => 'ti-redirect',
+            'is_active' => true,
+        ]);
+        $board = app(SectorProvisioningService::class)->provision($sector);
+
+        $this->actingAs($superAdmin)
+            ->get(route('tickets.index', ['board' => $board->id, 'view' => 'kanban']))
+            ->assertRedirect(route('tickets.board.show', ['board' => $board, 'view' => 'kanban']));
+
+        $this->actingAs($superAdmin)
+            ->get(route('tickets.index', ['sector' => $sector->id, 'view' => 'stages']))
+            ->assertRedirect(route('tickets.board.show', ['board' => $board, 'view' => 'stages']));
+
+        $this->actingAs($superAdmin)
+            ->get(route('tickets.board', $sector))
+            ->assertRedirect(route('tickets.board.show', ['board' => $board, 'view' => 'stages']));
     }
 
     public function test_manual_board_modal_creates_ticket_without_public_catalog_item(): void
@@ -236,10 +346,10 @@ class TicketBoardAccessTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('tickets.board'))
-            ->assertRedirect(route('tickets.index', ['view' => 'stages']));
+            ->assertRedirect(route('tickets.index'));
 
         $this->actingAs($user)
-            ->get(route('tickets.index', ['view' => 'stages']))
+            ->get(route('tickets.index'))
             ->assertRedirect(route('tickets.central'));
 
         $this->actingAs($user)

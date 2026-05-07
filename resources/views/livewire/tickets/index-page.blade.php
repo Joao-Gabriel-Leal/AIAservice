@@ -22,10 +22,14 @@
 
     <x-portal.section-hero
         eyebrow="Quadro operacional"
-        title="Quadros"
-        description="Filtre tudo em um so lugar e alterne entre lista, etapas e kanban sem perder o contexto."
+        :title="$board?->name ?? 'Quadro'"
+        :description="$board?->description ?: 'Acompanhe as demandas deste quadro em lista, etapas ou kanban.'"
     >
         <x-slot:actions>
+            <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                Voltar aos quadros
+            </a>
+
             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-1">
                 <div class="flex items-center gap-1">
                     <button
@@ -77,8 +81,8 @@
 
         <div class="portal-toolbar">
             <div>
-                <p class="text-sm font-semibold text-slate-900">Filtros compartilhados</p>
-                <p class="mt-1 text-sm text-slate-500">Os mesmos filtros abastecem lista, etapas e kanban.</p>
+                <p class="text-sm font-semibold text-slate-900">Filtros do quadro</p>
+                <p class="mt-1 text-sm text-slate-500">Este painel mostra somente demandas do quadro aberto.</p>
             </div>
 
             @if ($board)
@@ -91,35 +95,6 @@
                 <span class="mb-1 block font-medium">Titulo</span>
                 <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por titulo">
             </label>
-
-            @if ($sectorOptions->isNotEmpty())
-                <label class="text-sm text-slate-600">
-                    <span class="mb-1 block font-medium">Setor</span>
-                    <select wire:model.live="selectedSectorId" class="ui-native-select w-full">
-                        <option value="">Todos os setores</option>
-                        @foreach ($sectorOptions as $sectorOption)
-                            <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
-                        @endforeach
-                    </select>
-                </label>
-            @endif
-
-            @if ($boardOptions->isNotEmpty())
-                <label class="text-sm text-slate-600">
-                    <span class="mb-1 block font-medium">Quadro</span>
-                    <select wire:model.live="selectedBoardId" class="ui-native-select w-full">
-                        <option value="">Todos os quadros</option>
-                        @foreach ($boardOptions as $boardOption)
-                            <option value="{{ $boardOption->id }}">
-                                {{ $boardOption->name }}
-                                @if (! $selectedSectorId)
-                                    - {{ $boardOption->sector?->name }}
-                                @endif
-                            </option>
-                        @endforeach
-                    </select>
-                </label>
-            @endif
 
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Etapa</span>

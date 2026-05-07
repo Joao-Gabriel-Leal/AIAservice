@@ -27,10 +27,8 @@ class IndexPage extends Component
     use AuthorizesRequests;
     use WithPagination;
 
-    #[Url(as: 'sector')]
     public ?int $selectedSectorId = null;
 
-    #[Url(as: 'board')]
     public ?int $selectedBoardId = null;
 
     #[Url(as: 'title')]
@@ -72,7 +70,7 @@ class IndexPage extends Component
         'dynamic_values' => [],
     ];
 
-    public function mount(): void
+    public function mount(?TicketBoard $board = null): void
     {
         if (! auth()->user()->hasOperationalAccess()) {
             session()->flash('status', 'A central de formularios fica disponivel para abrir chamados. O quadro e exclusivo para operadores e gestores.');
@@ -81,9 +79,17 @@ class IndexPage extends Component
             return;
         }
 
+        if ($board?->exists) {
+            abort_if(! $board->is_active, 404);
+            abort_unless(auth()->user()->canOperateBoard($board), 403);
+
+            $this->selectedSectorId = $board->sector_id;
+            $this->selectedBoardId = $board->id;
+        }
+
         $this->viewMode = $this->normalizeViewMode($this->viewMode);
 
-        if ($this->isBoardView()) {
+        if (! $this->selectedBoardId) {
             $this->ensureBoardSelected();
         }
 
@@ -318,10 +324,6 @@ class IndexPage extends Component
         if (! $user->hasOperationalAccess()) {
             session()->flash('status', 'A central de formularios fica disponivel para abrir chamados. O quadro e exclusivo para operadores e gestores.');
             $this->redirectRoute('tickets.central');
-        }
-
-        if ($this->isBoardView()) {
-            $this->ensureBoardSelected();
         }
 
         $sectorOptions = $this->availableBoardSectors();
