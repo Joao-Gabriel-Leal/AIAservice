@@ -464,6 +464,30 @@ class TicketFlowTest extends TestCase
             ->assertSet('selectedFormId', null);
     }
 
+    public function test_create_page_skips_context_selection_when_form_was_chosen_from_central(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'catalog' => $catalog] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $this->actingAs($requester)
+            ->get(route('tickets.create', [
+                'sector' => $sector->id,
+                'board' => $board->id,
+                'form' => $catalog->ticket_form_id,
+            ]))
+            ->assertOk()
+            ->assertSee('Setor: '.$sector->name)
+            ->assertSee('Formulario: '.$catalog->form->name)
+            ->assertSee('Explique o chamado')
+            ->assertDontSee('Escolha o setor e o formulario')
+            ->assertDontSee('Selecione um setor')
+            ->assertDontSee('Selecione um formulario');
+    }
+
     public function test_requester_can_open_a_ticket_from_an_active_form_without_catalog_item(): void
     {
         ['sector' => $sector, 'board' => $board, 'group' => $group] = $this->ticketContext();

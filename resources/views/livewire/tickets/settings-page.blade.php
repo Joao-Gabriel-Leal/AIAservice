@@ -2,8 +2,9 @@
     class="space-y-6"
     x-data="{
         openSection: $wire.entangle('openSection').live,
-        toggleSection(section) {
-            this.openSection = this.openSection === section ? null : section;
+        selectSection(section) {
+            this.openSection = section;
+            $wire.setOpenSection(section);
         },
     }"
 >
@@ -19,7 +20,7 @@
         compact
         eyebrow="Configuracao operacional"
         :title="$board?->name ?? 'Configurar quadro'"
-        :description="$board?->description ?: 'Ajuste etapas, SLA, automacoes, campos e formularios do setor.'"
+        :description="$board?->description ?: 'Ajuste etapas, SLA, campos e formularios do setor.'"
         :badge="$board ? ($board->groups->count().' etapa(s)') : 'Sem setor'"
     >
         @if ($sectorOptions->count() > 1 || $boardOptions->count() > 1 || $board)
@@ -31,7 +32,7 @@
                         </div>
                     @endif
                     <p class="text-sm font-semibold text-slate-900">Escopo da configuracao</p>
-                    <p class="mt-1 text-sm text-slate-500">Mantenha a estrutura do quadro alinhada com o setor antes de publicar formularios e automacoes.</p>
+                    <p class="mt-1 text-sm text-slate-500">Mantenha a estrutura do quadro alinhada com o setor antes de publicar formularios.</p>
                 </div>
 
                 <div class="portal-toolbar-group">
@@ -70,14 +71,40 @@
             Nenhum quadro disponivel para configuracao.
         </div>
     @else
-        <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" x-on:click="toggleSection('board')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+        <div class="grid gap-6 xl:grid-cols-[260px_1fr]">
+            <aside class="ui-panel h-max rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-6">
+                <p class="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Configuracao</p>
+                <div class="mt-3 space-y-2">
+                    @foreach ($settingsSections as $sectionKey => $sectionLabel)
+                        <button
+                            type="button"
+                            x-on:click="selectSection('{{ $sectionKey }}')"
+                            class="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold transition"
+                            :class="openSection === '{{ $sectionKey }}' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'"
+                        >
+                            <span>{{ $sectionLabel }}</span>
+                            <span class="text-xs opacity-70">Abrir</span>
+                        </button>
+                    @endforeach
+
+                    @unless ($automationsUiEnabled)
+                        <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                            <p class="font-semibold">Automacoes em manutencao</p>
+                            <p class="mt-1">A criacao e edicao de automacoes esta temporariamente oculta.</p>
+                        </div>
+                    @endunless
+                </div>
+            </aside>
+
+            <div class="min-w-0 space-y-6">
+        <section x-show="openSection === 'board'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Dados do quadro</h3>
                     <p class="text-sm text-slate-500">Resumo do ambiente: {{ $board->groups->count() }} etapas, {{ $board->fields->count() }} campos, {{ $board->forms->count() }} formularios.</p>
                 </div>
-                <span class="text-sm text-slate-500" x-text="openSection === 'board' ? 'Recolher' : 'Abrir'"></span>
-            </button>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
 
             <div x-show="openSection === 'board'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-4 lg:grid-cols-4">
@@ -95,7 +122,7 @@
                         </div>
                         <div class="rounded-2xl bg-slate-50 p-4">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Automacoes</p>
-                            <p class="mt-2 text-sm font-semibold text-slate-900">{{ $board->automationRules->count() }}</p>
+                            <p class="mt-2 text-sm font-semibold text-slate-900">{{ $automationsUiEnabled ? $board->automationRules->count() : 'Em manutencao' }}</p>
                         </div>
                     </div>
 
@@ -118,8 +145,8 @@
                     <div class="mt-6 grid gap-4 lg:grid-cols-2">
                         <form wire:submit="saveBoardOperators" class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div>
-                                <h4 class="text-base font-semibold text-slate-900">Operadores com acesso</h4>
-                                <p class="mt-1 text-sm text-slate-500">Gestores do setor sempre acessam. Marque abaixo somente os operadores que atuam neste quadro.</p>
+                                <h4 class="text-base font-semibold text-slate-900">Operadores destacados</h4>
+                                <p class="mt-1 text-sm text-slate-500">Gestores e operadores do setor podem abrir este quadro. Marque aqui apenas quem atua diretamente nele.</p>
                             </div>
 
                             <div class="mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1">
@@ -133,7 +160,7 @@
                                 @endforelse
                             </div>
 
-                            <button type="submit" class="ui-action ui-action-primary mt-4 rounded-2xl px-4 py-3 text-sm">Salvar acessos</button>
+                            <button type="submit" class="ui-action ui-action-primary mt-4 rounded-2xl px-4 py-3 text-sm">Salvar operadores</button>
                         </form>
 
                         <form wire:submit="createBoard" class="rounded-3xl border border-slate-200 bg-white p-5">
@@ -165,14 +192,14 @@
                 </div>
         </section>
 
-        <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" x-on:click="toggleSection('groups')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+        <section x-show="openSection === 'groups'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Etapas</h3>
                     <p class="text-sm text-slate-500">Fluxo principal do quadro. O ticket fecha sozinho ao entrar na etapa final.</p>
                 </div>
-                <span class="text-sm text-slate-500" x-text="openSection === 'groups' ? 'Recolher' : 'Abrir'"></span>
-            </button>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
 
             <div x-show="openSection === 'groups'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -269,14 +296,101 @@
                 </div>
         </section>
 
-        <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" x-on:click="toggleSection('sla')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+        <section x-show="openSection === 'statuses'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">Status</h3>
+                    <p class="text-sm text-slate-500">Status tecnico usado em filtros, automacoes legadas e compatibilidade dos chamados.</p>
+                </div>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
+
+            <div x-show="openSection === 'statuses'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
+                <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+                    <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                        <div class="mb-4">
+                            <h4 class="text-base font-semibold text-slate-900">{{ $editingStatusId ? 'Editar status' : 'Novo status' }}</h4>
+                            <p class="text-sm text-slate-500">Mantenha um status padrao ativo para entrada do fluxo.</p>
+                        </div>
+
+                        <form wire:submit="{{ $editingStatusId ? 'updateStatus' : 'addStatus' }}" class="space-y-4">
+                            <input type="text" wire:model="{{ $editingStatusId ? 'editStatusForm.name' : 'statusForm.name' }}" placeholder="Nome do status" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+                            <input type="text" wire:model="{{ $editingStatusId ? 'editStatusForm.color' : 'statusForm.color' }}" placeholder="#2563eb" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none" />
+
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" wire:model="{{ $editingStatusId ? 'editStatusForm.is_default' : 'statusForm.is_default' }}" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Padrao</label>
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" wire:model="{{ $editingStatusId ? 'editStatusForm.is_closed' : 'statusForm.is_closed' }}" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Fechamento</label>
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" wire:model="{{ $editingStatusId ? 'editStatusForm.is_active' : 'statusForm.is_active' }}" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" /> Ativo</label>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2">
+                                <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">{{ $editingStatusId ? 'Salvar status' : 'Criar status' }}</button>
+                                @if ($editingStatusId)
+                                    <button type="button" wire:click="cancelEditingStatus" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
+                                @endif
+                            </div>
+                        </form>
+                    </section>
+
+                    <div class="space-y-3">
+                        @foreach ($board->statuses as $status)
+                            <div class="rounded-2xl border border-slate-200 p-4">
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="size-3 rounded-full" style="background-color: {{ $status->color ?: '#2563eb' }}"></span>
+                                            <p class="font-medium text-slate-900">{{ $status->name }}</p>
+                                            @if ($status->is_default)
+                                                <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">Padrao</span>
+                                            @endif
+                                            @if ($status->is_closed)
+                                                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Fechamento</span>
+                                            @endif
+                                            <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $status->is_active ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-700' }}">{{ $status->is_active ? 'Ativo' : 'Inativo' }}</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" wire:click="moveStatusUp({{ $status->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" @disabled($loop->first)>Subir</button>
+                                        <button type="button" wire:click="moveStatusDown({{ $status->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" @disabled($loop->last)>Descer</button>
+                                        <button type="button" wire:click="startEditingStatus({{ $status->id }})" class="ui-action rounded-xl border border-sky-200 px-3 py-2 text-sm text-sky-700 hover:bg-sky-50">Editar</button>
+                                        <button type="button" wire:click="confirmDeleteStatus({{ $status->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Excluir</button>
+                                    </div>
+                                </div>
+
+                                @if ($pendingDeletionType === 'status' && $pendingDeletionId === $status->id)
+                                    <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                                        <p class="font-medium">Remover status</p>
+                                        <p class="mt-1 text-xs">Escolha para onde os chamados existentes devem apontar.</p>
+                                        <div class="mt-4">
+                                            <select wire:model="replacementSelection.status_replacement_id" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none">
+                                                <option value="">Selecione um substituto ativo</option>
+                                                @foreach ($deletionContext['replacement_statuses'] ?? [] as $replacementStatus)
+                                                    <option value="{{ $replacementStatus['id'] }}">{{ $replacementStatus['name'] }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="mt-4 flex flex-wrap gap-2">
+                                            <button type="button" wire:click="deleteStatus" class="ui-action rounded-2xl bg-rose-600 px-4 py-3 text-sm font-medium text-white hover:bg-rose-500">Confirmar exclusao</button>
+                                            <button type="button" wire:click="cancelDeletion" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section x-show="openSection === 'sla'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">SLA</h3>
                     <p class="text-sm text-slate-500">{{ $slaIsActive ? 'Ativo no quadro.' : 'Desativado no quadro.' }} Configure tempos por prioridade.</p>
                 </div>
-                <span class="text-sm text-slate-500" x-text="openSection === 'sla' ? 'Recolher' : 'Abrir'"></span>
-            </button>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
 
             <div x-show="openSection === 'sla'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <form wire:submit="saveSlaPolicy" class="space-y-5">
@@ -307,14 +421,15 @@
                 </div>
         </section>
 
-        <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" x-on:click="toggleSection('automations')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+        @if ($automationsUiEnabled)
+        <section x-show="openSection === 'automations'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Automacoes</h3>
                     <p class="text-sm text-slate-500">Regras no formato Quando / Se / Entao usando etapa, prioridade, responsavel e fechamento.</p>
                 </div>
-                <span class="text-sm text-slate-500" x-text="openSection === 'automations' ? 'Recolher' : 'Abrir'"></span>
-            </button>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
 
             <div x-show="openSection === 'automations'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -521,15 +636,16 @@
                     </div>
                 </div>
         </section>
+        @endif
 
-        <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" x-on:click="toggleSection('fields')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+        <section x-show="openSection === 'fields'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Campos do chamado</h3>
                     <p class="text-sm text-slate-500">Cada campo pode aparecer no quadro e tambem ser perguntado, ou nao, em cada formulario.</p>
                 </div>
-                <span class="text-sm text-slate-500" x-text="openSection === 'fields' ? 'Recolher' : 'Abrir'"></span>
-            </button>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
 
             <div x-show="openSection === 'fields'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -593,14 +709,14 @@
                 </div>
         </section>
 
-        <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <button type="button" x-on:click="toggleSection('forms')" class="ui-row-interactive flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+        <section x-show="openSection === 'forms'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Formularios e catalogo</h3>
                     <p class="text-sm text-slate-500">Defina quais perguntas entram em cada formulario e qual etapa o ticket recebe ao nascer.</p>
                 </div>
-                <span class="text-sm text-slate-500" x-text="openSection === 'forms' ? 'Recolher' : 'Abrir'"></span>
-            </button>
+                <span class="text-sm text-slate-500">Aba ativa</span>
+            </div>
 
             <div x-show="openSection === 'forms'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
                     <div class="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -814,5 +930,7 @@
                     </div>
                 </div>
         </section>
+            </div>
+        </div>
     @endif
 </div>

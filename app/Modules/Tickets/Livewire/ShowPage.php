@@ -430,17 +430,9 @@ class ShowPage extends Component
 
     private function boardAssignees($board)
     {
-        $operatorIds = $board->operators()->pluck('users.id')->all();
-
         return User::query()
             ->where('is_active', true)
-            ->where(function ($query) use ($board, $operatorIds): void {
-                $query->withSectorAccess($board->sector_id, ['sector_admin']);
-
-                if ($operatorIds !== []) {
-                    $query->orWhereIn('id', $operatorIds);
-                }
-            })
+            ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
     }

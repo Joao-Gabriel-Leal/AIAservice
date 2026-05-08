@@ -47,6 +47,8 @@ class CreatePage extends Component
         'previous_solutions' => [],
     ];
 
+    public bool $contextSelectionLocked = false;
+
     public function mount(?ServiceCatalogItem $catalogItem = null): void
     {
         if ($catalogItem && ! $catalogItem->exists) {
@@ -62,8 +64,10 @@ class CreatePage extends Component
             $this->selectedCatalogId = $catalogItem->id;
             $this->selectedFormId = $catalogItem->ticket_form_id;
             $this->priority = $catalogItem->default_priority?->value ?? TicketPriority::MEDIUM->value;
+            $this->contextSelectionLocked = true;
         } else {
             $requestedBoardId = request()->integer('board');
+            $requestedFormId = request()->integer('form');
             $requestedBoard = $requestedBoardId
                 ? TicketBoard::query()->where('is_active', true)->find($requestedBoardId)
                 : null;
@@ -76,8 +80,14 @@ class CreatePage extends Component
                 $this->selectedBoardId = $this->resolveBoardId($requestedBoardId);
             }
 
-            $this->selectedFormId = $this->resolveFormId(request()->integer('form'));
+            $this->selectedFormId = $this->resolveFormId($requestedFormId);
             $this->selectedCatalogId = $this->resolveCatalogIdForForm($this->selectedFormId);
+            $this->contextSelectionLocked = (bool) (
+                $requestedFormId
+                && $this->selectedSectorId
+                && $this->selectedBoardId
+                && $this->selectedFormId
+            );
         }
     }
 
@@ -199,6 +209,7 @@ class CreatePage extends Component
             'selectedBoard' => $this->board(),
             'selectedForm' => $form,
             'selectedCatalog' => $catalog,
+            'contextSelectionLocked' => $this->contextSelectionLocked,
             'suggestions' => $this->suggestions,
         ])->layout('layouts.portal', [
             'title' => 'Abrir chamado',

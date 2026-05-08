@@ -8,6 +8,7 @@ use App\Modules\Tickets\Livewire\CentralPage;
 use App\Modules\Tickets\Livewire\CreatePage;
 use App\Modules\Tickets\Livewire\IndexPage;
 use App\Modules\Tickets\Livewire\MinePage;
+use App\Modules\Tickets\Livewire\OperationalQueuePage;
 use App\Modules\Tickets\Livewire\SettingsPage;
 use App\Modules\Tickets\Livewire\ShowPage;
 use App\Modules\Tickets\Models\TicketBoard;
@@ -18,6 +19,7 @@ Route::middleware('auth')->prefix('tickets')->name('tickets.')->group(function (
     Route::get('/export', TicketExportController::class)->name('export');
     Route::get('/central', CentralPage::class)->name('central');
     Route::get('/my', MinePage::class)->name('mine');
+    Route::get('/queue', OperationalQueuePage::class)->name('queue');
     Route::get('/boards/{board}', IndexPage::class)->name('board.show');
     Route::get('/board/{boardOrSector?}', function (?string $boardOrSector = null) {
         if (! $boardOrSector) {

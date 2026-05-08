@@ -37,6 +37,7 @@
         </div>
 
         <div class="space-y-8 px-6 py-7 sm:px-10 sm:py-8">
+            @unless ($contextSelectionLocked)
             <section class="space-y-5">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.22em] text-[#4966d6]">Contexto</p>
@@ -107,6 +108,7 @@
                     </label>
                 </div>
             </section>
+            @endunless
 
             <section class="space-y-5 border-t border-slate-200/90 pt-8">
                 <div>

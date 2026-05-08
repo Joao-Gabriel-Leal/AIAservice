@@ -90,7 +90,66 @@
             @endif
         </div>
 
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        @if ($board)
+            <div class="grid gap-4 xl:grid-cols-[1fr_1fr]">
+                <div class="rounded-3xl border border-slate-200 bg-white/70 p-4">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-900">Views rapidas</p>
+                            <p class="mt-1 text-xs text-slate-500">Atalhos para o recorte operacional do dia.</p>
+                        </div>
+                        <button type="button" wire:click="resetTicketFilters" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs">Limpar filtros</button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        @foreach ($quickViews as $quickViewKey => $quickViewLabel)
+                            <button type="button" wire:click="applyQuickView('{{ $quickViewKey }}')" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs">
+                                {{ $quickViewLabel }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-200 bg-white/70 p-4">
+                    <div class="mb-3">
+                        <p class="text-sm font-semibold text-slate-900">Views salvas</p>
+                        <p class="mt-1 text-xs text-slate-500">Salve combinacoes de filtros como “SLA critico” ou “Minha triagem”.</p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        @forelse ($savedViews as $savedView)
+                            <div class="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-600">
+                                <button type="button" wire:click="applySavedView({{ $savedView->id }})" class="px-3 py-2 hover:bg-slate-50">
+                                    {{ $savedView->name }}{{ $savedView->is_default ? ' · padrao' : '' }}
+                                </button>
+                                <button type="button" wire:click="deleteSavedView({{ $savedView->id }})" class="border-l border-slate-200 px-2 py-2 text-rose-500 hover:bg-rose-50" title="Excluir view salva">
+                                    Excluir
+                                </button>
+                            </div>
+                        @empty
+                            <span class="text-xs text-slate-500">Nenhuma view salva ainda.</span>
+                        @endforelse
+                    </div>
+
+                    <form wire:submit.prevent="saveCurrentView" class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <label class="text-xs text-slate-600">
+                            <span class="mb-1 block font-medium">Nome da view</span>
+                            <input wire:model="savedViewName" type="text" class="ui-input w-full" placeholder="Ex.: Sem responsavel urgente">
+                            @error('savedViewName') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+                        <div class="flex items-end gap-2">
+                            <label class="mb-2 inline-flex items-center gap-2 text-xs text-slate-600">
+                                <input type="checkbox" wire:model="saveViewAsDefault" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                                Padrao
+                            </label>
+                            <button type="submit" class="ui-action ui-action-primary rounded-xl px-3 py-2 text-xs">Salvar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
+
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Titulo</span>
                 <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por titulo">
@@ -114,6 +173,38 @@
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Responsavel</span>
                 <input wire:model.live.debounce.400ms="assigneeFilter" type="text" class="ui-input w-full" placeholder="Nome ou email">
+            </label>
+
+            <label class="text-sm text-slate-600">
+                <span class="mb-1 block font-medium">Fila</span>
+                <select wire:model.live="assigneeStateFilter" class="ui-native-select w-full">
+                    <option value="all">Todos</option>
+                    <option value="me">Atribuidos a mim</option>
+                    <option value="unassigned">Sem responsavel</option>
+                    <option value="assigned">Com responsavel</option>
+                </select>
+            </label>
+
+            <label class="text-sm text-slate-600">
+                <span class="mb-1 block font-medium">Prioridade</span>
+                <select wire:model.live="priorityFilter" class="ui-native-select w-full">
+                    <option value="">Todas</option>
+                    <option value="high_or_urgent">Alta ou urgente</option>
+                    @foreach ($priorities as $priority)
+                        <option value="{{ $priority->value }}">{{ $priority->label() }}</option>
+                    @endforeach
+                </select>
+            </label>
+
+            <label class="text-sm text-slate-600">
+                <span class="mb-1 block font-medium">SLA</span>
+                <select wire:model.live="slaFilter" class="ui-native-select w-full">
+                    <option value="all">Todos</option>
+                    <option value="critical">Critico</option>
+                    <option value="breached">Estourado</option>
+                    <option value="warning">A vencer</option>
+                    <option value="ok">Em dia</option>
+                </select>
             </label>
 
             <div class="grid gap-3 md:grid-cols-2">

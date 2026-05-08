@@ -14,6 +14,8 @@ use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
+use App\Modules\Tickets\Models\TicketBoardSavedView;
+use App\Modules\Tickets\Models\TicketBoardUserPreference;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketTimeEntry;
@@ -127,6 +129,16 @@ class User extends Authenticatable
     public function ticketBoardAccesses(): HasMany
     {
         return $this->hasMany(TicketBoardUserAccess::class)->with('board');
+    }
+
+    public function ticketBoardPreferences(): HasMany
+    {
+        return $this->hasMany(TicketBoardUserPreference::class);
+    }
+
+    public function ticketBoardSavedViews(): HasMany
+    {
+        return $this->hasMany(TicketBoardSavedView::class);
     }
 
     public function assignedTickets(): HasMany
@@ -288,28 +300,15 @@ class User extends Authenticatable
                 ->all();
         }
 
-        $adminSectorIds = $this->adminSectorIds();
-        $technicianSectorIds = $this->sectorIds([SectorAccessLevel::TECHNICIAN]);
+        $sectorIds = $this->operationalSectorIds();
 
-        if ($adminSectorIds === [] && $technicianSectorIds === []) {
+        if ($sectorIds === []) {
             return [];
         }
 
         return TicketBoard::query()
             ->where('is_active', true)
-            ->where(function (Builder $query) use ($adminSectorIds, $technicianSectorIds): void {
-                if ($adminSectorIds !== []) {
-                    $query->orWhereIn('sector_id', $adminSectorIds);
-                }
-
-                if ($technicianSectorIds !== []) {
-                    $query->orWhere(function (Builder $technicianQuery) use ($technicianSectorIds): void {
-                        $technicianQuery
-                            ->whereIn('sector_id', $technicianSectorIds)
-                            ->whereHas('userAccesses', fn (Builder $accessQuery) => $accessQuery->where('user_id', $this->id));
-                    });
-                }
-            })
+            ->whereIn('sector_id', $sectorIds)
             ->pluck('id')
             ->map(fn ($boardId) => (int) $boardId)
             ->unique()
@@ -339,10 +338,6 @@ class User extends Authenticatable
 
     public function canOperateBoard(TicketBoard|int|null $board): bool
     {
-        if ($this->isSuperAdmin()) {
-            return true;
-        }
-
         if (! $board instanceof TicketBoard) {
             $board = $board ? TicketBoard::query()->find($board) : null;
         }
@@ -351,17 +346,11 @@ class User extends Authenticatable
             return false;
         }
 
-        if ($this->isSectorAdmin($board->sector_id)) {
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
-        if (! $this->isTechnician($board->sector_id)) {
-            return false;
-        }
-
-        return $board->userAccesses()
-            ->where('user_id', $this->id)
-            ->exists();
+        return $this->hasOperationalAccess($board->sector_id);
     }
 
     public function accessSummary(): string

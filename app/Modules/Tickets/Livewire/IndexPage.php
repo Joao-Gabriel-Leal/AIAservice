@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
+use App\Modules\Tickets\Models\TicketBoardSavedView;
+use App\Modules\Tickets\Models\TicketBoardUserPreference;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketGroup;
@@ -26,6 +28,8 @@ class IndexPage extends Component
 {
     use AuthorizesRequests;
     use WithPagination;
+
+    private const BOARD_COLUMN_PAGE_SIZE = 25;
 
     public ?int $selectedSectorId = null;
 
@@ -52,9 +56,24 @@ class IndexPage extends Component
     #[Url(as: 'view')]
     public string $viewMode = 'list';
 
+    #[Url(as: 'assignee_state')]
+    public string $assigneeStateFilter = 'all';
+
+    #[Url(as: 'priority')]
+    public string $priorityFilter = '';
+
+    #[Url(as: 'sla')]
+    public string $slaFilter = 'all';
+
     public array $fieldFilters = [];
 
     public array $collapsedGroups = [];
+
+    public array $columnLimits = [];
+
+    public string $savedViewName = '';
+
+    public bool $saveViewAsDefault = false;
 
     public bool $showManualTicketModal = false;
 
@@ -88,9 +107,17 @@ class IndexPage extends Component
         }
 
         $this->viewMode = $this->normalizeViewMode($this->viewMode);
+        $this->assigneeStateFilter = $this->normalizeAssigneeStateFilter($this->assigneeStateFilter);
+        $this->priorityFilter = $this->normalizePriorityFilter($this->priorityFilter);
+        $this->slaFilter = $this->normalizeSlaFilter($this->slaFilter);
 
         if (! $this->selectedBoardId) {
             $this->ensureBoardSelected();
+        }
+
+        if ($openedBoard = $this->board()) {
+            $this->recordBoardAccess($openedBoard);
+            $this->applyDefaultSavedViewIfNeeded($openedBoard);
         }
 
         $this->syncCollapsedGroups();
@@ -101,6 +128,7 @@ class IndexPage extends Component
         if (! $this->selectedSectorId) {
             $this->selectedGroupId = null;
             $this->fieldFilters = [];
+            $this->resetSavedViewDraft();
 
             $this->selectedBoardId = null;
 
@@ -118,6 +146,7 @@ class IndexPage extends Component
 
         $this->selectedGroupId = null;
         $this->fieldFilters = [];
+        $this->resetSavedViewDraft();
 
         if ($this->selectedBoardId && ! $this->boardOptions()->pluck('id')->contains($this->selectedBoardId)) {
             $this->selectedBoardId = null;
@@ -132,6 +161,7 @@ class IndexPage extends Component
         }
 
         $this->syncCollapsedGroups();
+        $this->resetBoardColumnLimits();
         $this->resetPage();
     }
 
@@ -144,14 +174,25 @@ class IndexPage extends Component
 
         $this->selectedGroupId = null;
         $this->fieldFilters = [];
+        $this->resetSavedViewDraft();
         $this->syncCollapsedGroups();
+        $this->resetBoardColumnLimits();
+
+        if ($board = $this->board()) {
+            $this->recordBoardAccess($board);
+        }
+
         $this->resetPage();
     }
 
     public function updated($name): void
     {
-        if ($name === 'selectedSectorId') {
+        if (in_array($name, ['selectedSectorId', 'savedViewName', 'saveViewAsDefault'], true)) {
             return;
+        }
+
+        if (! str_starts_with((string) $name, 'columnLimits.')) {
+            $this->resetBoardColumnLimits();
         }
 
         $this->resetPage();
@@ -164,7 +205,91 @@ class IndexPage extends Component
         if ($this->isBoardView()) {
             $this->ensureBoardSelected();
             $this->syncCollapsedGroups();
+            $this->resetBoardColumnLimits();
         }
+    }
+
+    public function applyQuickView(string $view): void
+    {
+        match ($view) {
+            'mine' => $this->applyFilterState(['assignee_state' => 'me'], 'list'),
+            'unassigned' => $this->applyFilterState(['assignee_state' => 'unassigned'], 'stages'),
+            'sla_critical' => $this->applyFilterState(['sla_state' => 'critical'], 'list'),
+            'high_priority' => $this->applyFilterState(['priority' => 'high_or_urgent'], 'list'),
+            default => null,
+        };
+    }
+
+    public function resetTicketFilters(): void
+    {
+        $this->applyFilterState([], $this->viewMode);
+    }
+
+    public function saveCurrentView(): void
+    {
+        $board = $this->board();
+        abort_unless($board, 404);
+
+        $validated = $this->validate([
+            'savedViewName' => ['required', 'string', 'max:120'],
+            'saveViewAsDefault' => ['boolean'],
+        ]);
+
+        if ($validated['saveViewAsDefault']) {
+            TicketBoardSavedView::query()
+                ->where('user_id', auth()->id())
+                ->where('ticket_board_id', $board->id)
+                ->update(['is_default' => false]);
+        }
+
+        TicketBoardSavedView::query()->create([
+            'user_id' => auth()->id(),
+            'ticket_board_id' => $board->id,
+            'name' => $validated['savedViewName'],
+            'filters' => $this->currentSavedFilters(),
+            'view_mode' => $this->viewMode,
+            'is_default' => $validated['saveViewAsDefault'],
+            'sort_order' => ((int) TicketBoardSavedView::query()
+                ->where('user_id', auth()->id())
+                ->where('ticket_board_id', $board->id)
+                ->max('sort_order')) + 1,
+        ]);
+
+        $this->resetSavedViewDraft();
+        session()->flash('status', 'View salva com sucesso.');
+    }
+
+    public function applySavedView(int $savedViewId): void
+    {
+        $board = $this->board();
+        abort_unless($board, 404);
+
+        $savedView = TicketBoardSavedView::query()
+            ->where('user_id', auth()->id())
+            ->where('ticket_board_id', $board->id)
+            ->findOrFail($savedViewId);
+
+        $this->applyFilterState($savedView->filters ?? [], $savedView->view_mode);
+    }
+
+    public function deleteSavedView(int $savedViewId): void
+    {
+        $board = $this->board();
+        abort_unless($board, 404);
+
+        TicketBoardSavedView::query()
+            ->where('user_id', auth()->id())
+            ->where('ticket_board_id', $board->id)
+            ->whereKey($savedViewId)
+            ->delete();
+
+        session()->flash('status', 'View salva removida.');
+    }
+
+    public function loadMoreColumn(string $columnKey): void
+    {
+        $normalizedKey = $columnKey === 'none' ? 'none' : (string) (int) $columnKey;
+        $this->columnLimits[$normalizedKey] = $this->columnLimitFor($normalizedKey) + self::BOARD_COLUMN_PAGE_SIZE;
     }
 
     public function updateFixedField(TicketWorkflowService $workflowService, int $ticketId, string $field, mixed $value): void
@@ -348,6 +473,9 @@ class IndexPage extends Component
             'group_id' => $this->selectedGroupId,
             'requester' => trim($this->requesterFilter),
             'assignee' => trim($this->assigneeFilter),
+            'assignee_state' => $this->normalizeAssigneeStateFilter($this->assigneeStateFilter),
+            'priority' => $this->normalizePriorityFilter($this->priorityFilter),
+            'sla_state' => $this->normalizeSlaFilter($this->slaFilter),
             'updated_from' => $this->updatedFrom,
             'updated_to' => $this->updatedTo,
             'field_filters' => $normalizedFieldFilters,
@@ -372,42 +500,48 @@ class IndexPage extends Component
             ->values() ?? collect();
         $ticketsByGroup = collect();
         $ungroupedTickets = collect();
+        $groupTicketTotals = collect();
+        $ungroupedTicketsTotal = 0;
         $kanbanColumns = collect();
         $assignees = collect();
 
         if ($board && $this->isBoardView()) {
-            $boardTickets = (clone $ticketQuery)
-                ->where('ticket_board_id', $board->id)
-                ->with([
-                    'requester',
-                    'assignee',
-                    'group',
-                    'catalogItem',
-                    'fieldValues.field.options',
-                ])
-                ->orderBy('created_at')
-                ->orderBy('id')
-                ->get();
-
-            $ticketsByGroup = $groups->mapWithKeys(fn ($group) => [
-                $group->id => $boardTickets->where('ticket_group_id', $group->id)->values(),
-            ]);
-            $ungroupedTickets = $boardTickets->whereNull('ticket_group_id')->values();
-
             $assignees = $this->boardAssignees($board);
 
-            $kanbanColumns = $groups->map(fn ($group) => [
-                'key' => "group-{$group->id}",
-                'group' => $group,
-                'tickets' => $ticketsByGroup->get($group->id, collect()),
-                'targetGroupId' => $group->id,
-            ])->values();
+            foreach ($groups as $group) {
+                $groupKey = $this->columnLimitKey($group->id);
+                $groupQuery = $this->columnTicketQuery($ticketQuery, $board, $group->id);
+                $total = (clone $groupQuery)->count();
+                $ticketsForGroup = (clone $groupQuery)
+                    ->limit($this->columnLimitFor($groupKey))
+                    ->get();
 
-            if ($ungroupedTickets->isNotEmpty()) {
+                $ticketsByGroup->put($group->id, $ticketsForGroup);
+                $groupTicketTotals->put($group->id, $total);
+
+                $kanbanColumns->push([
+                    'key' => "group-{$group->id}",
+                    'group' => $group,
+                    'tickets' => $ticketsForGroup,
+                    'total' => $total,
+                    'hasMore' => $ticketsForGroup->count() < $total,
+                    'targetGroupId' => $group->id,
+                ]);
+            }
+
+            $ungroupedQuery = $this->columnTicketQuery($ticketQuery, $board, null);
+            $ungroupedTicketsTotal = (clone $ungroupedQuery)->count();
+            $ungroupedTickets = (clone $ungroupedQuery)
+                ->limit($this->columnLimitFor('none'))
+                ->get();
+
+            if ($ungroupedTickets->isNotEmpty() || $ungroupedTicketsTotal > 0) {
                 $kanbanColumns->push([
                     'key' => 'group-none',
                     'group' => null,
                     'tickets' => $ungroupedTickets,
+                    'total' => $ungroupedTicketsTotal,
+                    'hasMore' => $ungroupedTickets->count() < $ungroupedTicketsTotal,
                     'targetGroupId' => null,
                 ]);
             }
@@ -420,6 +554,8 @@ class IndexPage extends Component
             'fields' => $fields,
             'ticketsByGroup' => $ticketsByGroup,
             'ungroupedTickets' => $ungroupedTickets,
+            'groupTicketTotals' => $groupTicketTotals,
+            'ungroupedTicketsTotal' => $ungroupedTicketsTotal,
             'kanbanColumns' => $kanbanColumns,
             'assignees' => $assignees,
             'sectorUsers' => $assignees,
@@ -433,6 +569,8 @@ class IndexPage extends Component
             'manualAssignees' => $manualAssignees,
             'manualRequesters' => $manualRequesters,
             'priorities' => TicketPriority::cases(),
+            'savedViews' => $this->savedViews(),
+            'quickViews' => $this->quickViews(),
             'canUpdate' => true,
             'exportParams' => array_filter([
                 'sector' => $this->selectedSectorId,
@@ -441,6 +579,9 @@ class IndexPage extends Component
                 'group' => $this->selectedGroupId,
                 'requester' => trim($this->requesterFilter),
                 'assignee' => trim($this->assigneeFilter),
+                'assignee_state' => $this->assigneeStateFilter,
+                'priority' => $this->priorityFilter,
+                'sla' => $this->slaFilter,
                 'updated_from' => $this->updatedFrom,
                 'updated_to' => $this->updatedTo,
             ], fn ($value) => ! is_null($value) && $value !== ''),
@@ -497,6 +638,119 @@ class IndexPage extends Component
                 default => 'Em dia',
             },
         ];
+    }
+
+    private function applyFilterState(array $filters, string $viewMode): void
+    {
+        $this->titleFilter = (string) ($filters['title'] ?? '');
+        $this->selectedGroupId = $this->normalizeNullableId($filters['group_id'] ?? null);
+        $this->requesterFilter = (string) ($filters['requester'] ?? '');
+        $this->assigneeFilter = (string) ($filters['assignee'] ?? '');
+        $this->assigneeStateFilter = $this->normalizeAssigneeStateFilter((string) ($filters['assignee_state'] ?? 'all'));
+        $this->priorityFilter = $this->normalizePriorityFilter((string) ($filters['priority'] ?? ''));
+        $this->slaFilter = $this->normalizeSlaFilter((string) ($filters['sla_state'] ?? 'all'));
+        $this->updatedFrom = (string) ($filters['updated_from'] ?? '');
+        $this->updatedTo = (string) ($filters['updated_to'] ?? '');
+        $this->fieldFilters = (array) ($filters['field_filters'] ?? []);
+        $this->viewMode = $this->normalizeViewMode($viewMode);
+        $this->resetBoardColumnLimits();
+        $this->resetPage();
+    }
+
+    private function currentSavedFilters(): array
+    {
+        return [
+            'title' => trim($this->titleFilter),
+            'group_id' => $this->selectedGroupId,
+            'requester' => trim($this->requesterFilter),
+            'assignee' => trim($this->assigneeFilter),
+            'assignee_state' => $this->normalizeAssigneeStateFilter($this->assigneeStateFilter),
+            'priority' => $this->normalizePriorityFilter($this->priorityFilter),
+            'sla_state' => $this->normalizeSlaFilter($this->slaFilter),
+            'updated_from' => $this->updatedFrom,
+            'updated_to' => $this->updatedTo,
+            'field_filters' => collect($this->fieldFilters)
+                ->filter(fn ($value) => $value !== null && $value !== '')
+                ->all(),
+        ];
+    }
+
+    private function savedViews(): Collection
+    {
+        $board = $this->board();
+
+        if (! $board) {
+            return collect();
+        }
+
+        return TicketBoardSavedView::query()
+            ->where('user_id', auth()->id())
+            ->where('ticket_board_id', $board->id)
+            ->orderByDesc('is_default')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function applyDefaultSavedViewIfNeeded(TicketBoard $board): void
+    {
+        if ($this->requestCarriesTicketFilters()) {
+            return;
+        }
+
+        $savedView = TicketBoardSavedView::query()
+            ->where('user_id', auth()->id())
+            ->where('ticket_board_id', $board->id)
+            ->where('is_default', true)
+            ->orderBy('sort_order')
+            ->first();
+
+        if (! $savedView) {
+            return;
+        }
+
+        $this->applyFilterState($savedView->filters ?? [], $savedView->view_mode);
+    }
+
+    private function requestCarriesTicketFilters(): bool
+    {
+        return collect([
+            'title',
+            'group',
+            'requester',
+            'assignee',
+            'assignee_state',
+            'priority',
+            'sla',
+            'updated_from',
+            'updated_to',
+        ])->contains(fn (string $key) => request()->has($key));
+    }
+
+    private function quickViews(): array
+    {
+        return [
+            'mine' => 'Meus chamados',
+            'unassigned' => 'Sem responsavel',
+            'sla_critical' => 'SLA critico',
+            'high_priority' => 'Alta prioridade',
+        ];
+    }
+
+    private function resetSavedViewDraft(): void
+    {
+        $this->savedViewName = '';
+        $this->saveViewAsDefault = false;
+    }
+
+    private function recordBoardAccess(TicketBoard $board): void
+    {
+        TicketBoardUserPreference::query()->updateOrCreate([
+            'user_id' => auth()->id(),
+            'ticket_board_id' => $board->id,
+        ], [
+            'last_opened_at' => now(),
+        ]);
     }
 
     private function sectorOptions(): Collection
@@ -651,9 +905,66 @@ class IndexPage extends Component
         return in_array($mode, ['list', 'stages', 'kanban'], true) ? $mode : 'list';
     }
 
+    private function normalizeAssigneeStateFilter(string $state): string
+    {
+        return in_array($state, ['all', 'me', 'unassigned', 'assigned'], true) ? $state : 'all';
+    }
+
+    private function normalizePriorityFilter(string $priority): string
+    {
+        $allowed = collect(TicketPriority::cases())
+            ->map(fn (TicketPriority $case) => $case->value)
+            ->push('high_or_urgent')
+            ->push('')
+            ->all();
+
+        return in_array($priority, $allowed, true) ? $priority : '';
+    }
+
+    private function normalizeSlaFilter(string $state): string
+    {
+        return in_array($state, ['all', 'ok', 'warning', 'breached', 'critical'], true) ? $state : 'all';
+    }
+
     private function isBoardView(): bool
     {
         return in_array($this->viewMode, ['stages', 'kanban'], true);
+    }
+
+    private function columnTicketQuery(Builder $baseQuery, TicketBoard $board, ?int $groupId): Builder
+    {
+        return (clone $baseQuery)
+            ->where('ticket_board_id', $board->id)
+            ->when(
+                $groupId === null,
+                fn (Builder $query) => $query->whereNull('ticket_group_id'),
+                fn (Builder $query) => $query->where('ticket_group_id', $groupId)
+            )
+            ->with([
+                'requester',
+                'assignee',
+                'group',
+                'catalogItem',
+                'fieldValues.field.options',
+            ])
+            ->reorder()
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
+
+    private function columnLimitKey(?int $groupId): string
+    {
+        return $groupId === null ? 'none' : (string) $groupId;
+    }
+
+    private function columnLimitFor(string $columnKey): int
+    {
+        return max(self::BOARD_COLUMN_PAGE_SIZE, (int) ($this->columnLimits[$columnKey] ?? self::BOARD_COLUMN_PAGE_SIZE));
+    }
+
+    private function resetBoardColumnLimits(): void
+    {
+        $this->columnLimits = [];
     }
 
     private function groupOptions(): Collection
@@ -758,17 +1069,9 @@ class IndexPage extends Component
 
     private function boardAssignees(TicketBoard $board): Collection
     {
-        $operatorIds = $board->operators()->pluck('users.id')->all();
-
         return User::query()
             ->where('is_active', true)
-            ->where(function (Builder $query) use ($board, $operatorIds): void {
-                $query->withSectorAccess($board->sector_id, ['sector_admin']);
-
-                if ($operatorIds !== []) {
-                    $query->orWhereIn('id', $operatorIds);
-                }
-            })
+            ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
     }

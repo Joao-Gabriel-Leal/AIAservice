@@ -36,14 +36,14 @@
                             @endif
                         </div>
 
-                        <p class="mt-1 text-sm text-slate-500">{{ $ticketsByGroup->get($group->id)?->count() ?? 0 }} chamados nesta etapa</p>
+                        <p class="mt-1 text-sm text-slate-500">{{ $ticketsByGroup->get($group->id)?->count() ?? 0 }} de {{ $groupTicketTotals->get($group->id, 0) }} chamados nesta etapa</p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3">
                     <span class="ui-tone-chip" style="--ui-pill-color: {{ $group->color ?: '#2563eb' }}">
                         <span class="ui-tone-dot"></span>
-                        {{ $ticketsByGroup->get($group->id)?->count() ?? 0 }}
+                        {{ $groupTicketTotals->get($group->id, 0) }}
                     </span>
 
                     <span class="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -199,11 +199,18 @@
                         </tbody>
                     </table>
                 </div>
+                @if (($ticketsByGroup->get($group->id)?->count() ?? 0) < $groupTicketTotals->get($group->id, 0))
+                    <div class="border-t border-slate-100 px-6 py-4 text-center">
+                        <button type="button" wire:click="loadMoreColumn('{{ $group->id }}')" class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm">
+                            Carregar mais chamados desta etapa
+                        </button>
+                    </div>
+                @endif
             @endif
         </section>
     @endforeach
 
-    @if ($ungroupedTickets->isNotEmpty())
+    @if ($ungroupedTickets->isNotEmpty() || $ungroupedTicketsTotal > 0)
         <section
             class="ui-panel rounded-3xl border border-slate-200 bg-white shadow-sm"
             wire:key="ungrouped-stages"
@@ -213,7 +220,7 @@
         >
             <div class="border-b border-slate-200 px-6 py-4">
                 <h3 class="text-lg font-semibold text-slate-900">Sem etapa</h3>
-                <p class="text-sm text-slate-500">Chamados sem etapa definida no quadro.</p>
+                <p class="text-sm text-slate-500">{{ $ungroupedTickets->count() }} de {{ $ungroupedTicketsTotal }} chamados sem etapa definida no quadro.</p>
             </div>
 
             <div class="divide-y divide-slate-100">
@@ -247,6 +254,13 @@
                     </div>
                 @endforeach
             </div>
+            @if ($ungroupedTickets->count() < $ungroupedTicketsTotal)
+                <div class="border-t border-slate-100 px-6 py-4 text-center">
+                    <button type="button" wire:click="loadMoreColumn('none')" class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm">
+                        Carregar mais chamados sem etapa
+                    </button>
+                </div>
+            @endif
         </section>
     @endif
 </div>

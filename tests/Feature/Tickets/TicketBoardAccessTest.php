@@ -141,8 +141,8 @@ class TicketBoardAccessTest extends TestCase
         $this->actingAs($operator)
             ->get(route('tickets.index'))
             ->assertOk()
+            ->assertSeeText($supportBoard->name)
             ->assertSeeText($devBoard->name)
-            ->assertDontSeeText($supportBoard->name)
             ->assertDontSeeText($outsideBoard->name);
 
         $this->actingAs(User::factory()->superAdmin()->create())
@@ -208,7 +208,7 @@ class TicketBoardAccessTest extends TestCase
         $this->assertSame(1, substr_count($response->getContent(), 'Central de formularios'));
     }
 
-    public function test_operator_with_board_access_can_open_manual_creation_without_configure_access(): void
+    public function test_operator_with_sector_access_can_open_manual_creation_without_configure_access(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Operador Manual',
@@ -226,6 +226,9 @@ class TicketBoardAccessTest extends TestCase
             'sector_id' => $sector->id,
         ]);
 
+        $board->operators()->detach($operator->id);
+
+        $this->assertFalse($board->operators()->whereKey($operator->id)->exists());
         $this->assertTrue($operator->canOperateBoard($board));
 
         $this->actingAs($operator)
@@ -234,6 +237,79 @@ class TicketBoardAccessTest extends TestCase
             ->assertSeeText('Nova demanda')
             ->assertDontSeeText('Configurar')
             ->assertDontSee(route('tickets.settings', $board, absolute: false), false);
+    }
+
+    public function test_user_can_open_manager_and_operator_sector_boards_without_board_operator_row(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Acesso Misto',
+            'is_active' => true,
+        ]);
+        $managerSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Adesao',
+            'slug' => 'adesao',
+            'is_active' => true,
+        ]);
+        $operatorSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Administrativo',
+            'slug' => 'administrativo',
+            'is_active' => true,
+        ]);
+        $outsideSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'CARC',
+            'slug' => 'carc',
+            'is_active' => true,
+        ]);
+
+        $managerBoard = app(SectorProvisioningService::class)->provision($managerSector);
+        $operatorBoard = app(SectorProvisioningService::class)->provision($operatorSector);
+        $outsideBoard = app(SectorProvisioningService::class)->provision($outsideSector);
+
+        $user = User::factory()->create([
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $managerSector->id,
+        ]);
+        $user->sectorAccesses()->updateOrCreate(
+            ['sector_id' => $operatorSector->id],
+            ['access_level' => 'technician'],
+        );
+        $operatorBoard->operators()->detach($user->id);
+
+        $this->assertFalse($operatorBoard->operators()->whereKey($user->id)->exists());
+        $this->assertTrue($user->canOperateBoard($managerBoard));
+        $this->assertTrue($user->canOperateBoard($operatorBoard));
+        $this->assertFalse($user->canOperateBoard($outsideBoard));
+        $this->assertEqualsCanonicalizing(
+            [$managerBoard->id, $operatorBoard->id],
+            $user->operationalBoardIds(),
+        );
+
+        $this->actingAs($user)
+            ->get(route('tickets.index'))
+            ->assertOk()
+            ->assertSeeText($managerBoard->name)
+            ->assertSeeText($operatorBoard->name)
+            ->assertDontSeeText($outsideBoard->name);
+
+        $this->actingAs($user)
+            ->get(route('tickets.board.show', ['board' => $operatorBoard, 'view' => 'list']))
+            ->assertOk()
+            ->assertSeeText('Nova demanda')
+            ->assertDontSeeText('Configurar')
+            ->assertDontSee(route('tickets.settings', $operatorBoard, absolute: false), false);
+
+        $this->actingAs($user)
+            ->get(route('tickets.board.show', ['board' => $managerBoard, 'view' => 'list']))
+            ->assertOk()
+            ->assertSeeText('Configurar')
+            ->assertSee(route('tickets.settings', $managerBoard, absolute: false), false);
+
+        $this->actingAs($user)
+            ->get(route('tickets.settings', $operatorBoard))
+            ->assertForbidden();
     }
 
     public function test_legacy_board_query_redirects_to_board_detail(): void
@@ -405,7 +481,7 @@ class TicketBoardAccessTest extends TestCase
             ->assertSeeText('Chamado proprio');
     }
 
-    public function test_operator_access_is_limited_by_selected_board(): void
+    public function test_operator_access_is_limited_by_sector_not_board_operator_assignment(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Multi Quadro',
@@ -418,14 +494,26 @@ class TicketBoardAccessTest extends TestCase
             'slug' => 'ti',
             'is_active' => true,
         ]);
+        $outsideSector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Financeiro',
+            'slug' => 'financeiro',
+            'is_active' => true,
+        ]);
 
         $room = Room::query()->create([
             'sector_id' => $sector->id,
             'name' => 'Sala TI',
             'is_active' => true,
         ]);
+        $outsideRoom = Room::query()->create([
+            'sector_id' => $outsideSector->id,
+            'name' => 'Sala Financeiro',
+            'is_active' => true,
+        ]);
 
         $supportBoard = app(SectorProvisioningService::class)->provision($sector);
+        $outsideBoard = app(SectorProvisioningService::class)->provision($outsideSector);
         $devOperator = User::factory()->create([
             'role' => UserRole::TECHNICIAN,
             'sector_id' => $sector->id,
@@ -442,6 +530,7 @@ class TicketBoardAccessTest extends TestCase
         $supportBoard->operators()->detach([$devOperator->id, $supportOperator->id]);
 
         $devBoard = app(SectorProvisioningService::class)->createAdditionalBoard($sector, 'Desenvolvimento', null, [$devOperator->id]);
+        $devBoard->operators()->detach([$devOperator->id, $supportOperator->id]);
         $requester = User::factory()->create();
 
         $supportTicket = Ticket::query()->create([
@@ -469,9 +558,23 @@ class TicketBoardAccessTest extends TestCase
             'priority' => TicketPriority::MEDIUM,
             'last_activity_at' => now(),
         ]);
+        $outsideTicket = Ticket::query()->create([
+            'sector_id' => $outsideSector->id,
+            'ticket_board_id' => $outsideBoard->id,
+            'ticket_group_id' => $outsideBoard->groups()->firstOrFail()->id,
+            'ticket_status_id' => $outsideBoard->statuses()->firstOrFail()->id,
+            'room_id' => $outsideRoom->id,
+            'title' => 'Chamado financeiro',
+            'description' => 'Fica fora do setor operacional.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
 
         $this->assertTrue($devOperator->canOperateBoard($devBoard));
-        $this->assertFalse($supportOperator->canOperateBoard($devBoard));
+        $this->assertTrue($devOperator->canOperateBoard($supportBoard));
+        $this->assertTrue($supportOperator->canOperateBoard($devBoard));
+        $this->assertFalse($devOperator->canOperateBoard($outsideBoard));
         $this->assertTrue($manager->canOperateBoard($devBoard));
 
         $this->actingAs($devOperator)
@@ -481,6 +584,11 @@ class TicketBoardAccessTest extends TestCase
 
         $this->actingAs($devOperator)
             ->get(route('tickets.show', $supportTicket))
+            ->assertOk()
+            ->assertSeeText('Chamado de suporte');
+
+        $this->actingAs($devOperator)
+            ->get(route('tickets.show', $outsideTicket))
             ->assertForbidden();
 
         $this->actingAs($manager)

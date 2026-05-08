@@ -7,7 +7,25 @@
         <div class="portal-toolbar">
             <div>
                 <p class="text-sm font-semibold text-slate-900">{{ $boards->count() }} quadro(s) disponivel(is)</p>
-                <p class="mt-1 text-sm text-slate-500">Aparecem aqui apenas os quadros atribuidos ao seu perfil.</p>
+                <p class="mt-1 text-sm text-slate-500">Busque, favorite e reabra rapidamente os quadros que voce usa todos os dias.</p>
+            </div>
+
+            <div class="portal-toolbar-group">
+                <button type="button" wire:click="setScope('all')" class="ui-action rounded-2xl px-4 py-2 text-sm {{ $scope === 'all' ? 'ui-action-primary' : 'ui-action-secondary' }}">Todos</button>
+                <button type="button" wire:click="setScope('favorites')" class="ui-action rounded-2xl px-4 py-2 text-sm {{ $scope === 'favorites' ? 'ui-action-primary' : 'ui-action-secondary' }}">Favoritos</button>
+                <button type="button" wire:click="setScope('recent')" class="ui-action rounded-2xl px-4 py-2 text-sm {{ $scope === 'recent' ? 'ui-action-primary' : 'ui-action-secondary' }}">Recentes</button>
+            </div>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+            <label class="text-sm text-slate-600">
+                <span class="mb-1 block font-medium">Buscar quadro</span>
+                <input wire:model.live.debounce.350ms="search" type="text" class="ui-input w-full" placeholder="Nome, setor ou empresa">
+            </label>
+
+            <div class="flex items-end gap-2">
+                <span class="portal-chip">{{ $favoriteCount }} favorito(s)</span>
+                <span class="portal-chip">{{ $recentCount }} recente(s)</span>
             </div>
         </div>
     </x-portal.section-hero>
@@ -27,9 +45,20 @@
                                 <h2 class="mt-2 text-lg font-semibold text-slate-950">{{ $board->name }}</h2>
                             </div>
 
-                            <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                                {{ $board->open_tickets_count }} abertas
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    wire:click="toggleFavorite({{ $board->id }})"
+                                    class="rounded-full border px-3 py-1 text-xs font-semibold transition {{ $board->userPreferences->first()?->is_favorite ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-900' }}"
+                                    title="{{ $board->userPreferences->first()?->is_favorite ? 'Remover dos favoritos' : 'Favoritar quadro' }}"
+                                >
+                                    {{ $board->userPreferences->first()?->is_favorite ? 'Favorito' : 'Favoritar' }}
+                                </button>
+
+                                <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                                    {{ $board->open_tickets_count }} abertas
+                                </span>
+                            </div>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2">
@@ -45,6 +74,10 @@
                         <p class="line-clamp-3 text-sm text-slate-500">
                             {{ $board->description ?: 'Quadro operacional para acompanhamento das demandas deste fluxo.' }}
                         </p>
+
+                        @if ($board->userPreferences->first()?->last_opened_at)
+                            <p class="text-xs font-medium text-slate-400">Aberto recentemente {{ $board->userPreferences->first()->last_opened_at->diffForHumans() }}</p>
+                        @endif
                     </div>
 
                     <div class="mt-5 flex justify-end">

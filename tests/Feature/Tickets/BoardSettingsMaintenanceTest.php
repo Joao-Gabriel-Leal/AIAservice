@@ -26,7 +26,7 @@ class BoardSettingsMaintenanceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_settings_sections_start_closed_and_can_toggle_groups(): void
+    public function test_settings_uses_internal_tabs_and_can_select_groups(): void
     {
         ['sector' => $sector, 'room' => $room] = $this->maintenanceContext();
 
@@ -34,11 +34,25 @@ class BoardSettingsMaintenanceTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(SettingsPage::class)
-            ->assertSet('openSection', null)
+            ->assertSet('openSection', 'board')
             ->call('setOpenSection', 'groups')
             ->assertSet('openSection', 'groups')
             ->call('setOpenSection', 'groups')
-            ->assertSet('openSection', null);
+            ->assertSet('openSection', 'groups');
+    }
+
+    public function test_automation_configuration_is_hidden_while_in_maintenance(): void
+    {
+        ['sector' => $sector, 'room' => $room] = $this->maintenanceContext();
+
+        $admin = $this->sectorAdmin($sector, $room);
+
+        $this->actingAs($admin)
+            ->get(route('tickets.settings'))
+            ->assertOk()
+            ->assertSeeText('Automacoes em manutencao')
+            ->assertDontSeeText('Nova regra')
+            ->assertDontSeeText('Criar automacao');
     }
 
     public function test_group_actions_keep_groups_section_open(): void

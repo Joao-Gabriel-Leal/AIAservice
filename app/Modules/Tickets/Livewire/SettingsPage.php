@@ -37,7 +37,7 @@ class SettingsPage extends Component
 
     public ?int $selectedSectorId = null;
     public ?int $selectedBoardId = null;
-    public ?string $openSection = null;
+    public ?string $openSection = 'board';
     public string $boardName = '';
     public string $boardDescription = '';
     public string $newBoardName = '';
@@ -174,7 +174,7 @@ class SettingsPage extends Component
     public function setOpenSection(string $section): void
     {
         if ($this->isSupportedSection($section)) {
-            $this->openSection = $this->openSection === $section ? null : $section;
+            $this->openSection = $section;
         }
     }
 
@@ -187,7 +187,32 @@ class SettingsPage extends Component
 
     private function isSupportedSection(string $section): bool
     {
-        return in_array($section, ['board', 'groups', 'statuses', 'sla', 'automations', 'fields', 'forms'], true);
+        return in_array($section, array_keys($this->settingsSections()), true);
+    }
+
+    public function automationsUiEnabled(): bool
+    {
+        return (bool) config('tickets.automations_ui_enabled', false);
+    }
+
+    private function settingsSections(): array
+    {
+        $sections = [
+            'board' => 'Quadro',
+            'groups' => 'Etapas',
+            'statuses' => 'Status',
+            'sla' => 'SLA',
+            'fields' => 'Campos',
+            'forms' => 'Formularios',
+        ];
+
+        if ($this->automationsUiEnabled()) {
+            $sections = array_slice($sections, 0, 4, true)
+                + ['automations' => 'Automacoes']
+                + array_slice($sections, 4, null, true);
+        }
+
+        return $sections;
     }
 
     public function saveBoardMeta(): void
@@ -962,12 +987,16 @@ class SettingsPage extends Component
 
     public function addAutomationCondition(): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $this->automationConditions[] = $this->emptyCondition(count($this->automationConditions) + 1);
         $this->keepSectionOpen('automations');
     }
 
     public function removeAutomationCondition(int $index): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         unset($this->automationConditions[$index]);
         $this->automationConditions = array_values($this->automationConditions);
         $this->reindexAutomationConditions();
@@ -975,12 +1004,16 @@ class SettingsPage extends Component
 
     public function addAutomationAction(): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $this->automationActions[] = $this->emptyAction(count($this->automationActions) + 1);
         $this->keepSectionOpen('automations');
     }
 
     public function removeAutomationAction(int $index): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         unset($this->automationActions[$index]);
         $this->automationActions = array_values($this->automationActions);
         $this->reindexAutomationActions();
@@ -988,6 +1021,8 @@ class SettingsPage extends Component
 
     public function startEditingAutomation(int $ruleId): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $rule = TicketAutomationRule::query()->with(['conditions', 'actions'])->findOrFail($ruleId);
         $this->authorize('update', $rule->board);
 
@@ -1027,12 +1062,16 @@ class SettingsPage extends Component
 
     public function cancelAutomationEditing(): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $this->resetAutomationForm();
         $this->keepSectionOpen('automations');
     }
 
     public function saveAutomation(): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $validated = $this->validate([
             'automationForm.name' => ['required', 'string', 'max:120'],
             'automationForm.description' => ['nullable', 'string'],
@@ -1086,6 +1125,8 @@ class SettingsPage extends Component
 
     public function toggleAutomationActive(int $ruleId): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $rule = TicketAutomationRule::query()->findOrFail($ruleId);
         $this->authorize('update', $rule->board);
         $rule->update(['is_active' => ! $rule->is_active]);
@@ -1096,6 +1137,8 @@ class SettingsPage extends Component
 
     public function deleteAutomation(int $ruleId): void
     {
+        abort_unless($this->automationsUiEnabled(), 404);
+
         $rule = TicketAutomationRule::query()->findOrFail($ruleId);
         $this->authorize('update', $rule->board);
         $rule->delete();
@@ -1513,10 +1556,12 @@ class SettingsPage extends Component
             'automationConditionOperators' => TicketAutomationConditionOperator::cases(),
             'automationActionTypes' => $this->supportedAutomationActionTypes(),
             'automationAssignees' => $this->boardAssignees(),
+            'automationsUiEnabled' => $this->automationsUiEnabled(),
+            'settingsSections' => $this->settingsSections(),
             'openingAccessLevels' => TicketFormOpeningAccessLevel::cases(),
         ])->layout('layouts.portal', [
             'title' => 'Configurar quadro',
-            'subtitle' => 'Etapas, SLA, automacoes, campos e formularios do setor.',
+            'subtitle' => 'Etapas, SLA, campos e formularios do setor.',
         ]);
     }
 
@@ -1652,17 +1697,9 @@ class SettingsPage extends Component
             return collect();
         }
 
-        $operatorIds = $board->operators->pluck('id')->all();
-
         return User::query()
             ->where('is_active', true)
-            ->where(function ($query) use ($board, $operatorIds): void {
-                $query->withSectorAccess($board->sector_id, ['sector_admin']);
-
-                if ($operatorIds !== []) {
-                    $query->orWhereIn('id', $operatorIds);
-                }
-            })
+            ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
     }
@@ -1785,7 +1822,7 @@ class SettingsPage extends Component
     private function resetForms(): void
     {
         $this->resetValidation();
-        $this->openSection = null;
+        $this->openSection = 'board';
         $this->groupForm = $this->emptyGroupForm();
         $this->editGroupForm = $this->emptyGroupForm();
         $this->statusForm = $this->emptyStatusForm();

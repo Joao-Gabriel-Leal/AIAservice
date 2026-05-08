@@ -4,13 +4,22 @@ namespace App\Modules\Tickets\Livewire;
 
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\TicketBoard;
+use App\Modules\Tickets\Models\TicketBoardUserPreference;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class BoardDirectoryPage extends Component
 {
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'scope')]
+    public string $scope = 'all';
+
     public function mount(): void
     {
         if (! auth()->user()->hasOperationalAccess()) {
@@ -50,18 +59,47 @@ class BoardDirectoryPage extends Component
 
         return view('livewire.tickets.board-directory-page', [
             'boards' => $boards,
+            'favoriteCount' => $boards->filter(fn (TicketBoard $board) => $this->boardPreference($board)?->is_favorite)->count(),
+            'recentCount' => $boards->filter(fn (TicketBoard $board) => ! is_null($this->boardPreference($board)?->last_opened_at))->count(),
         ])->layout('layouts.portal', [
             'title' => 'Quadros',
             'subtitle' => 'Escolha um quadro para acompanhar demandas em lista, etapas ou kanban.',
         ]);
     }
 
-    private function boards()
+    public function updatedSearch(): void
+    {
+        $this->search = trim($this->search);
+    }
+
+    public function setScope(string $scope): void
+    {
+        $this->scope = in_array($scope, ['all', 'favorites', 'recent'], true) ? $scope : 'all';
+    }
+
+    public function toggleFavorite(int $boardId): void
+    {
+        $board = TicketBoard::query()->where('is_active', true)->findOrFail($boardId);
+
+        abort_unless(auth()->user()->canOperateBoard($board), 403);
+
+        $preference = TicketBoardUserPreference::query()->firstOrCreate([
+            'user_id' => auth()->id(),
+            'ticket_board_id' => $board->id,
+        ]);
+
+        $preference->update(['is_favorite' => ! $preference->is_favorite]);
+    }
+
+    private function boards(): Collection
     {
         $this->provisionMissingManagerBoards();
 
         $query = TicketBoard::query()
-            ->with('sector.company')
+            ->with([
+                'sector.company',
+                'userPreferences' => fn ($preferenceQuery) => $preferenceQuery->where('user_id', auth()->id()),
+            ])
             ->withCount([
                 'tickets as open_tickets_count' => function (Builder $ticketQuery): void {
                     $ticketQuery
@@ -79,10 +117,50 @@ class BoardDirectoryPage extends Component
             $query->whereIn('id', auth()->user()->operationalBoardIds());
         }
 
-        return $query
-            ->orderByDesc('is_default')
-            ->orderBy('name')
-            ->get();
+        $search = trim($this->search);
+
+        if ($search !== '') {
+            $query->where(function (Builder $searchQuery) use ($search): void {
+                $searchQuery
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhereHas('sector', fn (Builder $sectorQuery) => $sectorQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('sector.company', fn (Builder $companyQuery) => $companyQuery->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        $boards = $query->get();
+
+        if ($this->scope === 'favorites') {
+            $boards = $boards->filter(fn (TicketBoard $board) => $this->boardPreference($board)?->is_favorite)->values();
+        }
+
+        if ($this->scope === 'recent') {
+            $boards = $boards->filter(fn (TicketBoard $board) => ! is_null($this->boardPreference($board)?->last_opened_at))->values();
+        }
+
+        return $boards
+            ->sort(function (TicketBoard $first, TicketBoard $second): int {
+                $firstPreference = $this->boardPreference($first);
+                $secondPreference = $this->boardPreference($second);
+
+                return [
+                    $secondPreference?->is_favorite ? 1 : 0,
+                    $secondPreference?->last_opened_at?->getTimestamp() ?? 0,
+                    $second->is_default ? 1 : 0,
+                    mb_strtolower($first->name),
+                ] <=> [
+                    $firstPreference?->is_favorite ? 1 : 0,
+                    $firstPreference?->last_opened_at?->getTimestamp() ?? 0,
+                    $first->is_default ? 1 : 0,
+                    mb_strtolower($second->name),
+                ];
+            })
+            ->values();
+    }
+
+    private function boardPreference(TicketBoard $board): ?TicketBoardUserPreference
+    {
+        return $board->userPreferences->firstWhere('user_id', auth()->id());
     }
 
     private function provisionMissingManagerBoards(): void
@@ -118,6 +196,13 @@ class BoardDirectoryPage extends Component
 
     private function redirectToBoard(TicketBoard $board): void
     {
+        TicketBoardUserPreference::query()->updateOrCreate([
+            'user_id' => auth()->id(),
+            'ticket_board_id' => $board->id,
+        ], [
+            'last_opened_at' => now(),
+        ]);
+
         $this->redirectRoute('tickets.board.show', [
             'board' => $board,
             'view' => request()->query('view', 'list'),

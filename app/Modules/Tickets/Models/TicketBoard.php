@@ -73,6 +73,16 @@ class TicketBoard extends Model
         return $this->hasMany(TicketBoardUserAccess::class);
     }
 
+    public function userPreferences(): HasMany
+    {
+        return $this->hasMany(TicketBoardUserPreference::class);
+    }
+
+    public function savedViews(): HasMany
+    {
+        return $this->hasMany(TicketBoardSavedView::class);
+    }
+
     public function operators(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'ticket_board_user_accesses')

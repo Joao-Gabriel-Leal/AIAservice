@@ -29,6 +29,8 @@ class TicketAutomationTest extends TestCase
 
     public function test_sector_admin_can_create_automation_rule_from_settings_page(): void
     {
+        config(['tickets.automations_ui_enabled' => true]);
+
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
 
         $admin = User::factory()->create([

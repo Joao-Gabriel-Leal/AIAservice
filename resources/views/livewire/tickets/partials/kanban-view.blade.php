@@ -15,6 +15,7 @@
                 $columnTickets = $column['tickets'];
                 $targetGroupId = $column['targetGroupId'];
                 $laneColor = $columnGroup?->color ?: '#94a3b8';
+                $totalTickets = $column['total'] ?? $columnTickets->count();
             @endphp
 
             <section
@@ -45,12 +46,12 @@
                                 @endif
                             </div>
 
-                            <p class="mt-1 text-sm text-slate-500">{{ $columnTickets->count() }} chamado(s)</p>
+                            <p class="mt-1 text-sm text-slate-500">{{ $columnTickets->count() }} de {{ $totalTickets }} chamado(s)</p>
                         </div>
 
                         <span class="ui-tone-chip" style="--ui-pill-color: {{ $laneColor }}">
                             <span class="ui-tone-dot"></span>
-                            {{ $columnTickets->count() }}
+                            {{ $totalTickets }}
                         </span>
                     </div>
                 </div>
@@ -184,6 +185,16 @@
                             Nenhum chamado nesta coluna.
                         </div>
                     @endforelse
+
+                    @if ($column['hasMore'] ?? false)
+                        <button
+                            type="button"
+                            wire:click="loadMoreColumn('{{ $targetGroupId === null ? 'none' : $targetGroupId }}')"
+                            class="ui-action ui-action-secondary w-full rounded-2xl px-4 py-3 text-sm"
+                        >
+                            Carregar mais
+                        </button>
+                    @endif
                 </div>
             </section>
         @endforeach
