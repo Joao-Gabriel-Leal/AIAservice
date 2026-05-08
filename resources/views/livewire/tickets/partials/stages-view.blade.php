@@ -86,7 +86,7 @@
                                 </tr>
 
                                 <tr
-                                    class="ui-row-interactive align-top hover:bg-slate-50"
+                                    class="ui-row-interactive ui-row-zebra {{ $loop->even ? 'ui-row-zebra-alt' : '' }} align-top"
                                     wire:key="ticket-row-stages-{{ $ticket->id }}"
                                     data-board-ticket-id="{{ $ticket->id }}"
                                     x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, {{ $ticket->ticket_group_id ?? 'null' }})"
@@ -270,7 +270,7 @@
                     ></div>
 
                     <div
-                        class="ui-row-interactive flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50"
+                        class="ui-row-interactive ui-row-zebra {{ $loop->even ? 'ui-row-zebra-alt' : '' }} flex items-center justify-between gap-4 px-6 py-4"
                         wire:key="ticket-ungrouped-stages-{{ $ticket->id }}"
                         data-board-ticket-id="{{ $ticket->id }}"
                         x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, null)"

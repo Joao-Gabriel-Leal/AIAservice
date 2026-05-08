@@ -305,7 +305,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($tickets as $ticket)
-                        <tr class="ui-row-interactive hover:bg-slate-50">
+                        <tr class="ui-row-interactive ui-row-zebra {{ $loop->even ? 'ui-row-zebra-alt' : '' }}">
                             <td class="px-6 py-4">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
