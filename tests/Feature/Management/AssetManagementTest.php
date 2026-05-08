@@ -322,7 +322,7 @@ class AssetManagementTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_guest_can_open_public_asset_qr_page_with_main_data(): void
+    public function test_guest_is_redirected_to_login_when_opening_the_asset_qr_page(): void
     {
         $context = $this->assetContext();
         $admin = User::factory()->superAdmin()->create();
@@ -341,6 +341,29 @@ class AssetManagementTest extends TestCase
         ], $admin);
 
         $this->get(route('assets.public.show', $asset))
+            ->assertRedirect(route('login', absolute: false));
+    }
+
+    public function test_authenticated_user_can_open_asset_qr_page_with_main_data(): void
+    {
+        $context = $this->assetContext();
+        $admin = User::factory()->superAdmin()->create();
+        $service = app(AssetMovementService::class);
+
+        $asset = $service->register([
+            'name' => 'Notebook de campo',
+            'description' => 'Uso em visitas externas',
+            'serial_number' => 'QR-100',
+            'brand' => 'Lenovo',
+            'model' => 'ThinkPad',
+            'status' => AssetStatus::EM_USO->value,
+            'current_sector_id' => $context['sectorA']->id,
+            'current_room_id' => $context['roomA']->id,
+            'current_user_id' => $context['collaborator']->id,
+        ], $admin);
+
+        $this->actingAs($admin)
+            ->get(route('assets.public.show', $asset))
             ->assertOk()
             ->assertSee('Dados principais do patrimonio')
             ->assertSee($asset->asset_code)

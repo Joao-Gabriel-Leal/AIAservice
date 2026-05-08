@@ -255,7 +255,9 @@ class LicenseAssignmentService
             return null;
         }
 
-        return User::query()->find($userId);
+        return User::query()
+            ->where('is_active', true)
+            ->find($userId);
     }
 
     private function resolvedAssignedEmail(array $validated, ?User $user): ?string

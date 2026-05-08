@@ -3,7 +3,6 @@
 namespace App\Modules\Licenses\Http\Requests;
 
 use App\Enums\LicenseAssignmentStatus;
-use App\Models\User;
 use App\Modules\Licenses\Models\License;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,9 +17,7 @@ class LicenseAssignmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
-            'assigned_email' => ['nullable', 'email:rfc', 'max:190'],
-            'display_name' => ['nullable', 'string', 'max:160'],
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where(fn ($query) => $query->where('is_active', true))],
             'external_reference' => ['nullable', 'string', 'max:160'],
             'seat_label' => ['nullable', 'string', 'max:120'],
             'status' => ['required', Rule::enum(LicenseAssignmentStatus::class)],
@@ -44,22 +41,6 @@ class LicenseAssignmentRequest extends FormRequest
 
             if (! $license instanceof License) {
                 return;
-            }
-
-            if (! $this->filled('user_id') && ! $this->filled('assigned_email')) {
-                $validator->errors()->add('assigned_email', 'Informe um colaborador interno ou um email para esta atribuicao.');
-            }
-
-            if ($this->filled('user_id')) {
-                $user = User::query()->find($this->integer('user_id'));
-
-                $belongsToSector = $user
-                    ? $user->sectorAccesses()->where('sector_id', $license->sector_id)->exists()
-                    : false;
-
-                if (! $belongsToSector) {
-                    $validator->errors()->add('user_id', 'O colaborador selecionado precisa estar vinculado ao setor desta licenca.');
-                }
             }
 
             $assignedAt = $this->input('assigned_at');

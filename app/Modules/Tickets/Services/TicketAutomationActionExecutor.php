@@ -159,7 +159,7 @@ class TicketAutomationActionExecutor
             ...User::query()
                 ->where(function ($query) use ($ticket) {
                     $query
-                        ->where('global_role', 'super_admin')
+                        ->globalAdmins()
                         ->orWhere(function ($scopedQuery) use ($ticket) {
                             $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']);
                         });

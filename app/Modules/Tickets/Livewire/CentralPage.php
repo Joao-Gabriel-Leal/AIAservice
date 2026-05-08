@@ -12,6 +12,7 @@ use Livewire\Component;
 class CentralPage extends Component
 {
     public ?int $selectedSectorId = null;
+    public string $sectorSearch = '';
 
     protected array $queryString = [
         'selectedSectorId' => ['as' => 'sector', 'except' => null],
@@ -25,11 +26,18 @@ class CentralPage extends Component
     public function selectSector(int $sectorId): void
     {
         $this->selectedSectorId = $this->resolveSectorId($sectorId);
+        $this->dispatch('central-sector-selected', sectorId: $this->selectedSectorId);
+    }
+
+    public function updatedSectorSearch(): void
+    {
+        $this->sectorSearch = trim($this->sectorSearch);
     }
 
     public function render(): View
     {
         $sectors = $this->sectors();
+        $filteredSectors = $this->filteredSectors($sectors);
         $selectedSector = $sectors->firstWhere('id', $this->selectedSectorId) ?? $sectors->first();
         $forms = $selectedSector?->boards
             ?->flatMap(fn ($board) => $board->forms->map(function (TicketForm $form) use ($board) {
@@ -41,6 +49,7 @@ class CentralPage extends Component
 
         return view('livewire.tickets.central-page', [
             'sectors' => $sectors,
+            'filteredSectors' => $filteredSectors,
             'selectedSector' => $selectedSector,
             'forms' => $forms,
         ])->layout('layouts.portal', [
@@ -82,5 +91,25 @@ class CentralPage extends Component
         }
 
         return $sectors->first()?->id;
+    }
+
+    private function filteredSectors(Collection $sectors): Collection
+    {
+        $term = mb_strtolower(trim($this->sectorSearch));
+
+        if ($term === '') {
+            return $sectors;
+        }
+
+        return $sectors
+            ->filter(function (Sector $sector) use ($term) {
+                return collect([
+                    $sector->name,
+                    $sector->company?->name,
+                ])
+                    ->filter()
+                    ->contains(fn (?string $value) => $value !== null && str_contains(mb_strtolower($value), $term));
+            })
+            ->values();
     }
 }

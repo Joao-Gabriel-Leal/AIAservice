@@ -22,12 +22,14 @@ class TicketAttachmentController extends Controller
         }, $attachment->original_name, [
             'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
             'Content-Length' => (string) ($attachment->size ?? strlen($content)),
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
     public function inline(TicketAttachment $attachment): Response
     {
         $this->authorize('view', $attachment->ticket);
+        abort_unless($attachment->canBePreviewedInline(), 404);
 
         $content = $attachment->binaryContent();
 
@@ -37,6 +39,7 @@ class TicketAttachmentController extends Controller
             'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
             'Content-Length' => (string) ($attachment->size ?? strlen($content)),
             'Content-Disposition' => 'inline; filename="'.$attachment->original_name.'"',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 }

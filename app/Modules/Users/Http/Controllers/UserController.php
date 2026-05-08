@@ -19,6 +19,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class UserController extends Controller
@@ -65,6 +67,8 @@ class UserController extends Controller
     {
         $this->authorize('create', User::class);
 
+        $setPasswordUrl = null;
+
         $user = DB::transaction(function () use ($request) {
             $resolved = $this->resolvedData($request);
 
@@ -75,7 +79,13 @@ class UserController extends Controller
             return $user;
         });
 
-        $user->notify(new AccountCreatedNotification($user->email, (bool) $user->must_change_password));
+        $setPasswordUrl = $this->issueSetPasswordUrl($user);
+
+        $user->notify(new AccountCreatedNotification(
+            $user->email,
+            (bool) $user->must_change_password,
+            $setPasswordUrl,
+        ));
 
         return redirect()->route('users.index')->with('status', 'Usuario criado com sucesso.');
     }
@@ -91,6 +101,8 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
+        $wasActive = (bool) $user->is_active;
+
         DB::transaction(function () use ($request, $user) {
             $resolved = $this->resolvedData($request, $user);
 
@@ -98,6 +110,10 @@ class UserController extends Controller
 
             $this->syncSectorAccesses($user, $resolved['sector_accesses']);
         });
+
+        if ($wasActive && ! $user->fresh()->is_active) {
+            $this->invalidateUserAccess($user);
+        }
 
         return redirect()->route('users.index')->with('status', 'Usuario atualizado com sucesso.');
     }
@@ -126,7 +142,7 @@ class UserController extends Controller
 
     private function resolvedData(UserRequest $request, ?User $user = null): array
     {
-        $globalRole = auth()->user()->isSuperAdmin()
+        $globalRole = auth()->user()->isGlobalAdmin()
             ? GlobalUserRole::from((string) $request->input('global_role'))
             : GlobalUserRole::COLLABORATOR;
 
@@ -147,7 +163,7 @@ class UserController extends Controller
         $payload['is_active'] = $request->boolean('is_active', true);
 
         if (! $user) {
-            $payload['password'] = Hash::make('123456');
+            $payload['password'] = Hash::make(Str::random(40));
         } elseif (filled($request->input('password'))) {
             $payload['password'] = Hash::make((string) $request->input('password'));
         }
@@ -171,7 +187,7 @@ class UserController extends Controller
 
     private function syncSectorAccesses(User $user, Collection $sectorAccesses): void
     {
-        $manageableSectorIds = auth()->user()->isSuperAdmin()
+        $manageableSectorIds = auth()->user()->isGlobalAdmin()
             ? null
             : auth()->user()->adminSectorIds();
 
@@ -193,7 +209,7 @@ class UserController extends Controller
     private function availableGlobalRoles(): array
     {
         return collect(GlobalUserRole::cases())
-            ->reject(fn (GlobalUserRole $role) => ! auth()->user()->isSuperAdmin() && $role === GlobalUserRole::SUPER_ADMIN)
+            ->reject(fn (GlobalUserRole $role) => $role === GlobalUserRole::SUPER_ADMIN)
             ->mapWithKeys(fn (GlobalUserRole $role) => [$role->value => $role->label()])
             ->all();
     }
@@ -202,7 +218,7 @@ class UserController extends Controller
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isGlobalAdmin()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
 
@@ -211,15 +227,7 @@ class UserController extends Controller
 
     private function legacySnapshot(GlobalUserRole $globalRole, Collection $sectorAccesses): array
     {
-        if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
-            return [
-                'role' => UserRole::SUPER_ADMIN,
-                'sector_id' => null,
-                'room_id' => null,
-            ];
-        }
-
-        if ($globalRole === GlobalUserRole::DEV) {
+        if (in_array($globalRole, [GlobalUserRole::SUPER_ADMIN, GlobalUserRole::DEV], true)) {
             return [
                 'role' => UserRole::DEV,
                 'sector_id' => null,
@@ -241,5 +249,26 @@ class UserController extends Controller
             'sector_id' => $primaryAccess['sector_id'] ?? null,
             'room_id' => null,
         ];
+    }
+
+    private function issueSetPasswordUrl(User $user): string
+    {
+        $token = Password::broker()->createToken($user);
+
+        return route('password.reset', [
+            'token' => $token,
+            'email' => $user->email,
+        ]);
+    }
+
+    private function invalidateUserAccess(User $user): void
+    {
+        DB::table(config('session.table', 'sessions'))
+            ->where('user_id', $user->id)
+            ->delete();
+
+        $user->forceFill([
+            'remember_token' => Str::random(60),
+        ])->saveQuietly();
     }
 }

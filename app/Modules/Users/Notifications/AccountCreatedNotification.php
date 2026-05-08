@@ -13,6 +13,7 @@ class AccountCreatedNotification extends Notification
     public function __construct(
         private readonly string $email,
         private readonly bool $mustChangePassword,
+        private readonly ?string $setPasswordUrl = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -26,11 +27,16 @@ class AccountCreatedNotification extends Notification
             ->subject('Sua conta foi criada')
             ->greeting("Ola, {$notifiable->name}!")
             ->line('Sua conta no sistema foi criada por um administrador.')
-            ->line("Login de acesso: {$this->email}")
-            ->line('No primeiro acesso, entre com a senha temporaria 123456.');
+            ->line("Login de acesso: {$this->email}");
 
         if ($this->mustChangePassword) {
-            $mail->line('A troca de senha sera obrigatoria no primeiro acesso.');
+            $mail->line('Defina sua senha pelo link abaixo antes de acessar o sistema.');
+        }
+
+        if ($this->setPasswordUrl) {
+            return $mail
+                ->action('Definir senha', $this->setPasswordUrl)
+                ->line('Se o link expirar, use a opcao de esqueci minha senha na tela de login.');
         }
 
         return $mail

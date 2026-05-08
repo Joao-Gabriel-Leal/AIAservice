@@ -34,7 +34,7 @@ class UserIndexQuery
             ->when($filters['sector_id'], fn (Builder $builder, int $sectorId) => $builder->withSectorAccess($sectorId))
             ->latest();
 
-        if (! $user->isSuperAdmin()) {
+        if (! $user->isGlobalAdmin()) {
             $managedSectorIds = $user->adminSectorIds();
 
             $query->where(function (Builder $scopedQuery) use ($managedSectorIds, $user) {

@@ -433,7 +433,7 @@ class DashboardDataBuilder
 
     private function licenseSummary(User $user, ?int $sectorId): array
     {
-        $canView = $user->isSuperAdmin() || $user->hasOperationalAccess();
+        $canView = $user->isGlobalAdmin();
 
         if (! $canView) {
             return [

@@ -20,13 +20,15 @@ class UserRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->route('user');
-        $isUpdate = $user instanceof User;
 
         return [
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:120', Rule::unique('users', 'email')->ignore($user?->id)],
             'password' => ['nullable', 'confirmed', Password::default()],
-            'global_role' => ['required', Rule::enum(GlobalUserRole::class)],
+            'global_role' => ['required', Rule::in([
+                GlobalUserRole::DEV->value,
+                GlobalUserRole::COLLABORATOR->value,
+            ])],
             'sector_accesses' => ['nullable', 'array'],
             'sector_accesses.*' => ['nullable', Rule::enum(SectorAccessLevel::class)],
             'must_change_password' => ['nullable', 'boolean'],
@@ -58,9 +60,13 @@ class UserRequest extends FormRequest
                 $validator->errors()->add('sector_accesses', 'Existem setores informados que nao sao validos.');
             }
 
-            if (! $actor->isSuperAdmin()) {
-                if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
-                    $validator->errors()->add('global_role', 'Gestor nao pode criar ou promover super admins.');
+            if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
+                $validator->errors()->add('global_role', 'Use o perfil Dev para acesso global administrativo.');
+            }
+
+            if (! $actor->isGlobalAdmin()) {
+                if ($globalRole === GlobalUserRole::DEV) {
+                    $validator->errors()->add('global_role', 'Somente administradores globais podem atribuir o perfil Dev.');
                 }
 
                 $unauthorizedSectorIds = $requestedSectorIds->diff($actor->adminSectorIds());

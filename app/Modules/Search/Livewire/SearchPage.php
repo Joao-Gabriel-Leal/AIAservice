@@ -34,7 +34,7 @@ class SearchPage extends Component
 
     public function mount(): void
     {
-        abort_unless(auth()->user()?->isSuperAdmin(), 403);
+        abort_unless(auth()->user()?->isGlobalAdmin(), 403);
 
         $this->types = $this->normalizedTypes($this->types);
         $this->groupLimits = collect(GlobalSearchService::groupKeys())
@@ -116,7 +116,7 @@ class SearchPage extends Component
 
     private function sectorOptions(User $user): Collection
     {
-        $sectorIds = $user->isSuperAdmin() ? null : $user->allSectorIds();
+        $sectorIds = $user->isGlobalAdmin() ? null : $user->allSectorIds();
 
         return Sector::query()
             ->when(is_array($sectorIds), fn ($query) => $query->whereIn('id', $sectorIds === [] ? [0] : $sectorIds))

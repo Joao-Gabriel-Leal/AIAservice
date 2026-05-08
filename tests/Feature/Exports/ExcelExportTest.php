@@ -69,12 +69,12 @@ class ExcelExportTest extends TestCase
         $this->assertSame('PAT-000001', $expected->asset_code);
     }
 
-    public function test_licenses_export_respects_sector_scope_and_search_filters(): void
+    public function test_licenses_export_is_restricted_to_global_admins_and_respects_search_filters(): void
     {
         $company = Company::query()->create(['name' => 'Empresa Licencas Export', 'is_active' => true]);
         $sectorA = Sector::query()->create(['company_id' => $company->id, 'name' => 'TI Export', 'slug' => 'ti-export', 'is_active' => true]);
         $sectorB = Sector::query()->create(['company_id' => $company->id, 'name' => 'RH Export', 'slug' => 'rh-export', 'is_active' => true]);
-        $technician = User::factory()->create(['sector_id' => $sectorA->id, 'role' => UserRole::TECHNICIAN]);
+        $admin = User::factory()->superAdmin()->create();
         $collaborator = User::factory()->create(['sector_id' => $sectorA->id]);
 
         $visibleLicense = License::query()->create([
@@ -107,7 +107,7 @@ class ExcelExportTest extends TestCase
         ]);
 
         $spreadsheet = $this->spreadsheetFromResponse(
-            $this->actingAs($technician)->get(route('licenses.export', [
+            $this->actingAs($admin)->get(route('licenses.export', [
                 'search' => $collaborator->email,
             ])),
         );

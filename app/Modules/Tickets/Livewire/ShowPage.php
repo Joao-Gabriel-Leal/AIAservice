@@ -11,6 +11,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Services\TicketWorkflowService;
+use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
@@ -84,17 +85,16 @@ class ShowPage extends Component
 
         $validated = $this->validate([
             'message' => [$hasFiles ? 'nullable' : 'required', 'string', 'max:4000'],
-            'chatFiles' => ['array', 'max:5'],
-            'chatFiles.*' => ['file', 'max:25600'],
+            ...TicketAttachmentRules::validationRules('chatFiles'),
         ], [
             'message.required' => 'Escreva uma mensagem ou anexe ao menos um arquivo.',
-            'chatFiles.max' => 'Envie no maximo 5 arquivos por mensagem.',
-            'chatFiles.*.max' => 'Cada arquivo pode ter no maximo 25 MB.',
+            ...TicketAttachmentRules::validationMessages('chatFiles'),
         ]);
 
         $message = trim((string) ($validated['message'] ?? ''));
+        $attachments = TicketAttachmentRules::validate($validated['chatFiles'] ?? [], 'chatFiles');
 
-        if ($message === '' && ! $hasFiles) {
+        if ($message === '' && $attachments === []) {
             $this->addError('message', 'Escreva uma mensagem ou anexe ao menos um arquivo.');
 
             return;
@@ -102,7 +102,7 @@ class ShowPage extends Component
 
         $ticket = $this->ticket();
         $this->authorize('comment', $ticket);
-        $workflowService->addMessage(auth()->user(), $ticket, $message, $this->chatFiles);
+        $workflowService->addMessage(auth()->user(), $ticket, $message, $attachments);
 
         $this->reset('message', 'chatFiles');
     }

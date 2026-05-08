@@ -18,11 +18,11 @@ class AdministrationFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_super_admin_can_manage_core_administration_entities(): void
+    public function test_global_admin_can_manage_core_administration_entities(): void
     {
         Notification::fake();
 
-        $admin = User::factory()->superAdmin()->create();
+        $admin = User::factory()->developer()->create();
         $this->actingAs($admin);
 
         $this->post(route('companies.store'), [
@@ -68,8 +68,11 @@ class AdministrationFlowTest extends TestCase
 
         $createdUser = User::query()->where('email', 'tecnico@example.com')->firstOrFail();
 
-        $this->assertTrue(Hash::check('123456', $createdUser->password));
+        $this->assertFalse(Hash::check('123456', $createdUser->password));
         $this->assertTrue($createdUser->must_change_password);
+        $this->assertDatabaseHas('password_reset_tokens', [
+            'email' => $createdUser->email,
+        ]);
 
         $this->assertDatabaseHas('users', [
             'id' => $createdUser->id,
@@ -95,7 +98,7 @@ class AdministrationFlowTest extends TestCase
         );
     }
 
-    public function test_developer_can_manage_rooms_without_full_super_admin_access(): void
+    public function test_developer_has_full_global_administration_access(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Dev Rooms',
@@ -125,7 +128,8 @@ class AdministrationFlowTest extends TestCase
             'name' => 'Sala Dev',
         ]);
 
-        $this->get(route('users.index'))->assertForbidden();
+        $this->get(route('users.index'))->assertOk();
+        $this->get(route('companies.index'))->assertOk();
     }
 
     public function test_sector_admin_cannot_access_other_sector_records(): void

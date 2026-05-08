@@ -71,7 +71,7 @@
                 </div>
 
                 @if ($license->seatsAvailable() > 0)
-                    <details class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:w-[420px]" {{ $errors->has('user_id') || $errors->has('assigned_email') || $errors->has('external_reference') ? 'open' : '' }}>
+                    <details class="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:w-[420px]" {{ $errors->has('user_id') || $errors->has('external_reference') ? 'open' : '' }}>
                         <summary class="cursor-pointer list-none text-sm font-medium text-slate-900">
                             <span class="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-white">Atribuir licenca</span>
                         </summary>
@@ -80,34 +80,25 @@
                             @csrf
 
                             <label class="block">
-                                <span class="mb-2 block text-sm font-medium text-slate-700">Colaborador</span>
-                                <select name="user_id" class="w-full rounded-xl border border-slate-300 px-4 py-3" data-license-assignment-user-select>
-                                    <option value="">Sem colaborador interno</option>
+                                <span class="mb-2 block text-sm font-medium text-slate-700">Usuario ativo</span>
+                                <select name="user_id" class="w-full rounded-xl border border-slate-300 px-4 py-3" data-license-assignment-user-select required>
+                                    <option value="">Selecione um usuario</option>
                                     @foreach ($collaborators as $collaboratorOption)
                                         <option value="{{ $collaboratorOption->id }}" @selected((string) old('user_id') === (string) $collaboratorOption->id)>{{ $collaboratorOption->name }} - {{ $collaboratorOption->email }}</option>
                                     @endforeach
                                 </select>
                             </label>
 
-                            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" data-license-assignment-auto-hint hidden>
-                                O sistema usa automaticamente o nome e o e-mail do colaborador selecionado.
+                            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                                O sistema usa automaticamente o nome e o e-mail do usuario selecionado.
                             </div>
 
-                            <div class="grid gap-3" data-license-assignment-manual-fields>
-                                <label class="block">
-                                    <span class="mb-2 block text-sm font-medium text-slate-700">Email</span>
-                                    <input type="email" name="assigned_email" value="{{ old('assigned_email') }}" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="usuario@empresa.com">
-                                </label>
+                            <label class="block">
+                                <span class="mb-2 block text-sm font-medium text-slate-700">Referencia</span>
+                                <input type="text" name="external_reference" value="{{ old('external_reference') }}" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Codigo SAP, tenant ou id externo">
+                            </label>
 
-                                <label class="block">
-                                    <span class="mb-2 block text-sm font-medium text-slate-700">Referencia</span>
-                                    <input type="text" name="external_reference" value="{{ old('external_reference') }}" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Codigo SAP, tenant ou id externo">
-                                </label>
-                            </div>
-
-                            <p class="text-xs text-slate-500">
-                                Para conta externa, deixe "Sem colaborador interno" e preencha os campos manuais.
-                            </p>
+                            <p class="text-xs text-slate-500">Novas atribuicoes ficam restritas a usuarios ativos do sistema. Registros externos antigos continuam apenas como historico legado.</p>
 
                             <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">Salvar atribuicao</button>
                         </form>
@@ -135,7 +126,7 @@
                                 <td class="py-4 pr-4">
                                     <p class="font-medium text-slate-900">{{ $assignment->resolvedDisplayName() }}</p>
                                     <p class="mt-1 text-xs text-slate-500">
-                                        {{ $assignment->user ? 'Colaborador interno' : 'Conta externa' }}
+                                        {{ $assignment->user ? 'Usuario interno' : 'Registro legado sem usuario interno' }}
                                         @if ($assignment->assigned_at)
                                             - em uso desde {{ $assignment->assigned_at->format('d/m/Y H:i') }}
                                         @endif
@@ -159,9 +150,9 @@
                                                     @csrf
 
                                                     <label class="block">
-                                                        <span class="mb-2 block text-sm font-medium text-slate-700">Novo colaborador</span>
-                                                        <select name="user_id" class="w-full rounded-xl border border-slate-300 px-4 py-3">
-                                                            <option value="">Transferir sem colaborador interno</option>
+                                                        <span class="mb-2 block text-sm font-medium text-slate-700">Novo usuario ativo</span>
+                                                        <select name="user_id" class="w-full rounded-xl border border-slate-300 px-4 py-3" required>
+                                                            <option value="">Selecione um usuario</option>
                                                             @foreach ($collaborators as $collaboratorOption)
                                                                 <option value="{{ $collaboratorOption->id }}">{{ $collaboratorOption->name }} - {{ $collaboratorOption->email }}</option>
                                                             @endforeach
@@ -169,15 +160,11 @@
                                                     </label>
 
                                                     <label class="block">
-                                                        <span class="mb-2 block text-sm font-medium text-slate-700">Novo email</span>
-                                                        <input type="email" name="assigned_email" value="{{ old('assigned_email') }}" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="{{ $assignment->resolvedAssignedEmail() ?: 'usuario@empresa.com' }}">
-                                                        <span class="mt-2 block text-xs text-slate-500">Se voce escolher um colaborador e deixar este campo em branco, o sistema usa o email atual dele.</span>
-                                                    </label>
-
-                                                    <label class="block">
                                                         <span class="mb-2 block text-sm font-medium text-slate-700">Referencia</span>
                                                         <input type="text" name="external_reference" value="{{ old('external_reference', $assignment->external_reference) }}" class="w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Codigo SAP, tenant ou id externo">
                                                     </label>
+
+                                                    <p class="text-xs text-slate-500">A transferencia passa a usar o nome e o e-mail do usuario selecionado automaticamente.</p>
 
                                                     <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">Salvar transferencia</button>
                                                 </form>
@@ -300,45 +287,4 @@
             </div>
         </section>
     </div>
-
-    @push('scripts')
-        <script>
-            (() => {
-                const initializeLicenseAssignmentForms = () => {
-                    document.querySelectorAll('[data-license-assignment-form]').forEach((form) => {
-                        if (form.dataset.licenseAssignmentBound === 'true') {
-                            return;
-                        }
-
-                        const collaboratorSelect = form.querySelector('[data-license-assignment-user-select]');
-                        const autoHint = form.querySelector('[data-license-assignment-auto-hint]');
-                        const manualFields = form.querySelector('[data-license-assignment-manual-fields]');
-
-                        if (!collaboratorSelect || !autoHint || !manualFields) {
-                            return;
-                        }
-
-                        const manualInputs = manualFields.querySelectorAll('input, select, textarea');
-
-                        const syncForm = () => {
-                            const hasInternalCollaborator = collaboratorSelect.value !== '';
-
-                            autoHint.hidden = !hasInternalCollaborator;
-                            manualFields.hidden = hasInternalCollaborator;
-
-                            manualInputs.forEach((input) => {
-                                input.disabled = hasInternalCollaborator;
-                            });
-                        };
-
-                        collaboratorSelect.addEventListener('change', syncForm);
-                        form.dataset.licenseAssignmentBound = 'true';
-                        syncForm();
-                    });
-                };
-
-                document.addEventListener('DOMContentLoaded', initializeLicenseAssignmentForms);
-            })();
-        </script>
-    @endpush
 </x-layouts.portal>

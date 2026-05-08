@@ -747,8 +747,13 @@ class LegacyUserImportService
 
     private function isSuperAdmin(User $user): bool
     {
-        return $this->enumValue($user->global_role) === GlobalUserRole::SUPER_ADMIN->value
-            || $this->enumValue($user->role) === UserRole::SUPER_ADMIN->value;
+        return in_array($this->enumValue($user->global_role), [
+            GlobalUserRole::SUPER_ADMIN->value,
+            GlobalUserRole::DEV->value,
+        ], true) || in_array($this->enumValue($user->role), [
+            UserRole::SUPER_ADMIN->value,
+            UserRole::DEV->value,
+        ], true);
     }
 
     private function enumValue(mixed $value): ?string

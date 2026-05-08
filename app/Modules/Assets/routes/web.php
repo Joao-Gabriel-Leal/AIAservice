@@ -3,9 +3,8 @@
 use App\Modules\Assets\Http\Controllers\AssetController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('a/{asset}', [AssetController::class, 'publicShow'])->name('assets.public.show');
-
 Route::middleware('auth')->group(function () {
+    Route::get('a/{asset}', [AssetController::class, 'publicShow'])->name('assets.public.show');
     Route::get('assets', [AssetController::class, 'index'])->name('assets.index');
     Route::get('assets/export', [AssetController::class, 'export'])->name('assets.export');
     Route::get('assets/create', [AssetController::class, 'create'])->name('assets.create');

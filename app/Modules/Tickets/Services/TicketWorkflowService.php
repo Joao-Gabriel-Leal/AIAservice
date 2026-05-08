@@ -23,6 +23,7 @@ use App\Modules\Tickets\Notifications\TicketMessageNotification;
 use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
 use App\Modules\Tickets\Notifications\TicketTimeEntryReviewedNotification;
 use App\Modules\Tickets\Notifications\TicketUpdateNotification;
+use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -655,8 +656,10 @@ class TicketWorkflowService
         ?TicketMessage $message = null,
         string $source = 'opening',
     ): Collection {
-        return collect($attachments)
-            ->filter(fn ($file) => $file instanceof UploadedFile)
+        $field = $message ? 'chatFiles' : 'attachments';
+        $validatedAttachments = TicketAttachmentRules::validate($attachments, $field);
+
+        return collect($validatedAttachments)
             ->map(function (UploadedFile $file) use ($ticket, $actor, $message, $source) {
                 $content = file_get_contents($file->getRealPath());
 
@@ -667,6 +670,7 @@ class TicketWorkflowService
                 $extension = $file->extension() ?: $file->getClientOriginalExtension() ?: 'bin';
                 $path = "tickets/{$ticket->id}/".Str::uuid().".{$extension}";
                 $attachment = new TicketAttachment;
+                $mimeType = $file->getMimeType() ?: $file->getClientMimeType() ?: 'application/octet-stream';
 
                 return TicketAttachment::query()->create([
                     'ticket_id' => $ticket->id,
@@ -676,7 +680,7 @@ class TicketWorkflowService
                     'disk' => 'database',
                     'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
+                    'mime_type' => $mimeType,
                     'size' => $file->getSize() ?: strlen($content),
                     'content' => $attachment->encodeContentForStorage($content),
                 ]);
@@ -710,7 +714,7 @@ class TicketWorkflowService
             ->where('is_active', true)
             ->where(function (Builder $query) use ($ticket) {
                 $query
-                    ->where('global_role', 'super_admin')
+                    ->globalAdmins()
                     ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin']));
             })
             ->whereNotIn('id', $exceptUserIds)
@@ -819,7 +823,7 @@ class TicketWorkflowService
             ...User::query()
                 ->where(function ($query) use ($ticket) {
                     $query
-                        ->where('global_role', 'super_admin')
+                        ->globalAdmins()
                         ->orWhere(function ($scopedQuery) use ($ticket) {
                             $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']);
                         });

@@ -9,26 +9,26 @@ class AssetPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function view(User $user, Asset $asset): bool
     {
-        return $user->isSuperAdmin() || $asset->current_user_id === $user->id;
+        return $user->isGlobalAdmin() || $asset->current_user_id === $user->id;
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function update(User $user, Asset $asset): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function move(User $user, Asset $asset): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 }

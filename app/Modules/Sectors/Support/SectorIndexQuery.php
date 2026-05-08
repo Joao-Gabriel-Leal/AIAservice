@@ -22,7 +22,7 @@ class SectorIndexQuery
     {
         return Sector::query()
             ->with('company')
-            ->when($user->isSectorAdmin() && ! $user->isSuperAdmin(), fn (Builder $query) => $query->whereIn('id', $user->adminSectorIds()))
+            ->when($user->isSectorAdmin() && ! $user->isGlobalAdmin(), fn (Builder $query) => $query->whereIn('id', $user->adminSectorIds()))
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $query->where(function (Builder $searchQuery) use ($filters) {
                     $searchQuery

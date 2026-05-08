@@ -29,7 +29,7 @@
             </div>
         @endif
 
-        @if (auth()->user()->isSuperAdmin())
+        @if (auth()->user()->isGlobalAdmin())
             <label class="block md:col-span-2">
                 <span class="mb-2 block text-sm font-medium text-slate-700">Perfil global</span>
                 <select name="global_role" class="w-full rounded-2xl border border-slate-300 px-4 py-3" required>

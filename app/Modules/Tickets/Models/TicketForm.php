@@ -40,7 +40,7 @@ class TicketForm extends Model
             $query->whereHas('board', fn (Builder $boardQuery) => $boardQuery->where('sector_id', $sectorId));
         }
 
-        if ($user->isSuperAdmin()) {
+        if ($user->isGlobalAdmin()) {
             return $query;
         }
 
