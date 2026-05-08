@@ -344,7 +344,7 @@ class ShowPage extends Component
             'knowledgeArticleIdsUsed' => $knowledgeArticleIdsUsed,
             'helpfulKnowledgeArticles' => $helpfulKnowledgeArticles,
         ])->layout('layouts.portal', [
-            'title' => "Chamado #{$ticket->id}",
+            'title' => $ticket->publicReference().' - '.$ticket->title,
             'subtitle' => $canViewOperationalHistory
                 ? 'Detalhes, historico e conversa do chamado.'
                 : 'Detalhes e conversa do chamado.',

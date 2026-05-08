@@ -25,7 +25,7 @@ abstract class BaseTicketNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject($this->title)
+            ->subject($this->title.' - '.$this->ticket->publicReference())
             ->line($this->message)
             ->action($this->actionLabel(), route('tickets.show', $this->ticket));
     }
@@ -34,6 +34,7 @@ abstract class BaseTicketNotification extends Notification
     {
         return [
             'ticket_id' => $this->ticket->id,
+            'ticket_reference_code' => $this->ticket->publicReference(),
             'title' => $this->title,
             'message' => $this->message,
             'url' => route('tickets.show', $this->ticket, absolute: false),

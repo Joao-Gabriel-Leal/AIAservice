@@ -402,6 +402,7 @@ class TicketBoardAccessTest extends TestCase
         $this->assertSame($requester->id, $ticket->requester_id);
         $this->assertSame($assignee->id, $ticket->assignee_id);
         $this->assertSame('Homolog', $ticket->fieldValues()->where('ticket_field_id', $field->id)->first()?->primitive_value);
+        $this->assertMatchesRegularExpression('/^TM-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/', $ticket->reference_code);
     }
 
     public function test_user_without_operational_access_is_redirected_to_central(): void

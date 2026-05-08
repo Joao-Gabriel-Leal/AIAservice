@@ -9,7 +9,7 @@
             <h2 class="text-lg font-semibold text-slate-900">Origem do conhecimento</h2>
             <p class="mt-1 text-sm text-slate-600">
                 Este artigo esta sendo criado a partir do chamado
-                <a href="{{ route('tickets.show', $sourceTicket) }}" class="font-medium text-sky-700 hover:text-sky-800">#{{ $sourceTicket->id }} - {{ $sourceTicket->title }}</a>.
+                <a href="{{ route('tickets.show', $sourceTicket) }}" class="font-medium text-sky-700 hover:text-sky-800">{{ $sourceTicket->fullReference() }} - {{ $sourceTicket->title }}</a>.
             </p>
             <p class="mt-3 text-sm text-slate-600">
                 @if ($canPublish)

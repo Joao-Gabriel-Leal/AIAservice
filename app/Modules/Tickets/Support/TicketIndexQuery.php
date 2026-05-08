@@ -4,11 +4,10 @@ namespace App\Modules\Tickets\Support;
 
 use App\Enums\TicketPriority;
 use App\Models\User;
-use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Models\TicketField;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 
 class TicketIndexQuery
 {
@@ -58,7 +57,7 @@ class TicketIndexQuery
             ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem', 'fieldValues.field.options'])
             ->when($filters['sector_id'], fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->when($filters['board_id'] ?? null, fn (Builder $query, int $boardId) => $query->where('ticket_board_id', $boardId))
-            ->when(($filters['title'] ?? '') !== '', fn (Builder $query) => $query->where('title', 'like', '%'.$filters['title'].'%'))
+            ->when(($filters['title'] ?? '') !== '', fn (Builder $query) => $this->applyTicketReferenceOrTitleFilter($query, (string) $filters['title']))
             ->when($filters['group_id'] ?? null, fn (Builder $query, int $groupId) => $query->where('ticket_group_id', $groupId))
             ->when(($filters['requester'] ?? '') !== '', function (Builder $query) use ($filters) {
                 $query->whereHas('requester', function (Builder $requesterQuery) use ($filters) {
@@ -235,5 +234,23 @@ class TicketIndexQuery
         }
 
         return $query;
+    }
+
+    public function applyTicketReferenceOrTitleFilter(Builder $query, string $term): Builder
+    {
+        $term = trim($term);
+        $normalizedReference = TicketReferenceCode::normalizeLookup($term);
+
+        return $query->where(function (Builder $searchQuery) use ($term, $normalizedReference): void {
+            $searchQuery->where('title', 'like', '%'.$term.'%');
+
+            if ($normalizedReference !== '') {
+                $searchQuery->orWhere('reference_lookup', 'like', $normalizedReference.'%');
+            }
+
+            if (ctype_digit($term)) {
+                $searchQuery->orWhere('id', (int) $term);
+            }
+        });
     }
 }

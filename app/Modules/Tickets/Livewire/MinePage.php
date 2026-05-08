@@ -5,6 +5,7 @@ namespace App\Modules\Tickets\Livewire;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Support\TicketReferenceCode;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -69,7 +70,20 @@ class MinePage extends Component
                 'rating',
             ])
             ->when(trim($this->titleFilter) !== '', function (Builder $query): void {
-                $query->where('title', 'like', '%'.trim($this->titleFilter).'%');
+                $term = trim($this->titleFilter);
+                $normalizedReference = TicketReferenceCode::normalizeLookup($term);
+
+                $query->where(function (Builder $searchQuery) use ($term, $normalizedReference): void {
+                    $searchQuery->where('title', 'like', '%'.$term.'%');
+
+                    if ($normalizedReference !== '') {
+                        $searchQuery->orWhere('reference_lookup', 'like', $normalizedReference.'%');
+                    }
+
+                    if (ctype_digit($term)) {
+                        $searchQuery->orWhere('id', (int) $term);
+                    }
+                });
             })
             ->when($this->selectedSectorId, function (Builder $query): void {
                 $query->where('sector_id', $this->selectedSectorId);

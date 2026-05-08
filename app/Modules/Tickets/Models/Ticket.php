@@ -9,6 +9,7 @@ use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleTicketUsage;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
+use App\Modules\Tickets\Support\TicketReferenceCode;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -72,6 +73,8 @@ class Ticket extends Model
     protected static function booted(): void
     {
         static::creating(function (Ticket $ticket): void {
+            $ticket->ensureReferenceCode();
+
             if ($ticket->board_sort_order !== null || ! $ticket->ticket_board_id) {
                 return;
             }
@@ -94,6 +97,29 @@ class Ticket extends Model
             ->orderBy('board_sort_order')
             ->orderBy('created_at')
             ->orderBy('id');
+    }
+
+    public function publicReference(): string
+    {
+        if (filled($this->reference_code)) {
+            return (string) $this->reference_code;
+        }
+
+        return $this->technicalReference();
+    }
+
+    public function fullReference(): string
+    {
+        if (! $this->id || $this->publicReference() === $this->technicalReference()) {
+            return $this->publicReference();
+        }
+
+        return $this->publicReference().' ('.$this->technicalReference().')';
+    }
+
+    public function technicalReference(): string
+    {
+        return '#'.($this->id ?? '?');
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
@@ -337,5 +363,30 @@ class Ticket extends Model
         }
 
         return $this->timeEntries()->with('user')->get();
+    }
+
+    private function ensureReferenceCode(): void
+    {
+        if (filled($this->reference_code) && blank($this->reference_lookup)) {
+            $this->reference_lookup = TicketReferenceCode::normalizeLookup($this->reference_code);
+        }
+
+        if (filled($this->reference_code) && filled($this->reference_lookup)) {
+            return;
+        }
+
+        $sectorSlug = Sector::query()
+            ->whereKey($this->sector_id)
+            ->value('slug');
+
+        $reference = TicketReferenceCode::generateUniqueForSectorSlug(
+            $sectorSlug,
+            fn (string $lookup): bool => static::withTrashed()
+                ->where('reference_lookup', $lookup)
+                ->exists(),
+        );
+
+        $this->reference_code = $reference['reference_code'];
+        $this->reference_lookup = $reference['reference_lookup'];
     }
 }

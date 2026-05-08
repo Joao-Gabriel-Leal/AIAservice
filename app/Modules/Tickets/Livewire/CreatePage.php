@@ -187,7 +187,9 @@ class CreatePage extends Component
             'priority' => $validated['priority'],
         ], $this->visibleDynamicValues($visibleFields), $attachments);
 
-        return redirect()->route('tickets.show', $ticket)->with('status', 'Chamado criado com sucesso.');
+        return redirect()
+            ->route('tickets.show', $ticket)
+            ->with('status', 'Chamado '.$ticket->fullReference().' criado com sucesso.');
     }
 
     public function render(): View

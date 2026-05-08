@@ -30,7 +30,15 @@
         :description="$ticket->description ?: 'Sem descricao adicional.'"
     >
         <x-slot:meta>
-            <span class="portal-chip">Chamado #{{ $ticket->id }}</span>
+            <span class="portal-chip">{{ $ticket->publicReference() }}</span>
+            <span class="portal-chip">ID interno {{ $ticket->technicalReference() }}</span>
+            <div
+                x-data="{ copied: false, timeoutId: null, copy() { if (! navigator.clipboard) { return; } navigator.clipboard.writeText(@js($ticket->publicReference())); this.copied = true; window.clearTimeout(this.timeoutId); this.timeoutId = window.setTimeout(() => this.copied = false, 1600); } }"
+                class="inline-flex items-center gap-2"
+            >
+                <button type="button" class="portal-chip transition hover:bg-slate-100" @click="copy()">Copiar codigo</button>
+                <span x-cloak x-show="copied" class="text-xs font-medium text-emerald-700">Copiado</span>
+            </div>
             <x-sector-badge :sector="$ticket->sector" mode="chip" />
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">{{ $ticket->priority?->label() }}</span>
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">

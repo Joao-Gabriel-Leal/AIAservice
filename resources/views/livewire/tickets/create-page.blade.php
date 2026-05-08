@@ -232,6 +232,7 @@
                                     @forelse ($suggestions['similar_tickets'] as $ticketSuggestion)
                                         <a href="{{ $ticketSuggestion['url'] }}" class="block rounded-2xl border border-white bg-white p-4 transition hover:shadow-sm" style="border-color: color-mix(in srgb, var(--ticket-sector-display) 10%, white);">
                                             <p class="text-sm font-semibold text-slate-900">{{ $ticketSuggestion['title'] }}</p>
+                                            <p class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{{ $ticketSuggestion['reference'] }}</p>
                                             <p class="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
                                                 {{ $ticketSuggestion['sector_name'] ?? 'Sem setor' }}
                                                 @if ($ticketSuggestion['resolved_at'])
@@ -254,6 +255,7 @@
                                     @forelse ($suggestions['previous_solutions'] as $solutionSuggestion)
                                         <a href="{{ $solutionSuggestion['url'] }}" class="block rounded-2xl border border-white bg-white p-4 transition hover:shadow-sm" style="border-color: color-mix(in srgb, var(--ticket-sector-display) 10%, white);">
                                             <p class="text-sm font-semibold text-slate-900">{{ $solutionSuggestion['title'] }}</p>
+                                            <p class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">{{ $solutionSuggestion['reference'] }}</p>
                                             <p class="mt-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
                                                 {{ $solutionSuggestion['sector_name'] ?? 'Sem setor' }}
                                                 @if ($solutionSuggestion['resolved_at'])

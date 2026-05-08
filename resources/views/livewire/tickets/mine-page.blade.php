@@ -24,8 +24,8 @@
     <x-portal.filter-bar title="Filtros pessoais" description="A lista ignora chamados de outros solicitantes, mesmo quando voce tem acesso operacional ao setor.">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
-                <span class="mb-1 block font-medium">Titulo</span>
-                <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por titulo">
+                <span class="mb-1 block font-medium">ID ou titulo</span>
+                <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por codigo ou titulo">
             </label>
 
             <label class="text-sm text-slate-600">
@@ -92,6 +92,7 @@
                     <tr class="ui-row-interactive hover:bg-slate-50">
                         <td class="px-6 py-4">
                             <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                            <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
                             @if ($needsRating)
                                 <span class="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Avalie o atendimento</span>

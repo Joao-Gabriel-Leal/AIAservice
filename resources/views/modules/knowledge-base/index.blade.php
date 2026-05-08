@@ -77,7 +77,7 @@
                                 <h2 class="text-xl font-semibold text-slate-900">{{ $article->title }}</h2>
                                 <p class="mt-2 text-sm text-slate-600">{{ $article->summary }}</p>
                                 @if ($article->sourceTicket)
-                                    <p class="mt-3 text-xs text-sky-700">Originado do chamado #{{ $article->sourceTicket->id }}</p>
+                                    <p class="mt-3 text-xs text-sky-700">Originado do chamado {{ $article->sourceTicket->fullReference() }}</p>
                                 @endif
                                 <p class="mt-3 text-xs text-slate-500">
                                     Atualizado em {{ $article->updated_at?->format('d/m/Y H:i') }}

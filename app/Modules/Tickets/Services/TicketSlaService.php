@@ -175,7 +175,7 @@ class TicketSlaService
             $this->sendNotification(
                 $ticket,
                 'SLA de primeira resposta proximo do vencimento',
-                "O chamado #{$ticket->id} esta perto de estourar o SLA de primeira resposta.",
+                'O chamado '.$ticket->fullReference().' esta perto de estourar o SLA de primeira resposta.',
             );
 
             $ticket->forceFill(['first_response_warning_sent_at' => $checkedAt])->save();
@@ -192,7 +192,7 @@ class TicketSlaService
             $this->sendNotification(
                 $ticket,
                 'SLA de resolucao proximo do vencimento',
-                "O chamado #{$ticket->id} esta perto de estourar o SLA de resolucao.",
+                'O chamado '.$ticket->fullReference().' esta perto de estourar o SLA de resolucao.',
             );
 
             $ticket->forceFill(['resolution_warning_sent_at' => $checkedAt])->save();
@@ -216,7 +216,7 @@ class TicketSlaService
             $this->sendNotification(
                 $ticket,
                 'SLA de primeira resposta estourado',
-                "O chamado #{$ticket->id} ultrapassou o SLA de primeira resposta.",
+                'O chamado '.$ticket->fullReference().' ultrapassou o SLA de primeira resposta.',
             );
         }
     }
@@ -238,7 +238,7 @@ class TicketSlaService
             $this->sendNotification(
                 $ticket,
                 'SLA de resolucao estourado',
-                "O chamado #{$ticket->id} ultrapassou o SLA de resolucao.",
+                'O chamado '.$ticket->fullReference().' ultrapassou o SLA de resolucao.',
             );
         }
     }

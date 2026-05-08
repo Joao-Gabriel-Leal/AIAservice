@@ -27,7 +27,7 @@
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_260px]">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Buscar na fila</span>
-                <input wire:model.live.debounce.400ms="search" type="text" class="ui-input w-full" placeholder="Titulo, solicitante ou responsavel">
+                <input wire:model.live.debounce.400ms="search" type="text" class="ui-input w-full" placeholder="Codigo, titulo, solicitante ou responsavel">
             </label>
 
             <label class="text-sm text-slate-600">
@@ -61,6 +61,7 @@
                     <tr class="ui-row-interactive hover:bg-slate-50">
                         <td class="px-6 py-4">
                             <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                            <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
                         </td>
                         <td class="px-6 py-4 text-slate-600">

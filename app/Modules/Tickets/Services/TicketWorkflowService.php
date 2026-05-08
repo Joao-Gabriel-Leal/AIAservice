@@ -67,7 +67,7 @@ class TicketWorkflowService
         ]);
         $this->notifyUsers(
             $ticket,
-            new TicketCreatedNotification($ticket, 'Novo chamado criado', "O chamado #{$ticket->id} foi criado."),
+            new TicketCreatedNotification($ticket, 'Novo chamado criado', 'O chamado '.$ticket->fullReference().' foi criado.'),
         );
 
         $ticket = $ticket->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee']);
@@ -429,7 +429,7 @@ class TicketWorkflowService
         ]);
         $this->notifyUsers(
             $ticket,
-            new TicketMessageNotification($ticket, 'Nova mensagem no chamado', "Ha uma nova mensagem no chamado #{$ticket->id}."),
+            new TicketMessageNotification($ticket, 'Nova mensagem no chamado', 'Ha uma nova mensagem no chamado '.$ticket->fullReference().'.'),
             [$actor->id],
         );
 
@@ -501,7 +501,7 @@ class TicketWorkflowService
         $this->ticketSlaService->evaluateTicket($ticket);
         $this->notifyUsers(
             $ticket,
-            new TicketUpdateNotification($ticket, 'Chamado finalizado pelo solicitante', "O chamado #{$ticket->id} foi finalizado pelo solicitante."),
+            new TicketUpdateNotification($ticket, 'Chamado finalizado pelo solicitante', 'O chamado '.$ticket->fullReference().' foi finalizado pelo solicitante.'),
             [$actor->id],
         );
         $this->notifyRequesterToRate($ticket);
@@ -567,7 +567,7 @@ class TicketWorkflowService
         $this->ticketSlaService->evaluateTicket($ticket);
         $this->notifyUsers(
             $ticket,
-            new TicketUpdateNotification($ticket, 'Chamado reaberto pelo solicitante', "O chamado #{$ticket->id} foi reaberto pelo solicitante."),
+            new TicketUpdateNotification($ticket, 'Chamado reaberto pelo solicitante', 'O chamado '.$ticket->fullReference().' foi reaberto pelo solicitante.'),
             [$actor->id],
         );
         $this->handleAutomationEventSafely($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
@@ -760,7 +760,7 @@ class TicketWorkflowService
         $notification = new TicketRatingRequestNotification(
             $ticket,
             'Chamado encerrado',
-            "O chamado #{$ticket->id} foi encerrado. Avalie o atendimento quando puder.",
+            'O chamado '.$ticket->fullReference().' foi encerrado. Avalie o atendimento quando puder.',
         );
 
         try {
@@ -847,14 +847,14 @@ class TicketWorkflowService
             return new TicketUpdateNotification(
                 $ticket,
                 'Chamado reaberto',
-                "O chamado #{$ticket->id} foi reaberto e voltou para atendimento.",
+                'O chamado '.$ticket->fullReference().' foi reaberto e voltou para atendimento.',
             );
         }
 
         if (($original['assignee_id'] ?? null) !== $ticket->assignee_id) {
             $message = $ticket->assignee
-                ? "O chamado #{$ticket->id} agora esta atribuido para {$ticket->assignee->name}."
-                : "O chamado #{$ticket->id} ficou sem responsavel definido.";
+                ? 'O chamado '.$ticket->fullReference().' agora esta atribuido para '.$ticket->assignee->name.'.'
+                : 'O chamado '.$ticket->fullReference().' ficou sem responsavel definido.';
 
             return new TicketUpdateNotification($ticket, 'Responsavel do chamado atualizado', $message);
         }
@@ -865,7 +865,7 @@ class TicketWorkflowService
             return new TicketUpdateNotification(
                 $ticket,
                 'Etapa do chamado atualizada',
-                "O chamado #{$ticket->id} foi movido para {$target}.",
+                'O chamado '.$ticket->fullReference().' foi movido para '.$target.'.',
             );
         }
 
@@ -873,7 +873,7 @@ class TicketWorkflowService
             return new TicketUpdateNotification(
                 $ticket,
                 'Prioridade do chamado atualizada',
-                "O chamado #{$ticket->id} agora esta com prioridade {$ticket->priority?->label()}.",
+                'O chamado '.$ticket->fullReference().' agora esta com prioridade '.$ticket->priority?->label().'.',
             );
         }
 

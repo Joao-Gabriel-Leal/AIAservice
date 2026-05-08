@@ -77,6 +77,7 @@ class TicketCreationSuggestionService
             ->get()
             ->map(fn (Ticket $ticket) => [
                 'id' => $ticket->id,
+                'reference' => $ticket->publicReference(),
                 'title' => $ticket->title,
                 'url' => route('tickets.show', $ticket),
                 'sector_name' => $ticket->sector?->name,
@@ -108,6 +109,7 @@ class TicketCreationSuggestionService
 
                 return [
                     'id' => $ticket->id,
+                    'reference' => $ticket->publicReference(),
                     'title' => $ticket->title,
                     'url' => route('tickets.show', $ticket),
                     'sector_name' => $ticket->sector?->name,

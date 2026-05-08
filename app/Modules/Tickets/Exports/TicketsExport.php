@@ -29,6 +29,8 @@ class TicketsExport
             new ExcelSheetData(
                 'Atendimentos',
                 [
+                    'Codigo',
+                    'ID interno',
                     'Titulo',
                     'Setor',
                     'Empresa',
@@ -41,6 +43,8 @@ class TicketsExport
                 ],
                 $this->tickets->map(function ($ticket) {
                     return [
+                        $ticket->publicReference(),
+                        $ticket->technicalReference(),
                         $ticket->title,
                         $ticket->sector?->name ?? 'Sem setor',
                         $ticket->sector?->company?->name ?? '',

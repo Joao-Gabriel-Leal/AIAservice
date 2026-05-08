@@ -20,6 +20,7 @@ use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Models\TicketSlaPolicy;
 use App\Modules\Tickets\Models\TicketStatus;
+use App\Modules\Tickets\Support\TicketReferenceCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -148,15 +149,24 @@ class GlobalSearchService
         $like = '%'.$termLower.'%';
         $prefix = $termLower.'%';
         $isNumeric = ctype_digit($term);
+        $normalizedReference = TicketReferenceCode::normalizeLookup($term);
+        $hasReferenceTerm = $normalizedReference !== '';
+        $referencePrefix = $normalizedReference.'%';
 
         return Ticket::query()
             ->visibleTo($user)
             ->with(['sector.company', 'requester', 'assignee', 'group'])
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
-            ->where(function (Builder $query) use ($like, $isNumeric, $term) {
+            ->where(function (Builder $query) use ($like, $isNumeric, $term, $hasReferenceTerm, $referencePrefix) {
                 if ($isNumeric) {
                     $query->where('tickets.id', (int) $term)
-                        ->orWhereRaw('LOWER(tickets.title) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(tickets.title) LIKE ?', [$like]);
+
+                    if ($hasReferenceTerm) {
+                        $query->orWhereRaw('UPPER(COALESCE(tickets.reference_lookup, \'\')) LIKE ?', [$referencePrefix]);
+                    }
+
+                    $query
                         ->orWhereRaw('LOWER(COALESCE(tickets.description, \'\')) LIKE ?', [$like])
                         ->orWhereHas('requester', function (Builder $requesterQuery) use ($like) {
                             $requesterQuery
@@ -185,16 +195,32 @@ class GlobalSearchService
                             ->whereRaw('LOWER(name) LIKE ?', [$like])
                             ->orWhereRaw('LOWER(email) LIKE ?', [$like]);
                     });
+
+                if ($hasReferenceTerm) {
+                    $query->orWhereRaw('UPPER(COALESCE(tickets.reference_lookup, \'\')) LIKE ?', [$referencePrefix]);
+                }
             })
             ->select('tickets.*')
             ->selectRaw(
                 '(
+                    CASE WHEN ? = 1 AND UPPER(COALESCE(tickets.reference_lookup, \'\')) = ? THEN 120 ELSE 0 END +
+                    CASE WHEN ? = 1 AND UPPER(COALESCE(tickets.reference_lookup, \'\')) LIKE ? THEN 70 ELSE 0 END +
                     CASE WHEN ? = 1 AND tickets.id = ? THEN 100 ELSE 0 END +
                     CASE WHEN LOWER(tickets.title) = ? THEN 60 ELSE 0 END +
                     CASE WHEN LOWER(tickets.title) LIKE ? THEN 30 ELSE 0 END +
                     CASE WHEN LOWER(COALESCE(tickets.description, \'\')) LIKE ? THEN 12 ELSE 0 END
                 ) as search_relevance',
-                [$isNumeric ? 1 : 0, $isNumeric ? (int) $term : 0, $termLower, $prefix, $like]
+                [
+                    $hasReferenceTerm ? 1 : 0,
+                    $normalizedReference,
+                    $hasReferenceTerm ? 1 : 0,
+                    $referencePrefix,
+                    $isNumeric ? 1 : 0,
+                    $isNumeric ? (int) $term : 0,
+                    $termLower,
+                    $prefix,
+                    $like,
+                ]
             )
             ->orderByDesc('search_relevance')
             ->orderByDesc('last_activity_at')
@@ -204,8 +230,8 @@ class GlobalSearchService
             ->map(function (Ticket $ticket) use ($term) {
                 return [
                     'type' => 'tickets',
-                    'title' => $ticket->title,
-                    'subtitle' => 'Chamado #'.$ticket->id.' - '.($ticket->sector?->name ?? 'Sem setor'),
+                    'title' => $ticket->publicReference().' - '.$ticket->title,
+                    'subtitle' => $ticket->fullReference().' - '.($ticket->sector?->name ?? 'Sem setor'),
                     'snippet' => $this->excerpt($ticket->description, $term),
                     'url' => route('tickets.show', $ticket),
                     'meta' => [
@@ -258,7 +284,7 @@ class GlobalSearchService
 
                 return [
                     'type' => 'messages',
-                    'title' => 'Mensagem no chamado #'.$ticket->id,
+                    'title' => 'Mensagem em '.$ticket->publicReference(),
                     'subtitle' => $ticket->title,
                     'snippet' => $this->excerpt($message->message, $term),
                     'url' => route('tickets.show', $ticket),
@@ -318,7 +344,7 @@ class GlobalSearchService
 
                 return [
                     'type' => 'history',
-                    'title' => 'Historico do chamado #'.$ticket->id,
+                    'title' => 'Historico de '.$ticket->publicReference(),
                     'subtitle' => $ticket->title,
                     'snippet' => $this->excerpt($log->description ?: $log->event, $term),
                     'url' => route('tickets.show', $ticket),

@@ -11,7 +11,7 @@ class TicketTimeEntryReviewedNotification extends BaseTicketNotification
         parent::__construct(
             $ticket,
             'Apontamento manual revisado',
-            "O seu apontamento manual no chamado #{$ticket->id} foi {$statusLabel}.",
+            'O seu apontamento manual no chamado '.$ticket->fullReference().' foi '.$statusLabel.'.',
         );
     }
 

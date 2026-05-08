@@ -11,7 +11,7 @@ class TicketManualTimeEntryPendingApprovalNotification extends BaseTicketNotific
         parent::__construct(
             $ticket,
             'Apontamento manual pendente',
-            "O chamado #{$ticket->id} recebeu um apontamento manual aguardando aprovacao.",
+            'O chamado '.$ticket->fullReference().' recebeu um apontamento manual aguardando aprovacao.',
         );
     }
 
