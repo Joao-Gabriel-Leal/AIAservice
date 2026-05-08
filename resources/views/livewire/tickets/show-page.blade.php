@@ -1,4 +1,4 @@
-<div class="space-y-6">
+<div class="ticket-cockpit space-y-6">
     @php
         $messageCount = $messages->count();
         $latestMessage = $messages->last();
@@ -16,6 +16,14 @@
         $detailFields = $canViewOperationalHistory ? $fields : $requesterFields;
         $detailFieldsCount = $detailFields->count();
         $internalAudienceUsersById = $internalAudienceUsers->keyBy('id');
+        $slaItems = $canViewOperationalHistory ? collect($ticket->slaSummary()) : collect();
+        $activeSlaItems = $slaItems->reject(fn ($slaItem) => $slaItem['state'] === 'na')->values();
+        $primarySlaItem = $activeSlaItems->first();
+        $statusLabel = $ticket->group?->name ?? $ticket->status?->name ?? 'Sem etapa';
+        $statusColor = $ticket->group?->color ?: ($ticket->status?->color ?: '#2563eb');
+        $priorityLabel = $ticket->priority?->label() ?? 'Sem prioridade';
+        $requesterName = $ticket->requester?->name ?? 'Nao informado';
+        $assigneeName = $ticket->assignee?->name ?? 'Nao atribuido';
 
         if ($latestActivity) {
             $latestActivitySummary = $latestActivity->description ?: $latestActivity->event;
@@ -26,40 +34,79 @@
         }
     @endphp
 
-    <x-portal.page-intro
-        variant="detail"
-        :eyebrow="($ticket->sector?->company?->name ?? 'Sem empresa').' / '.($ticket->sector?->name ?? 'Sem setor')"
-        :title="$ticket->title"
-        :description="$ticket->description ?: 'Sem descricao adicional.'"
-    >
-        <x-slot:meta>
-            <span class="portal-chip">{{ $ticket->publicReference() }}</span>
-            <span class="portal-chip">ID interno {{ $ticket->technicalReference() }}</span>
+    <section class="ticket-cockpit-hero">
+        <div class="ticket-cockpit-hero-main">
+            <div class="ticket-cockpit-reference-row">
+                <span class="ticket-cockpit-reference">{{ $ticket->publicReference() }}</span>
+                <span class="ticket-cockpit-status" style="--ticket-status-color: {{ $statusColor }}">
+                    <span></span>
+                    {{ $statusLabel }}
+                </span>
+                <span class="ticket-cockpit-priority">{{ $priorityLabel }}</span>
+            </div>
+
+            <div>
+                <p class="ticket-cockpit-kicker">{{ $ticket->sector?->company?->name ?? 'Sem empresa' }} / {{ $ticket->sector?->name ?? 'Sem setor' }}</p>
+                <h1 class="ticket-cockpit-title">{{ $ticket->title }}</h1>
+                <p class="ticket-cockpit-description">{{ $ticket->description ?: 'Sem descricao adicional.' }}</p>
+            </div>
+
+            <div class="ticket-cockpit-meta-grid">
+                <div>
+                    <span>Solicitante</span>
+                    <strong>{{ $requesterName }}</strong>
+                </div>
+                <div>
+                    <span>Responsavel</span>
+                    <strong>{{ $assigneeName }}</strong>
+                </div>
+                <div>
+                    <span>Catalogo</span>
+                    <strong>{{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</strong>
+                </div>
+                <div>
+                    <span>Ultima atividade</span>
+                    <strong>{{ $ticket->last_activity_at?->diffForHumans() ?? $ticket->updated_at?->diffForHumans() ?? 'Agora' }}</strong>
+                </div>
+            </div>
+        </div>
+
+        <aside class="ticket-cockpit-hero-side">
             <div
                 x-data="{ copied: false, timeoutId: null, copy() { if (! navigator.clipboard) { return; } navigator.clipboard.writeText(@js($ticket->publicReference())); this.copied = true; window.clearTimeout(this.timeoutId); this.timeoutId = window.setTimeout(() => this.copied = false, 1600); } }"
-                class="inline-flex items-center gap-2"
+                class="ticket-cockpit-copy-card"
             >
-                <button type="button" class="portal-chip transition hover:bg-slate-100" @click="copy()">Copiar codigo</button>
-                <span x-cloak x-show="copied" class="text-xs font-medium text-emerald-700">Copiado</span>
+                <span>ID interno {{ $ticket->technicalReference() }}</span>
+                <button type="button" @click="copy()">Copiar codigo</button>
+                <small x-cloak x-show="copied">Copiado</small>
             </div>
-            <x-sector-badge :sector="$ticket->sector" mode="chip" />
-            <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">{{ $ticket->priority?->label() }}</span>
-            <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
-                {{ $ticket->group?->name ?? 'Sem etapa' }}
-            </span>
-            <span class="portal-chip">Solicitante: {{ $ticket->requester?->name ?? 'Nao informado' }}</span>
-            <span class="portal-chip">Responsavel: {{ $ticket->assignee?->name ?? 'Nao atribuido' }}</span>
-            <span class="portal-chip">Catalogo: {{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</span>
-            <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
-            <span class="portal-chip">{{ $attachmentCount }} {{ $attachmentLabel }}</span>
-            @if ($canViewInternalUpdates)
-                <span class="portal-chip">{{ $internalMessageCount }} {{ $internalMessageLabel }}</span>
+
+            <div class="ticket-cockpit-score-grid">
+                <div>
+                    <strong>{{ $messageCount }}</strong>
+                    <span>{{ $messageLabel }}</span>
+                </div>
+                @if ($canViewInternalUpdates)
+                    <div>
+                        <strong>{{ $internalMessageCount }}</strong>
+                        <span>internas</span>
+                    </div>
+                @endif
+                <div>
+                    <strong>{{ $attachmentCount }}</strong>
+                    <span>{{ $attachmentLabel }}</span>
+                </div>
+            </div>
+
+            @if ($primarySlaItem)
+                <div class="ticket-cockpit-sla-card">
+                    <span>SLA em foco</span>
+                    <strong>{{ $primarySlaItem['label'] }}</strong>
+                    <small>{{ $primarySlaItem['due_at']?->format('d/m/Y H:i') ?? 'Sem prazo definido' }}</small>
+                </div>
             @endif
-            @if ($canViewOperationalHistory)
-                <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
-            @endif
-        </x-slot:meta>
-    </x-portal.page-intro>
+        </aside>
+    </section>
 
     @if (session('status'))
         <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-sm" role="status">
@@ -67,24 +114,32 @@
         </div>
     @endif
 
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px] xl:items-start">
-        <div class="space-y-6">
+    <div class="ticket-cockpit-layout">
+        <div class="ticket-cockpit-feed space-y-6">
             <div
                 wire:poll.5s
                 class="space-y-6"
                 x-data="ticketConversation({{ $ticket->id }})"
                 x-init="boot()"
             >
-                <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <section class="ticket-channel-card ticket-channel-card-public">
                     <div class="ticket-conversation-surface">
                         <div class="ticket-chat-header">
-                            <div>
+                            <div class="ticket-channel-heading">
+                                <div class="ticket-channel-icon ticket-channel-icon-public">
+                                    <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
+                                        <path d="M7 10.5h10M7 14h6m-8.2 5.2 2.3-2.1H17a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v5.1a4 4 0 0 0 1.8 3.4v2.7Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </div>
+                                <div>
                                 <p class="ticket-panel-kicker">Fluxo de conversa</p>
-                                <h3 class="ticket-panel-title ticket-chat-title">Conversa</h3>
-                                <p class="ticket-panel-copy">Mensagens do atendimento em tempo real, com foco em leitura e resposta rapida.</p>
+                                    <h3 class="ticket-panel-title ticket-chat-title">Conversa com solicitante</h3>
+                                    <p class="ticket-panel-copy">Canal visivel para quem abriu o chamado.</p>
+                                </div>
                             </div>
 
                             <div class="ticket-chat-chip-group">
+                                <span class="ticket-visibility-chip ticket-visibility-chip-public">Visivel para o solicitante</span>
                                 <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
                                 @if ($latestMessage?->created_at)
                                     <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
@@ -99,7 +154,10 @@
                                     $messageAttachments = $ticketMessage->attachments ?? collect();
                                     $hasMessageText = trim((string) $ticketMessage->message) !== '';
                                 @endphp
-                                <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
+                                <div class="ticket-chat-message-row {{ $isOwnMessage ? 'ticket-chat-message-row-self' : 'ticket-chat-message-row-other' }}">
+                                    @unless ($isOwnMessage)
+                                        <x-user-avatar :user="$ticketMessage->user" size="xs" class="ticket-chat-avatar" />
+                                    @endunless
                                     <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
                                         <div class="ticket-chat-meta {{ $isOwnMessage ? 'ticket-chat-meta-self' : '' }}">
                                             <div class="ticket-chat-author-row">
@@ -145,6 +203,9 @@
                                             </div>
                                         @endif
                                     </article>
+                                    @if ($isOwnMessage)
+                                        <x-user-avatar :user="$ticketMessage->user" size="xs" class="ticket-chat-avatar" />
+                                    @endif
                                 </div>
                             @empty
                                 <div class="ticket-chat-empty">
@@ -163,6 +224,23 @@
 
                                 <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
                                 @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                                @if ($canUseMessageTemplates && $publicMessageTemplates->isNotEmpty())
+                                    <div class="ticket-template-strip">
+                                        <div>
+                                            <p class="ticket-template-strip-title">Templates</p>
+                                            <p class="ticket-template-strip-copy">Clique para inserir no texto.</p>
+                                        </div>
+
+                                        <div class="ticket-template-pill-list">
+                                            @foreach ($publicMessageTemplates as $template)
+                                                <button type="button" wire:click="applyMessageTemplate({{ $template->id }})" class="ticket-template-pill {{ $template->isPersonal() ? 'ticket-template-pill-personal' : '' }}">
+                                                    {{ $template->name }}
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
 
                                 <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
                                     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -199,16 +277,24 @@
                                 <div class="ticket-chat-composer-footer">
                                     <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
 
-                                    <button
-                                        type="submit"
-                                        wire:loading.attr="disabled"
-                                        wire:loading.class="ui-loading"
-                                        wire:target="sendMessage,chatFiles"
-                                        class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
-                                    >
-                                        <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
-                                        <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
-                                    </button>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        @if ($canUseMessageTemplates)
+                                            <button type="button" wire:click="openPersonalTemplateForm('public')" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
+                                                Salvar template
+                                            </button>
+                                        @endif
+
+                                        <button
+                                            type="submit"
+                                            wire:loading.attr="disabled"
+                                            wire:loading.class="ui-loading"
+                                            wire:target="sendMessage,chatFiles"
+                                            class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
+                                        >
+                                            <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
+                                            <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                         @else
@@ -222,16 +308,24 @@
                 </section>
 
                 @if ($canViewInternalUpdates)
-                    <section class="ui-panel rounded-3xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm">
+                    <section class="ticket-channel-card ticket-channel-card-internal">
                         <div class="ticket-conversation-surface">
                             <div class="ticket-chat-header">
-                                <div>
+                                <div class="ticket-channel-heading">
+                                    <div class="ticket-channel-icon ticket-channel-icon-internal">
+                                        <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
+                                            <path d="M8 11V8a4 4 0 1 1 8 0v3m-9.2 0h10.4A1.8 1.8 0 0 1 19 12.8v5.4a1.8 1.8 0 0 1-1.8 1.8H6.8A1.8 1.8 0 0 1 5 18.2v-5.4A1.8 1.8 0 0 1 6.8 11Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                                        </svg>
+                                    </div>
+                                    <div>
                                     <p class="ticket-panel-kicker">Canal restrito</p>
                                     <h3 class="ticket-panel-title ticket-chat-title">Atualizacoes internas</h3>
-                                    <p class="ticket-panel-copy">Espaco privado para operadores e gestores alinharem contexto do chamado sem expor o solicitante.</p>
+                                        <p class="ticket-panel-copy">Espaco privado para operadores e gestores alinharem diagnostico.</p>
+                                    </div>
                                 </div>
 
                                 <div class="ticket-chat-chip-group">
+                                    <span class="ticket-visibility-chip ticket-visibility-chip-internal">Restrito a equipe</span>
                                     <span class="portal-chip">{{ $internalMessageCount }} {{ $internalMessageLabel }}</span>
                                     @if ($latestInternalMessage?->created_at)
                                         <span class="portal-chip">Ultima atualizacao {{ $latestInternalMessage->created_at->diffForHumans() }}</span>
@@ -250,7 +344,10 @@
                                             ->filter()
                                             ->values();
                                     @endphp
-                                    <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
+                                    <div class="ticket-chat-message-row {{ $isOwnMessage ? 'ticket-chat-message-row-self' : 'ticket-chat-message-row-other' }}">
+                                        @unless ($isOwnMessage)
+                                            <x-user-avatar :user="$ticketMessage->user" size="xs" class="ticket-chat-avatar" />
+                                        @endunless
                                         <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
                                             <div class="ticket-chat-meta {{ $isOwnMessage ? 'ticket-chat-meta-self' : '' }}">
                                                 <div class="ticket-chat-author-row">
@@ -307,6 +404,9 @@
                                                 </div>
                                             @endif
                                         </article>
+                                        @if ($isOwnMessage)
+                                            <x-user-avatar :user="$ticketMessage->user" size="xs" class="ticket-chat-avatar" />
+                                        @endif
                                     </div>
                                 @empty
                                     <div class="ticket-chat-empty">
@@ -325,6 +425,23 @@
 
                                     <textarea wire:model="internalMessage" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Registre uma atualizacao interna"></textarea>
                                     @error('internalMessage') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                                    @if ($canUseMessageTemplates && $internalMessageTemplates->isNotEmpty())
+                                        <div class="ticket-template-strip ticket-template-strip-internal">
+                                            <div>
+                                                <p class="ticket-template-strip-title">Templates internos</p>
+                                                <p class="ticket-template-strip-copy">Insere sem marcar usuarios automaticamente.</p>
+                                            </div>
+
+                                            <div class="ticket-template-pill-list">
+                                                @foreach ($internalMessageTemplates as $template)
+                                                    <button type="button" wire:click="applyMessageTemplate({{ $template->id }})" class="ticket-template-pill {{ $template->isPersonal() ? 'ticket-template-pill-personal' : '' }}">
+                                                        {{ $template->name }}
+                                                    </button>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
 
                                     @if ($internalMentionableUsers->isNotEmpty())
                                         <div class="rounded-2xl border border-dashed border-amber-300 bg-white/80 px-4 py-3">
@@ -389,16 +506,24 @@
                                     <div class="ticket-chat-composer-footer">
                                         <p class="text-xs text-slate-500">As notificacoes vao somente para os operadores ou gestores que voce marcar.</p>
 
-                                        <button
-                                            type="submit"
-                                            wire:loading.attr="disabled"
-                                            wire:loading.class="ui-loading"
-                                            wire:target="sendInternalUpdate,internalChatFiles"
-                                            class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
-                                        >
-                                            <span wire:loading.remove wire:target="sendInternalUpdate,internalChatFiles">Registrar atualizacao interna</span>
-                                            <span wire:loading wire:target="sendInternalUpdate,internalChatFiles">Enviando...</span>
-                                        </button>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            @if ($canUseMessageTemplates)
+                                                <button type="button" wire:click="openPersonalTemplateForm('internal')" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
+                                                    Salvar template
+                                                </button>
+                                            @endif
+
+                                            <button
+                                                type="submit"
+                                                wire:loading.attr="disabled"
+                                                wire:loading.class="ui-loading"
+                                                wire:target="sendInternalUpdate,internalChatFiles"
+                                                class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
+                                            >
+                                                <span wire:loading.remove wire:target="sendInternalUpdate,internalChatFiles">Publicar atualizacao</span>
+                                                <span wire:loading wire:target="sendInternalUpdate,internalChatFiles">Enviando...</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </form>
                             @else
@@ -656,16 +781,52 @@
             </section>
         </div>
 
-        <aside class="space-y-6 xl:sticky xl:top-24">
+        <aside class="ticket-cockpit-aside space-y-5 xl:sticky xl:top-6">
+            @if ($canUseMessageTemplates)
+                <section class="ticket-side-card ticket-side-card-templates">
+                    <div class="ticket-panel-heading ticket-panel-heading-spread">
+                        <div>
+                            <p class="ticket-panel-kicker">Atalhos</p>
+                            <h3 class="ticket-panel-title text-[1.2rem]">Templates pessoais</h3>
+                            <p class="ticket-panel-copy">Seus textos ficam disponiveis neste quadro.</p>
+                        </div>
+
+                        <button type="button" wire:click="openPersonalTemplateForm('public')" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs font-medium">
+                            Novo
+                        </button>
+                    </div>
+
+                    <div class="mt-4 space-y-2">
+                        @forelse ($personalMessageTemplates as $template)
+                            <div class="ticket-personal-template-row">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-slate-900">{{ $template->name }}</p>
+                                    <p class="text-xs text-slate-500">{{ \App\Modules\Tickets\Models\TicketMessageTemplate::channelLabel($template->channel) }}</p>
+                                </div>
+                                <div class="flex shrink-0 gap-1">
+                                    <button type="button" wire:click="applyMessageTemplate({{ $template->id }})" class="ticket-mini-action">Usar</button>
+                                    <button type="button" wire:click="startEditingPersonalTemplate({{ $template->id }})" class="ticket-mini-action">Editar</button>
+                                    <button type="button" wire:click="deletePersonalTemplate({{ $template->id }})" class="ticket-mini-action ticket-mini-action-danger">Excluir</button>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="ticket-side-empty">
+                                Nenhum template pessoal ainda. Salve uma resposta frequente direto do composer.
+                            </div>
+                        @endforelse
+                    </div>
+                </section>
+            @endif
+
             <section
                 class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
                 wire:loading.class="ui-loading"
                 wire:target="updateFixedField,updateDynamicField"
             >
                 <div class="ticket-panel-heading">
-                    <p class="ticket-panel-kicker">Visao rapida</p>
-                    <h3 class="ticket-panel-title text-[1.45rem]">Painel do chamado</h3>
-                    <p class="ticket-panel-copy">O essencial do chamado fica aqui, mais compacto e facil de bater o olho.</p>
+                    <p class="ticket-panel-kicker">Detalhes do chamado</p>
+                    <h3 class="ticket-panel-title text-[1.45rem]">Painel operacional</h3>
+                    <p class="ticket-panel-copy">O essencial para conduzir o atendimento sem perder contexto.</p>
                 </div>
 
                 <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -1207,6 +1368,67 @@
             @endif
         </aside>
     </div>
+
+    @if ($canUseMessageTemplates && $showPersonalTemplateForm)
+        <div class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
+            <div class="ui-panel w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">
+                            {{ $editingPersonalTemplateId ? 'Editar template pessoal' : 'Salvar template pessoal' }}
+                        </h3>
+                        <p class="mt-1 text-sm text-slate-500">Use para respostas recorrentes neste quadro. Templates pessoais so aparecem para voce.</p>
+                    </div>
+
+                    <button
+                        type="button"
+                        wire:click="cancelPersonalTemplateForm"
+                        class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm"
+                    >
+                        Fechar
+                    </button>
+                </div>
+
+                <form wire:submit="savePersonalTemplate" class="mt-6 space-y-4">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Canal</span>
+                            <select wire:model="personalTemplateForm.channel" class="ui-native-select w-full">
+                                <option value="public">Conversa com solicitante</option>
+                                <option value="internal">Atualizacao interna</option>
+                            </select>
+                            @error('personalTemplateForm.channel') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Nome do template</span>
+                            <input type="text" wire:model="personalTemplateForm.name" class="ui-input w-full" placeholder="Ex: Pedir mais detalhes">
+                            @error('personalTemplateForm.name') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
+                    </div>
+
+                    <label class="text-sm text-slate-600">
+                        <span class="mb-2 block font-medium">Texto</span>
+                        <textarea wire:model="personalTemplateForm.body" rows="8" class="ui-input w-full resize-y" placeholder="Texto reutilizavel"></textarea>
+                        @error('personalTemplateForm.body') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    </label>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <p class="text-xs text-slate-500">Ao aplicar, o texto entra no composer vazio ou e anexado ao final da mensagem atual.</p>
+
+                        <div class="flex flex-wrap gap-3">
+                            <button type="button" wire:click="cancelPersonalTemplateForm" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-medium">
+                                Salvar template
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 
     @if ($canViewTimeTracking && $showTimeEntryForm)
         <div class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">

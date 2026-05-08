@@ -239,7 +239,9 @@
 
                         <div class="space-y-3">
                             @foreach ($board->groups as $group)
-                                @php($impact = $groupImpacts[$group->id] ?? ['tickets_count' => 0, 'catalog_count' => 0])
+                                @php
+                                    $impact = $groupImpacts[$group->id] ?? ['tickets_count' => 0, 'catalog_count' => 0];
+                                @endphp
                                 <div class="rounded-2xl border border-slate-200 p-4">
                                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                         <div class="min-w-0">
@@ -483,8 +485,8 @@
                                         <button type="button" wire:click="addAutomationCondition" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Adicionar</button>
                                     </div>
 
-                                    <?php foreach ($automationConditions as $automationConditionIndex => $condition): ?>
-                                        <?php
+                                    @foreach ($automationConditions as $automationConditionIndex => $condition)
+                                        @php
                                             $conditionField = data_get($condition, 'field');
                                             $conditionOperator = data_get($condition, 'operator');
                                             $isBooleanField = in_array($conditionField, [
@@ -502,7 +504,7 @@
                                                 \App\Enums\TicketAutomationConditionField::GROUP_ID->value => $board->groups->map(fn ($group) => ['value' => $group->id, 'label' => $group->name])->all(),
                                                 default => [],
                                             };
-                                        ?>
+                                        @endphp
 
                                         <div class="rounded-2xl border border-slate-200 p-3" wire:key="automation-condition-{{ $automationConditionIndex }}">
                                             <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
@@ -544,7 +546,7 @@
                                                 </div>
                                             @endif
                                         </div>
-                                    <?php endforeach; ?>
+                                    @endforeach
 
                                     @error('automationConditions') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
                                 </div>
@@ -555,8 +557,10 @@
                                         <button type="button" wire:click="addAutomationAction" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Adicionar</button>
                                     </div>
 
-                                    <?php foreach ($automationActions as $automationActionIndex => $action): ?>
-                                        @php($actionType = data_get($action, 'action'))
+                                    @foreach ($automationActions as $automationActionIndex => $action)
+                                        @php
+                                            $actionType = data_get($action, 'action');
+                                        @endphp
                                         <div class="rounded-2xl border border-slate-200 p-3" wire:key="automation-action-{{ $automationActionIndex }}">
                                             <div class="grid gap-3 md:grid-cols-[1fr_auto]">
                                                 <select wire:model.live="automationActions.{{ $automationActionIndex }}.action" class="rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
@@ -584,7 +588,7 @@
                                                 @endif
                                             </div>
                                         </div>
-                                    <?php endforeach; ?>
+                                    @endforeach
 
                                     @error('automationActions') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
                                 </div>
@@ -747,8 +751,8 @@
                                     @if ($board->fields->isEmpty())
                                         <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">Crie campos primeiro para montar formularios.</div>
                                     @else
-                                        <?php foreach ($board->fields as $formField): ?>
-                                            <?php
+                                        @foreach ($board->fields as $formField)
+                                            @php
                                                 $visibleFieldIds = array_map('strval', $formForm['field_ids'] ?? []);
                                                 $isVisibleInForm = in_array((string) $formField->id, $visibleFieldIds, true);
                                                 $visibilityCondition = data_get($formForm, "visibility_conditions.{$formField->id}", []);
@@ -759,7 +763,7 @@
                                                     return in_array((string) $candidateField->id, $visibleFieldIds, true)
                                                         && $candidateField->id !== $formField->id;
                                                 })->values();
-                                            ?>
+                                            @endphp
                                             <div class="rounded-2xl border border-slate-200 p-3">
                                                 <div class="flex flex-col gap-3">
                                                     <div>
@@ -825,7 +829,7 @@
                                                     </div>
                                                 @endif
                                             </div>
-                                        <?php endforeach; ?>
+                                        @endforeach
                                     @endif
                                 </div>
 
@@ -848,7 +852,12 @@
                                 <div class="mb-4"><h4 class="text-base font-semibold text-slate-900">Formularios existentes</h4><p class="text-sm text-slate-500">Formulario ativo nao aparece na central sozinho: ele precisa estar vinculado a um item de catalogo ativo.</p></div>
                                 <div class="space-y-3">
                                     @forelse ($board->forms as $form)
-                                        @php($publishedCatalogCount = $board->catalogItems->where('ticket_form_id', $form->id)->where('is_active', true)->count())
+                                        @php
+                                            $publishedCatalogCount = $board->catalogItems
+                                                ->where('ticket_form_id', $form->id)
+                                                ->where('is_active', true)
+                                                ->count();
+                                        @endphp
                                         <div class="rounded-2xl border border-slate-200 p-4">
                                             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                                 <div>
@@ -928,6 +937,101 @@
                         </section>
                     </div>
                 </div>
+        </section>
+
+        <section x-show="openSection === 'templates'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">Templates de mensagem</h3>
+                    <p class="text-sm text-slate-500">Respostas oficiais do quadro para padronizar conversa com solicitantes e notas internas.</p>
+                </div>
+                <span class="text-sm text-slate-500">Compartilhados</span>
+            </div>
+
+            <div x-show="openSection === 'templates'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
+                @php
+                    $sharedTemplates = $board->messageTemplates->whereNull('user_id')->values();
+                    $templateChannelLabels = [
+                        \App\Modules\Tickets\Models\TicketMessageTemplate::CHANNEL_PUBLIC => 'Conversa com solicitante',
+                        \App\Modules\Tickets\Models\TicketMessageTemplate::CHANNEL_INTERNAL => 'Atualizacao interna',
+                    ];
+                @endphp
+
+                <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                    <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                        <div class="mb-4">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h4 class="text-base font-semibold text-slate-900">{{ $editingTemplateId ? 'Editando template' : 'Novo template compartilhado' }}</h4>
+                                @if ($editingTemplateId)
+                                    <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">Registro existente</span>
+                                @endif
+                            </div>
+                            <p class="mt-1 text-sm text-slate-500">Operadores do quadro podem aplicar estes textos dentro do chamado.</p>
+                        </div>
+
+                        <form wire:submit="saveTemplate" class="space-y-4">
+                            <label class="block text-sm text-slate-600">
+                                <span class="mb-2 block font-medium">Canal</span>
+                                <select wire:model="templateForm.channel" class="ui-native-select w-full">
+                                    @foreach ($templateChannelLabels as $channelValue => $channelLabel)
+                                        <option value="{{ $channelValue }}">{{ $channelLabel }}</option>
+                                    @endforeach
+                                </select>
+                                @error('templateForm.channel') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            </label>
+
+                            <label class="block text-sm text-slate-600">
+                                <span class="mb-2 block font-medium">Nome</span>
+                                <input type="text" wire:model="templateForm.name" class="ui-input w-full" placeholder="Ex: Pedir print do erro">
+                                @error('templateForm.name') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            </label>
+
+                            <label class="block text-sm text-slate-600">
+                                <span class="mb-2 block font-medium">Mensagem</span>
+                                <textarea wire:model="templateForm.body" rows="7" class="ui-input w-full resize-y" placeholder="Texto que sera inserido no composer"></textarea>
+                                @error('templateForm.body') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            </label>
+
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+                                <input type="checkbox" wire:model="templateForm.is_active" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                                Template ativo
+                            </label>
+
+                            <div class="flex flex-wrap gap-2">
+                                <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">{{ $editingTemplateId ? 'Salvar template' : 'Criar template' }}</button>
+                                @if ($editingTemplateId)
+                                    <button type="button" wire:click="cancelEditingTemplate" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
+                                @endif
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="space-y-3">
+                        @forelse ($sharedTemplates as $template)
+                            <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="font-medium text-slate-900">{{ $template->name }}</p>
+                                            <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">{{ $templateChannelLabels[$template->channel] ?? 'Canal' }}</span>
+                                            <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $template->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $template->is_active ? 'Ativo' : 'Inativo' }}</span>
+                                        </div>
+                                        <p class="mt-2 line-clamp-3 whitespace-pre-line text-sm text-slate-500">{{ $template->body }}</p>
+                                    </div>
+
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" wire:click="startEditingTemplate({{ $template->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Editar</button>
+                                        <button type="button" wire:click="toggleTemplateActive({{ $template->id }})" class="ui-action rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">{{ $template->is_active ? 'Desativar' : 'Ativar' }}</button>
+                                        <button type="button" wire:click="deleteTemplate({{ $template->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Excluir</button>
+                                    </div>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">Nenhum template compartilhado configurado ainda.</div>
+                        @endforelse
+                    </section>
+                </div>
+            </div>
         </section>
             </div>
         </div>

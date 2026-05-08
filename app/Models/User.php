@@ -15,11 +15,12 @@ use App\Modules\Shared\Models\ActivityLog;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketBoardSavedView;
+use App\Modules\Tickets\Models\TicketBoardUserAccess;
 use App\Modules\Tickets\Models\TicketBoardUserPreference;
 use App\Modules\Tickets\Models\TicketMessage;
+use App\Modules\Tickets\Models\TicketMessageTemplate;
 use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketTimeEntry;
-use App\Modules\Tickets\Models\TicketBoardUserAccess;
 use App\Modules\Users\Models\UserSectorAccess;
 use App\Support\DatabaseBinary;
 use Database\Factories\UserFactory;
@@ -163,6 +164,11 @@ class User extends Authenticatable
     public function ticketMessages(): HasMany
     {
         return $this->hasMany(TicketMessage::class);
+    }
+
+    public function ticketMessageTemplates(): HasMany
+    {
+        return $this->hasMany(TicketMessageTemplate::class);
     }
 
     public function ticketRatings(): HasMany

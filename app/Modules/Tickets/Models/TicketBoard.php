@@ -83,6 +83,11 @@ class TicketBoard extends Model
         return $this->hasMany(TicketBoardSavedView::class);
     }
 
+    public function messageTemplates(): HasMany
+    {
+        return $this->hasMany(TicketMessageTemplate::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function operators(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'ticket_board_user_accesses')
