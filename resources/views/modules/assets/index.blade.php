@@ -184,10 +184,10 @@
                             <td class="ui-person-column-cell">
                                 <x-person-reference :user="$asset->currentUser" empty-label="Nao vinculado" />
                             </td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-2">
                                 <a href="{{ $asset->qrCodeUrl() }}" class="block w-fit" title="Abrir pagina publica do QR code">
-                                    <div class="rounded-xl border border-slate-200 bg-white p-1.5" data-qr-target="{{ $asset->qrCodeUrl() }}">
-                                        {!! $asset->qrCodeSvg(56) !!}
+                                    <div class="rounded-xl border border-slate-200 bg-white p-1" data-qr-target="{{ $asset->qrCodeUrl() }}">
+                                        {!! $asset->qrCodeSvg(68) !!}
                                     </div>
                                 </a>
                             </td>
