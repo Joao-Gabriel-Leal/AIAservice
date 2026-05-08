@@ -19,7 +19,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -67,10 +66,10 @@ class UserController extends Controller
     {
         $this->authorize('create', User::class);
 
-        $setPasswordUrl = null;
+        $temporaryPassword = $this->issueTemporaryPassword();
 
-        $user = DB::transaction(function () use ($request) {
-            $resolved = $this->resolvedData($request);
+        $user = DB::transaction(function () use ($request, $temporaryPassword) {
+            $resolved = $this->resolvedData($request, generatedPassword: $temporaryPassword);
 
             $user = User::query()->create($resolved['payload']);
 
@@ -79,15 +78,23 @@ class UserController extends Controller
             return $user;
         });
 
-        $setPasswordUrl = $this->issueSetPasswordUrl($user);
+        $accessUrl = url('/');
 
         $user->notify(new AccountCreatedNotification(
             $user->email,
             (bool) $user->must_change_password,
-            $setPasswordUrl,
+            $accessUrl,
         ));
 
-        return redirect()->route('users.index')->with('status', 'Usuario criado com sucesso.');
+        return redirect()
+            ->route('users.index')
+            ->with('status', 'Usuario criado com sucesso.')
+            ->with('created_user_access', [
+                'name' => $user->name,
+                'email' => $user->email,
+                'password' => $temporaryPassword,
+                'login_url' => $accessUrl,
+            ]);
     }
 
     public function edit(User $user): View
@@ -140,7 +147,7 @@ class UserController extends Controller
         ];
     }
 
-    private function resolvedData(UserRequest $request, ?User $user = null): array
+    private function resolvedData(UserRequest $request, ?User $user = null, ?string $generatedPassword = null): array
     {
         $globalRole = auth()->user()->isGlobalAdmin()
             ? GlobalUserRole::from((string) $request->input('global_role'))
@@ -163,7 +170,7 @@ class UserController extends Controller
         $payload['is_active'] = $request->boolean('is_active', true);
 
         if (! $user) {
-            $payload['password'] = Hash::make(Str::random(40));
+            $payload['password'] = Hash::make($generatedPassword ?? Str::random(40));
         } elseif (filled($request->input('password'))) {
             $payload['password'] = Hash::make((string) $request->input('password'));
         }
@@ -251,14 +258,9 @@ class UserController extends Controller
         ];
     }
 
-    private function issueSetPasswordUrl(User $user): string
+    private function issueTemporaryPassword(): string
     {
-        $token = Password::broker()->createToken($user);
-
-        return route('password.reset', [
-            'token' => $token,
-            'email' => $user->email,
-        ]);
+        return (string) random_int(100000, 999999);
     }
 
     private function invalidateUserAccess(User $user): void

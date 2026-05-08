@@ -1,5 +1,77 @@
 <x-layouts.portal title="Usuarios" header-variant="none">
     <div class="space-y-6">
+        @php($createdUserAccess = session('created_user_access'))
+
+        @if (is_array($createdUserAccess))
+            @php($copyRows = [
+                ['label' => 'E-mail', 'value' => $createdUserAccess['email'] ?? ''],
+                ['label' => 'Senha', 'value' => $createdUserAccess['password'] ?? ''],
+                ['label' => 'URL de Acesso', 'value' => $createdUserAccess['login_url'] ?? ''],
+            ])
+            @php($copyText = collect($copyRows)->map(fn (array $row) => $row['label'].': '.$row['value'])->implode(PHP_EOL))
+
+            <section data-created-user-access class="overflow-hidden rounded-[28px] border border-sky-200 bg-sky-50/85 shadow-sm">
+                <div class="flex flex-col gap-5 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="max-w-3xl">
+                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">Novo colaborador</p>
+                        <h2 class="mt-2 text-lg font-semibold text-slate-900">
+                            Dados de acesso de {{ $createdUserAccess['name'] ?? 'usuario' }} prontos para copia
+                        </h2>
+                        <p class="mt-1 text-sm text-slate-600">
+                            Compartilhe este bloco com o colaborador. A senha temporaria precisa ser trocada no primeiro acesso.
+                        </p>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-3">
+                        <button
+                            type="button"
+                            data-copy-created-user-access
+                            data-copy-rows='@json($copyRows)'
+                            class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm"
+                        >
+                            Copiar tabela
+                        </button>
+                        <span data-copy-feedback class="text-sm font-medium text-sky-700" aria-live="polite"></span>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 border-t border-sky-100 bg-white/75 px-5 py-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+                    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm">
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach ($copyRows as $row)
+                                    <tr>
+                                        <th class="w-44 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-700">{{ $row['label'] }}</th>
+                                        <td class="px-4 py-3 text-slate-900">
+                                            @if ($row['label'] === 'URL de Acesso')
+                                                <a href="{{ $row['value'] }}" target="_blank" rel="noreferrer" class="break-all font-medium text-sky-700 hover:text-sky-800">
+                                                    {{ $row['value'] }}
+                                                </a>
+                                            @else
+                                                <span class="break-all font-medium">{{ $row['value'] }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <label class="block">
+                        <span class="mb-2 block text-sm font-medium text-slate-700">Campo rapido para copia manual</span>
+                        <textarea
+                            readonly
+                            rows="5"
+                            spellcheck="false"
+                            data-copy-source
+                            class="ui-input min-h-[152px] w-full resize-none font-mono text-sm leading-6"
+                        >{{ trim($copyText) }}</textarea>
+                        <span class="mt-2 block text-xs text-slate-500">Se a copia automatica nao funcionar, selecione esse texto e copie manualmente.</span>
+                    </label>
+                </div>
+            </section>
+        @endif
+
         <x-portal.page-intro
             variant="compact"
             eyebrow="Administracao"
@@ -101,4 +173,96 @@
 
         {{ $users->links() }}
     </div>
+
+    @if (is_array($createdUserAccess))
+        @push('scripts')
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const card = document.querySelector('[data-created-user-access]');
+
+                    if (!card) {
+                        return;
+                    }
+
+                    const button = card.querySelector('[data-copy-created-user-access]');
+                    const textarea = card.querySelector('[data-copy-source]');
+                    const feedback = card.querySelector('[data-copy-feedback]');
+
+                    if (!button || !textarea || !feedback) {
+                        return;
+                    }
+
+                    const rows = JSON.parse(button.dataset.copyRows || '[]');
+                    let feedbackTimeout = null;
+
+                    const escapeHtml = (value) => String(value)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+
+                    const htmlTable = `
+                        <table style="border-collapse:collapse;width:100%;max-width:720px;font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#0f172a;">
+                            <tbody>
+                                ${rows.map((row, index) => `
+                                    <tr>
+                                        <td style="padding:10px 14px;font-weight:700;background:#f8fafc;width:180px;${index < rows.length - 1 ? 'border-bottom:1px solid #e2e8f0;' : ''}">${escapeHtml(row.label)}</td>
+                                        <td style="padding:10px 14px;${index < rows.length - 1 ? 'border-bottom:1px solid #e2e8f0;' : ''}">${escapeHtml(row.value)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `.trim();
+
+                    const setFeedback = (message) => {
+                        feedback.textContent = message;
+
+                        if (feedbackTimeout) {
+                            window.clearTimeout(feedbackTimeout);
+                        }
+
+                        feedbackTimeout = window.setTimeout(() => {
+                            feedback.textContent = '';
+                        }, 2600);
+                    };
+
+                    const fallbackCopy = () => {
+                        textarea.focus();
+                        textarea.select();
+                        textarea.setSelectionRange(0, textarea.value.length);
+
+                        return document.execCommand('copy');
+                    };
+
+                    button.addEventListener('click', async () => {
+                        try {
+                            if (navigator.clipboard?.write && window.ClipboardItem) {
+                                await navigator.clipboard.write([
+                                    new ClipboardItem({
+                                        'text/plain': new Blob([textarea.value], { type: 'text/plain' }),
+                                        'text/html': new Blob([htmlTable], { type: 'text/html' }),
+                                    }),
+                                ]);
+                            } else if (navigator.clipboard?.writeText) {
+                                await navigator.clipboard.writeText(textarea.value);
+                            } else if (!fallbackCopy()) {
+                                throw new Error('clipboard-unavailable');
+                            }
+
+                            setFeedback('Tabela copiada.');
+                        } catch (error) {
+                            if (fallbackCopy()) {
+                                setFeedback('Tabela copiada.');
+
+                                return;
+                            }
+
+                            setFeedback('Nao foi possivel copiar automaticamente.');
+                        }
+                    });
+                });
+            </script>
+        @endpush
+    @endif
 </x-layouts.portal>
