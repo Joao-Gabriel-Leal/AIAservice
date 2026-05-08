@@ -25,7 +25,7 @@
             </label>
         @else
             <div class="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-                O usuario sera criado com a senha temporaria <strong>123456</strong> e vai trocar a senha no primeiro acesso.
+                O usuario sera criado com troca obrigatoria no primeiro acesso e recebera um link para definir a senha.
             </div>
         @endif
 

@@ -1,6 +1,6 @@
 -- Reset presentation ANADEM
 -- Base de apresentacao com dados operacionais realistas para dashboards, tickets, patrimonio e conhecimento
--- Senha temporaria para todos os logins: Anadem@2026!
+-- As credenciais restauradas devem ser redefinidas apos o restore.
 
 BEGIN;
 SET TIME ZONE 'America/Sao_Paulo';
@@ -1135,4 +1135,3 @@ IF pending_rows_total < 3 THEN RAISE EXCEPTION 'Pendencias patrimoniais insufici
 END $$;
 COMMIT;
 SELECT (SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL) AS companies,(SELECT COUNT(*) FROM sectors WHERE deleted_at IS NULL) AS sectors,(SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL) AS rooms,(SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) AS users_total,(SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_active = true) AS users_active,(SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_active = false) AS users_inactive,(SELECT COUNT(*) FROM ticket_boards WHERE deleted_at IS NULL) AS boards,(SELECT COUNT(*) FROM ticket_forms WHERE deleted_at IS NULL) AS forms,(SELECT COUNT(*) FROM service_catalog_items WHERE deleted_at IS NULL) AS catalog_items,(SELECT COUNT(*) FROM tickets WHERE deleted_at IS NULL) AS tickets,(SELECT COUNT(*) FROM tickets WHERE deleted_at IS NULL AND resolved_at IS NULL) AS tickets_open,(SELECT COUNT(*) FROM tickets WHERE deleted_at IS NULL AND resolution_breached_at IS NOT NULL AND resolved_at IS NULL) AS tickets_overdue,(SELECT COUNT(*) FROM ticket_messages) AS ticket_messages,(SELECT COUNT(*) FROM ticket_time_entries WHERE deleted_at IS NULL) AS ticket_time_entries,(SELECT COUNT(*) FROM ticket_ratings) AS ticket_ratings,(SELECT COUNT(*) FROM notifications) AS notifications,(SELECT COUNT(*) FROM knowledge_base_articles WHERE deleted_at IS NULL) AS knowledge_articles,(SELECT COUNT(*) FROM assets) AS assets,(SELECT COUNT(*) FROM asset_movements) AS asset_movements,(SELECT COUNT(*) FROM asset_financial_profiles) AS asset_financial_profiles,(SELECT COUNT(*) FROM asset_import_batches) AS asset_import_batches,(SELECT COUNT(*) FROM asset_import_rows) AS asset_import_rows,(SELECT COUNT(*) FROM asset_import_rows WHERE processing_status='pending_review') AS asset_import_rows_pending;
-

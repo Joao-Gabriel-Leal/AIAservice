@@ -1,6 +1,6 @@
 -- Reset demo ANADEM
 -- Gerado automaticamente a partir de colaboradores.xlsx
--- Senha temporaria para todos os logins: Anadem@2026!
+-- As credenciais restauradas devem ser redefinidas apos o restore.
 
 BEGIN;
 SET TIME ZONE 'America/Sao_Paulo';
