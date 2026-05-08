@@ -95,7 +95,7 @@ class SearchPage extends Component
             'hasActiveFilters' => $this->types !== [] || $this->sectorId !== null || $this->dateFrom !== '' || $this->dateTo !== '',
         ])->layout('layouts.portal', [
             'title' => 'Busca global',
-            'subtitle' => 'Procure chamados, mensagens, historico, usuarios e patrimonios em uma unica tela.',
+            'subtitle' => 'Procure chamados, conhecimento, cadastros, SLAs, licencas e operacao em uma unica tela.',
         ]);
     }
 

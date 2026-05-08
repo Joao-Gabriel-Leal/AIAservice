@@ -4,12 +4,19 @@ namespace Tests\Feature\Search;
 
 use App\Enums\AssetAllocationStatus;
 use App\Enums\AssetStatus;
+use App\Enums\KnowledgeBaseArticleStatus;
+use App\Enums\KnowledgeBaseVisibility;
+use App\Enums\LicenseBillingCycle;
+use App\Enums\LicenseStatus;
 use App\Enums\TicketPriority;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Companies\Models\Company;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Licenses\Models\License;
 use App\Modules\Rooms\Models\Room;
+use App\Modules\SectorTemplates\Models\SectorTemplate;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Models\ActivityLog;
 use App\Modules\Search\Livewire\SearchPage;
@@ -26,11 +33,28 @@ class GlobalSearchTest extends TestCase
 
     public function test_global_search_groups_results_from_all_supported_sources(): void
     {
-        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+        ['company' => $company, 'sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext(
+            sectorName: 'Setor Lunar',
+            companyName: 'Empresa Lunar',
+            roomName: 'Sala Lunar',
+        );
 
         $superAdmin = User::factory()->superAdmin()->create([
             'name' => 'Admin Lunar',
             'email' => 'admin.lunar@example.com',
+        ]);
+
+        $board->update([
+            'name' => 'Quadro Lunar Operacional',
+            'description' => 'Quadro usado para validar a busca global lunar.',
+        ]);
+        $board->forms()->firstOrFail()->update([
+            'name' => 'Formulario Lunar',
+            'description' => 'Formulario com campos de triagem lunar.',
+        ]);
+        $board->catalogItems()->firstOrFail()->update([
+            'name' => 'Catalogo Lunar',
+            'description' => 'Catalogo de abertura para demandas lunares.',
         ]);
 
         $requester = User::factory()->create([
@@ -92,6 +116,51 @@ class GlobalSearchTest extends TestCase
             'created_by' => $superAdmin->id,
         ]);
 
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sector->id,
+            'created_by' => $superAdmin->id,
+            'title' => 'Base lunar de VPN',
+            'summary' => 'Procedimento lunar para recuperar acesso remoto.',
+            'content' => 'Passo a passo lunar da base de conhecimento.',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+        ]);
+
+        $license = License::query()->create([
+            'sector_id' => $sector->id,
+            'vendor_name' => 'LunarSoft',
+            'product_name' => 'OrbitDesk',
+            'plan_name' => 'Enterprise Lunar',
+            'license_reference' => 'LIC-LUNAR-01',
+            'supplier_name' => 'Fornecedor Lunar',
+            'seats_total' => 5,
+            'status' => LicenseStatus::ACTIVE,
+            'billing_cycle' => LicenseBillingCycle::ANNUAL,
+            'cost_amount' => 1200,
+            'cost_currency' => 'BRL',
+            'auto_renew' => true,
+            'notes' => 'Licenca lunar para validacao da busca.',
+            'created_by' => $superAdmin->id,
+        ]);
+        $license->assignments()->create([
+            'user_id' => $requester->id,
+            'assigned_email' => 'pessoa.lunar@example.com',
+            'display_name' => 'Pessoa Lunar Licenca',
+            'status' => 'active',
+            'assigned_at' => now(),
+            'created_by' => $superAdmin->id,
+        ]);
+
+        SectorTemplate::query()->create([
+            'name' => 'Template Lunar',
+            'slug' => 'template-lunar',
+            'description' => 'Onboarding lunar com formulario e SLA.',
+            'form_name' => 'Formulario Template Lunar',
+            'form_description' => 'Formulario reutilizavel lunar.',
+            'is_active' => true,
+        ]);
+
         $response = $this->actingAs($superAdmin)->get(route('search', ['q' => 'lunar']));
 
         $response
@@ -101,11 +170,32 @@ class GlobalSearchTest extends TestCase
             ->assertSee('Historico')
             ->assertSee('Usuarios')
             ->assertSee('Patrimonios')
+            ->assertSee('Base de conhecimento')
+            ->assertSee('Empresas')
+            ->assertSee('Setores')
+            ->assertSee('Salas')
+            ->assertSee('Quadros')
+            ->assertSee('Formularios')
+            ->assertSee('Catalogo')
+            ->assertSee('Etapas e status')
+            ->assertSee('SLAs')
+            ->assertSee('Licencas')
+            ->assertSee('Templates de setor')
             ->assertSee('Falha lunar no VPN')
             ->assertSee('Mensagem lunar registrada na conversa.')
             ->assertSee('Historico lunar registrado para auditoria.')
             ->assertSee('Pessoa Lunar')
-            ->assertSee('Notebook Lunar');
+            ->assertSee('Notebook Lunar')
+            ->assertSee('Base lunar de VPN')
+            ->assertSee($company->name)
+            ->assertSee($sector->name)
+            ->assertSee($room->name)
+            ->assertSee('Quadro Lunar Operacional')
+            ->assertSee('Formulario Lunar')
+            ->assertSee('Catalogo Lunar')
+            ->assertSee('SLA - Quadro Lunar Operacional')
+            ->assertSee('LunarSoft - OrbitDesk - Enterprise Lunar')
+            ->assertSee('Template Lunar');
     }
 
     public function test_super_admin_can_filter_by_type_and_period_and_prioritizes_exact_ticket_id(): void

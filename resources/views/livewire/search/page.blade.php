@@ -3,7 +3,7 @@
         <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
                 <p class="text-sm font-semibold text-slate-900">Busca absurda</p>
-                <p class="mt-1 text-sm text-slate-500">Digite texto, serial, usuario, historico ou mensagens para procurar em todo o sistema.</p>
+                <p class="mt-1 text-sm text-slate-500">Digite texto, serial, usuario, setor, SLA, artigo, licenca ou trecho operacional para procurar em todo o sistema.</p>
             </div>
 
             <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
@@ -19,7 +19,7 @@
                         wire:model.live.debounce.350ms="query"
                         type="text"
                         class="ui-input h-12 w-full"
-                        placeholder="Ex.: 123, serial, nome do usuario, trecho da mensagem"
+                        placeholder="Ex.: 123, serial, setor, artigo, SLA, licenca ou mensagem"
                     >
                 </label>
 
@@ -41,7 +41,7 @@
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold text-slate-900">Filtros rapidos</p>
-                        <p class="mt-1 text-xs text-slate-500">Setor e periodo valem especialmente para mensagens e historico.</p>
+                        <p class="mt-1 text-xs text-slate-500">Setor e periodo ajudam a afinar chamados, mensagens, artigos, licencas e cadastros.</p>
                     </div>
 
                     @if ($hasActiveFilters)
