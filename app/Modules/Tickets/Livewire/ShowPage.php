@@ -13,6 +13,7 @@ use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -271,10 +272,12 @@ class ShowPage extends Component
     {
         $ticket = $this->ticket();
         $board = $ticket->board()->with(['groups', 'fields.options'])->first();
+        $fields = $board?->fields->where('is_active', true)->values() ?? collect();
         $assignees = $board ? $this->boardAssignees($board) : collect();
         $canRate = auth()->user()->can('rate', $ticket);
         $canComment = auth()->user()->can('comment', $ticket);
         $canViewTimeTracking = auth()->user()->can('viewTimeTracking', $ticket);
+        $canViewOperationalHistory = $canViewTimeTracking;
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
         $canCloseOwn = auth()->user()->can('closeOwn', $ticket);
         $canReopenOwn = auth()->user()->can('reopenOwn', $ticket);
@@ -313,7 +316,8 @@ class ShowPage extends Component
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
             'board' => $board,
-            'fields' => $board?->fields->where('is_active', true)->values() ?? collect(),
+            'fields' => $fields,
+            'requesterFields' => $this->requesterVisibleFields($ticket, $fields),
             'groups' => $board?->groups ?? collect(),
             'assignees' => $assignees,
             'sectorUsers' => User::query()
@@ -326,6 +330,7 @@ class ShowPage extends Component
             'canComment' => $canComment,
             'canCloseOwn' => $canCloseOwn,
             'canReopenOwn' => $canReopenOwn,
+            'canViewOperationalHistory' => $canViewOperationalHistory,
             'canViewTimeTracking' => $canViewTimeTracking,
             'canTrackTime' => $canTrackTime,
             'activeOwnTimeEntry' => $activeOwnTimeEntry,
@@ -340,7 +345,9 @@ class ShowPage extends Component
             'helpfulKnowledgeArticles' => $helpfulKnowledgeArticles,
         ])->layout('layouts.portal', [
             'title' => "Chamado #{$ticket->id}",
-            'subtitle' => 'Detalhes, historico e conversa do chamado.',
+            'subtitle' => $canViewOperationalHistory
+                ? 'Detalhes, historico e conversa do chamado.'
+                : 'Detalhes e conversa do chamado.',
         ]);
     }
 
@@ -395,7 +402,7 @@ class ShowPage extends Component
                 'assignee',
                 'group',
                 'status',
-                'catalogItem.form',
+                'catalogItem.form.fields.options',
                 'fieldValues.field.options',
                 'messages.user',
                 'messages.attachments.uploader',
@@ -435,6 +442,29 @@ class ShowPage extends Component
             ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
+    }
+
+    private function requesterVisibleFields(Ticket $ticket, Collection $fields): Collection
+    {
+        $formFields = $ticket->catalogItem?->form?->fields;
+        $candidateFields = $formFields instanceof Collection
+            ? $formFields
+                ->where('is_active', true)
+                ->sortBy(fn (TicketField $field) => $field->pivot?->sort_order ?? $field->sort_order)
+                ->values()
+            : $fields;
+
+        return $candidateFields
+            ->filter(function (TicketField $field) use ($ticket) {
+                $value = $ticket->fieldValues->firstWhere('ticket_field_id', $field->id)?->primitive_value;
+
+                if ($field->type->value === 'checkbox') {
+                    return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+                }
+
+                return filled($value);
+            })
+            ->values();
     }
 
     /**

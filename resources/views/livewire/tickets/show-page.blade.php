@@ -11,6 +11,8 @@
         $attachmentLabel = $attachmentCount === 1 ? 'anexo' : 'anexos';
         $activityLabel = $activityCount === 1 ? 'evento' : 'eventos';
         $latestActivitySummary = null;
+        $detailFields = $canViewOperationalHistory ? $fields : $requesterFields;
+        $detailFieldsCount = $detailFields->count();
 
         if ($latestActivity) {
             $latestActivitySummary = $latestActivity->description ?: $latestActivity->event;
@@ -42,9 +44,17 @@
             <span class="portal-chip">Catalogo: {{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</span>
             <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
             <span class="portal-chip">{{ $attachmentCount }} {{ $attachmentLabel }}</span>
-            <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
+            @if ($canViewOperationalHistory)
+                <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
+            @endif
         </div>
     </x-portal.section-hero>
+
+    @if (session('status'))
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-sm" role="status">
+            {{ session('status') }}
+        </div>
+    @endif
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px] xl:items-start">
         <div class="space-y-6">
@@ -199,7 +209,7 @@
                 </div>
             </section>
 
-            <div class="grid gap-6 lg:grid-cols-2">
+            <div class="grid gap-6 {{ $canViewOperationalHistory ? 'lg:grid-cols-2' : '' }}">
                 <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm {{ $attachmentCount === 0 ? 'ticket-attachments-panel-empty' : '' }}">
                     <div class="ticket-panel-heading ticket-panel-heading-spread">
                         <div>
@@ -234,55 +244,57 @@
                     </div>
                 </section>
 
-                <section
-                    class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                    x-data="{ historyOpen: false }"
-                >
-                    <button type="button" class="ticket-collapsible-toggle" @click="historyOpen = ! historyOpen" :aria-expanded="historyOpen.toString()">
-                        <div class="ticket-panel-heading ticket-panel-heading-spread">
-                            <div>
-                                <p class="ticket-panel-kicker">Auditoria</p>
-                                <h3 class="ticket-panel-title text-[1.35rem]">Historico</h3>
-                                <p class="ticket-panel-copy">Log de acoes relevantes. Fica recolhido para a tela respirar melhor.</p>
-                            </div>
+                @if ($canViewOperationalHistory)
+                    <section
+                        class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                        x-data="{ historyOpen: false }"
+                    >
+                        <button type="button" class="ticket-collapsible-toggle" @click="historyOpen = ! historyOpen" :aria-expanded="historyOpen.toString()">
+                            <div class="ticket-panel-heading ticket-panel-heading-spread">
+                                <div>
+                                    <p class="ticket-panel-kicker">Auditoria</p>
+                                    <h3 class="ticket-panel-title text-[1.35rem]">Historico</h3>
+                                    <p class="ticket-panel-copy">Log de acoes relevantes. Fica recolhido para a tela respirar melhor.</p>
+                                </div>
 
-                            <div class="ticket-collapsible-summary">
-                                <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
+                                <div class="ticket-collapsible-summary">
+                                    <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
 
-                                @if ($latestActivity)
-                                    <div class="ticket-collapsible-highlight">
-                                        <p class="ticket-collapsible-highlight-title">{{ $latestActivitySummary }}</p>
-                                        <p class="ticket-collapsible-highlight-copy">{{ $latestActivity->created_at?->diffForHumans() }}</p>
-                                    </div>
-                                @endif
+                                    @if ($latestActivity)
+                                        <div class="ticket-collapsible-highlight">
+                                            <p class="ticket-collapsible-highlight-title">{{ $latestActivitySummary }}</p>
+                                            <p class="ticket-collapsible-highlight-copy">{{ $latestActivity->created_at?->diffForHumans() }}</p>
+                                        </div>
+                                    @endif
 
-                                <span class="ticket-collapsible-icon" :class="{ 'ticket-collapsible-icon-open': historyOpen }" aria-hidden="true">
-                                    <svg viewBox="0 0 20 20" fill="none" class="size-5">
-                                        <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
-                                    </svg>
-                                </span>
-                            </div>
-                        </div>
-                    </button>
-
-                    <div x-cloak x-show="historyOpen" x-transition.opacity.duration.200ms class="mt-4 space-y-3">
-                        @forelse ($activityLogs as $log)
-                            <div class="ui-row-interactive rounded-2xl border border-slate-200 px-4 py-3">
-                                <div class="flex items-start justify-between gap-4">
-                                    <div>
-                                        <p class="font-medium text-slate-900">{{ $log->description ?: $log->event }}</p>
-                                        <p class="text-xs text-slate-500">{{ $log->causer?->name ?? 'Sistema' }}</p>
-                                    </div>
-                                    <span class="text-xs text-slate-500">{{ $log->created_at?->diffForHumans() }}</span>
+                                    <span class="ticket-collapsible-icon" :class="{ 'ticket-collapsible-icon-open': historyOpen }" aria-hidden="true">
+                                        <svg viewBox="0 0 20 20" fill="none" class="size-5">
+                                            <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
+                                        </svg>
+                                    </span>
                                 </div>
                             </div>
-                        @empty
-                            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                                Ainda nao ha itens de historico registrados.
-                            </div>
-                        @endforelse
-                    </div>
-                </section>
+                        </button>
+
+                        <div x-cloak x-show="historyOpen" x-transition.opacity.duration.200ms class="mt-4 space-y-3">
+                            @forelse ($activityLogs as $log)
+                                <div class="ui-row-interactive rounded-2xl border border-slate-200 px-4 py-3">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p class="font-medium text-slate-900">{{ $log->description ?: $log->event }}</p>
+                                            <p class="text-xs text-slate-500">{{ $log->causer?->name ?? 'Sistema' }}</p>
+                                        </div>
+                                        <span class="text-xs text-slate-500">{{ $log->created_at?->diffForHumans() }}</span>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                                    Ainda nao ha itens de historico registrados.
+                                </div>
+                            @endforelse
+                        </div>
+                    </section>
+                @endif
             </div>
 
             @if ($ticket->isClosed() && ($canCreateKnowledgeArticle || $knowledgeArticle || $helpfulKnowledgeArticles->isNotEmpty()))
@@ -480,7 +492,8 @@
                             @if ($canCloseOwn)
                                 <button
                                     type="button"
-                                    onclick="if (confirm('Deseja finalizar este chamado?')) { $wire.closeOwnTicket() }"
+                                    wire:click="closeOwnTicket"
+                                    wire:confirm="Deseja finalizar este chamado?"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="ui-loading"
                                     wire:target="closeOwnTicket"
@@ -494,7 +507,8 @@
                             @if ($canReopenOwn)
                                 <button
                                     type="button"
-                                    onclick="if (confirm('Deseja reabrir este chamado?')) { $wire.reopenOwnTicket() }"
+                                    wire:click="reopenOwnTicket"
+                                    wire:confirm="Deseja reabrir este chamado?"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="ui-loading"
                                     wire:target="reopenOwnTicket"
@@ -512,8 +526,10 @@
 
                 <div class="mt-5 space-y-3">
                     <div>
-                        <p class="mb-2 text-sm font-semibold text-slate-900">Atualizacoes operacionais</p>
-                        <p class="mb-3 text-sm text-slate-500">Campos simples que antes estavam em cards grandes agora ficam em uma pilha mais enxuta.</p>
+                        <p class="mb-2 text-sm font-semibold text-slate-900">{{ $canViewOperationalHistory ? 'Atualizacoes operacionais' : 'Resumo do atendimento' }}</p>
+                        <p class="mb-3 text-sm text-slate-500">
+                            {{ $canViewOperationalHistory ? 'Campos simples que antes estavam em cards grandes agora ficam em uma pilha mais enxuta.' : 'Acompanhe responsavel, prioridade e etapa atual do seu chamado.' }}
+                        </p>
                     </div>
 
                     <label class="block text-sm text-slate-600">
@@ -558,117 +574,130 @@
                     </label>
                 </div>
 
-                <div class="mt-5 space-y-3">
-                    <div>
-                        <p class="mb-2 text-sm font-semibold text-slate-900">SLA</p>
-                        <p class="mb-3 text-sm text-slate-500">Prazos em blocos menores, sem ocupar uma faixa inteira da tela.</p>
-                    </div>
+                @if ($canViewOperationalHistory)
+                    <div class="mt-5 space-y-3">
+                        <div>
+                            <p class="mb-2 text-sm font-semibold text-slate-900">SLA</p>
+                            <p class="mb-3 text-sm text-slate-500">Prazos em blocos menores, sem ocupar uma faixa inteira da tela.</p>
+                        </div>
 
-                    @foreach ($ticket->slaSummary() as $slaItem)
-                        @php
-                            $badgeClass = match ($slaItem['state']) {
-                                'breached' => 'bg-rose-100 text-rose-700',
-                                'warning' => 'bg-amber-100 text-amber-700',
-                                'na' => 'bg-slate-100 text-slate-600',
-                                default => 'bg-emerald-100 text-emerald-700',
-                            };
-                            $badgeLabel = match ($slaItem['state']) {
-                                'breached' => 'Estourado',
-                                'warning' => 'A vencer',
-                                'na' => 'Nao configurado',
-                                default => ($slaItem['completed_at'] ? 'Cumprido' : 'Em dia'),
-                            };
-                        @endphp
+                        @foreach ($ticket->slaSummary() as $slaItem)
+                            @php
+                                $badgeClass = match ($slaItem['state']) {
+                                    'breached' => 'bg-rose-100 text-rose-700',
+                                    'warning' => 'bg-amber-100 text-amber-700',
+                                    'na' => 'bg-slate-100 text-slate-600',
+                                    default => 'bg-emerald-100 text-emerald-700',
+                                };
+                                $badgeLabel = match ($slaItem['state']) {
+                                    'breached' => 'Estourado',
+                                    'warning' => 'A vencer',
+                                    'na' => 'Nao configurado',
+                                    default => ($slaItem['completed_at'] ? 'Cumprido' : 'Em dia'),
+                                };
+                            @endphp
 
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <p class="text-sm font-semibold text-slate-900">{{ $slaItem['label'] }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">Prazo: {{ $slaItem['due_at']?->format('d/m/Y H:i') ?? 'Nao definido' }}</p>
-                                    <p class="mt-1 text-xs text-slate-500">Concluido: {{ $slaItem['completed_at']?->format('d/m/Y H:i') ?? 'Ainda pendente' }}</p>
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-semibold text-slate-900">{{ $slaItem['label'] }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Prazo: {{ $slaItem['due_at']?->format('d/m/Y H:i') ?? 'Nao definido' }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">Concluido: {{ $slaItem['completed_at']?->format('d/m/Y H:i') ?? 'Ainda pendente' }}</p>
+                                    </div>
+                                    <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $badgeClass }}">{{ $badgeLabel }}</span>
                                 </div>
-                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $badgeClass }}">{{ $badgeLabel }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </section>
+
+            @if ($canViewOperationalHistory || $detailFields->isNotEmpty())
+                <section
+                    class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                    x-data="{ fieldsOpen: false }"
+                >
+                    <button type="button" class="ticket-collapsible-toggle" @click="fieldsOpen = ! fieldsOpen" :aria-expanded="fieldsOpen.toString()">
+                        <div class="ticket-panel-heading ticket-panel-heading-spread">
+                            <div>
+                                <p class="ticket-panel-kicker">Detalhamento</p>
+                                <h3 class="ticket-panel-title text-[1.35rem]">{{ $canViewOperationalHistory ? 'Campos do chamado' : 'Informacoes da solicitacao' }}</h3>
+                                <p class="ticket-panel-copy">
+                                    {{ $canViewOperationalHistory ? 'Informacoes extras ficam mais escondidas e so aparecem quando voce precisar.' : 'Dados informados na abertura aparecem aqui em modo leitura.' }}
+                                </p>
+                            </div>
+
+                            <div class="ticket-collapsible-summary">
+                                <span class="portal-chip">{{ $detailFieldsCount }} campo(s)</span>
+                                <span class="ticket-collapsible-icon" :class="{ 'ticket-collapsible-icon-open': fieldsOpen }" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20" fill="none" class="size-5">
+                                        <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
+                                    </svg>
+                                </span>
                             </div>
                         </div>
-                    @endforeach
-                </div>
-            </section>
+                    </button>
 
-            <section
-                class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                x-data="{ fieldsOpen: false }"
-            >
-                <button type="button" class="ticket-collapsible-toggle" @click="fieldsOpen = ! fieldsOpen" :aria-expanded="fieldsOpen.toString()">
-                    <div class="ticket-panel-heading ticket-panel-heading-spread">
-                        <div>
-                            <p class="ticket-panel-kicker">Detalhamento</p>
-                            <h3 class="ticket-panel-title text-[1.35rem]">Campos do chamado</h3>
-                            <p class="ticket-panel-copy">Informacoes extras ficam mais escondidas e so aparecem quando voce precisar.</p>
-                        </div>
+                    <div x-cloak x-show="fieldsOpen" x-transition.opacity.duration.200ms class="mt-4 grid gap-3">
+                        @forelse ($detailFields as $field)
+                            @php
+                                $value = $ticket->fieldValues->firstWhere('ticket_field_id', $field->id)?->primitive_value;
+                                $displayValue = $value;
 
-                        <div class="ticket-collapsible-summary">
-                            <span class="portal-chip">{{ $fields->count() }} campo(s)</span>
-                            <span class="ticket-collapsible-icon" :class="{ 'ticket-collapsible-icon-open': fieldsOpen }" aria-hidden="true">
-                                <svg viewBox="0 0 20 20" fill="none" class="size-5">
-                                    <path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
-                                </svg>
-                            </span>
-                        </div>
-                    </div>
-                </button>
+                                if (in_array($field->type->value, ['select', 'status'], true)) {
+                                    $displayValue = $field->options->firstWhere('value', (string) $value)?->label ?? $value;
+                                } elseif ($field->type->value === 'user') {
+                                    $displayValue = $sectorUsers->firstWhere('id', (int) $value)?->name ?? $value;
+                                }
+                            @endphp
+                            <label class="block text-sm text-slate-600" wire:key="show-field-{{ $field->id }}">
+                                <span class="mb-2 block font-medium">{{ $field->name }}</span>
 
-                <div x-cloak x-show="fieldsOpen" x-transition.opacity.duration.200ms class="mt-4 grid gap-3">
-                    @forelse ($fields as $field)
-                        @php
-                            $value = $ticket->fieldValues->firstWhere('ticket_field_id', $field->id)?->primitive_value;
-                        @endphp
-                        <label class="block text-sm text-slate-600" wire:key="show-field-{{ $field->id }}">
-                            <span class="mb-2 block font-medium">{{ $field->name }}</span>
-
-                            @can('update', $ticket)
-                                @if (in_array($field->type->value, ['select', 'status'], true))
-                                    <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
-                                        <option value="">Selecione</option>
-                                        @foreach ($field->options as $option)
-                                            <option value="{{ $option->value }}" @selected((string) $value === (string) $option->value)>{{ $option->label }}</option>
-                                        @endforeach
-                                    </select>
-                                @elseif ($field->type->value === 'checkbox')
-                                    <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700">
-                                        <input type="checkbox" @checked((bool) $value) wire:change="updateDynamicField({{ $field->id }}, $event.target.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
-                                        Campo marcado
-                                    </label>
-                                @elseif ($field->type->value === 'date')
-                                    <input type="date" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-input w-full" />
-                                @elseif ($field->type->value === 'number')
-                                    <input type="number" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-input w-full" />
-                                @elseif ($field->type->value === 'user')
-                                    <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
-                                        <option value="">Selecione</option>
-                                        @foreach ($sectorUsers as $sectorUser)
-                                            <option value="{{ $sectorUser->id }}" @selected((string) $value === (string) $sectorUser->id)>{{ $sectorUser->name }}</option>
-                                        @endforeach
-                                    </select>
+                                @can('update', $ticket)
+                                    @if (in_array($field->type->value, ['select', 'status'], true))
+                                        <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
+                                            <option value="">Selecione</option>
+                                            @foreach ($field->options as $option)
+                                                <option value="{{ $option->value }}" @selected((string) $value === (string) $option->value)>{{ $option->label }}</option>
+                                            @endforeach
+                                        </select>
+                                    @elseif ($field->type->value === 'checkbox')
+                                        <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700">
+                                            <input type="checkbox" @checked((bool) $value) wire:change="updateDynamicField({{ $field->id }}, $event.target.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                                            Campo marcado
+                                        </label>
+                                    @elseif ($field->type->value === 'date')
+                                        <input type="date" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-input w-full" />
+                                    @elseif ($field->type->value === 'number')
+                                        <input type="number" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-input w-full" />
+                                    @elseif ($field->type->value === 'user')
+                                        <select wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
+                                            <option value="">Selecione</option>
+                                            @foreach ($sectorUsers as $sectorUser)
+                                                <option value="{{ $sectorUser->id }}" @selected((string) $value === (string) $sectorUser->id)>{{ $sectorUser->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    @else
+                                        <input type="text" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" data-mask="auto" data-mask-label="{{ $field->name }}" data-mask-placeholder="{{ $field->placeholder }}" class="ui-input w-full" />
+                                    @endif
                                 @else
-                                    <input type="text" value="{{ $value }}" wire:change="updateDynamicField({{ $field->id }}, $event.target.value)" data-mask="auto" data-mask-label="{{ $field->name }}" data-mask-placeholder="{{ $field->placeholder }}" class="ui-input w-full" />
-                                @endif
-                            @else
-                                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
-                                    {{ $field->type->value === 'checkbox' ? ($value ? 'Sim' : 'Nao') : ($value ?: '-') }}
-                                </div>
-                            @endcan
+                                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+                                        {{ $field->type->value === 'checkbox' ? ($value ? 'Sim' : 'Nao') : ($displayValue ?: '-') }}
+                                    </div>
+                                @endcan
 
-                            @if ($field->help_text)
-                                <span class="mt-1 block text-xs text-slate-500">{{ $field->help_text }}</span>
-                            @endif
-                        </label>
-                    @empty
-                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                            O setor ainda nao configurou campos do chamado neste quadro.
-                        </div>
-                    @endforelse
-                </div>
-            </section>
+                                @if ($field->help_text)
+                                    <span class="mt-1 block text-xs text-slate-500">{{ $field->help_text }}</span>
+                                @endif
+                            </label>
+                        @empty
+                            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                                O setor ainda nao configurou campos do chamado neste quadro.
+                            </div>
+                        @endforelse
+                    </div>
+                </section>
+            @endif
 
             @if ($canViewTimeTracking)
                 <section

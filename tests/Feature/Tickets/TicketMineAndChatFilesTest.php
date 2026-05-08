@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tickets;
 
 use App\Enums\TicketPriority;
+use App\Enums\TicketFieldType;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
@@ -12,6 +13,8 @@ use App\Modules\Tickets\Livewire\MinePage;
 use App\Modules\Tickets\Livewire\ShowPage;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketAttachment;
+use App\Modules\Tickets\Models\TicketField;
+use App\Modules\Tickets\Models\TicketFieldValue;
 use App\Modules\Tickets\Models\TicketMessage;
 use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
 use App\Modules\Tickets\Notifications\TicketUpdateNotification;
@@ -177,8 +180,15 @@ class TicketMineAndChatFilesTest extends TestCase
 
         Livewire::actingAs($requester)
             ->test(ShowPage::class, ['ticket' => $ticket])
+            ->assertSee('Finalizar chamado')
+            ->assertDontSee('Reabrir chamado')
+            ->assertSee('wire:click="closeOwnTicket"', false)
             ->call('closeOwnTicket')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertSee('Chamado finalizado com sucesso.')
+            ->assertSee('Reabrir chamado')
+            ->assertDontSee('Finalizar chamado')
+            ->assertSee('wire:click="reopenOwnTicket"', false);
 
         $ticket->refresh();
 
@@ -205,7 +215,10 @@ class TicketMineAndChatFilesTest extends TestCase
         Livewire::actingAs($requester)
             ->test(ShowPage::class, ['ticket' => $ticket->fresh()])
             ->call('reopenOwnTicket')
-            ->assertHasNoErrors();
+            ->assertHasNoErrors()
+            ->assertSee('Chamado reaberto com sucesso.')
+            ->assertSee('Finalizar chamado')
+            ->assertDontSee('Reabrir chamado');
 
         $ticket->refresh();
 
@@ -220,6 +233,158 @@ class TicketMineAndChatFilesTest extends TestCase
             'is_system' => true,
         ]);
         Notification::assertSentTo($technician, TicketUpdateNotification::class);
+    }
+
+    public function test_requester_detail_hides_operational_history_and_shows_only_filled_request_information(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+        $catalog = $board->catalogItems()->with('form')->firstOrFail();
+        $form = $catalog->form;
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $ticket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'service_catalog_item_id' => $catalog->id,
+            'title' => 'Chamado com dados extras',
+        ]);
+
+        $filledField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Patrimonio',
+            'slug' => 'patrimonio',
+            'type' => TicketFieldType::TEXT,
+            'settings' => [],
+            'sort_order' => 1,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+        $form->fields()->attach($filledField->id, [
+            'is_required' => false,
+            'sort_order' => 1,
+        ]);
+        $emptyField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Campo vazio',
+            'slug' => 'campo-vazio',
+            'type' => TicketFieldType::TEXT,
+            'settings' => [],
+            'sort_order' => 2,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+        $form->fields()->attach($emptyField->id, [
+            'is_required' => false,
+            'sort_order' => 2,
+        ]);
+        $internalField = TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Campo interno',
+            'slug' => 'campo-interno',
+            'type' => TicketFieldType::TEXT,
+            'settings' => [],
+            'sort_order' => 3,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+        TicketFieldValue::query()->create([
+            'ticket_id' => $ticket->id,
+            'ticket_field_id' => $filledField->id,
+            'value' => ['value' => 'ABC123'],
+        ]);
+        TicketFieldValue::query()->create([
+            'ticket_id' => $ticket->id,
+            'ticket_field_id' => $internalField->id,
+            'value' => ['value' => 'Segredo operacional'],
+        ]);
+        $ticket->activityLogs()->create([
+            'sector_id' => $sector->id,
+            'causer_id' => $technician->id,
+            'event' => 'ticket.updated',
+            'description' => 'Campo interno alterado.',
+            'properties' => [],
+        ]);
+
+        Livewire::actingAs($requester)
+            ->test(ShowPage::class, ['ticket' => $ticket->fresh()])
+            ->assertSee('Informacoes da solicitacao')
+            ->assertSee('Patrimonio')
+            ->assertSee('ABC123')
+            ->assertSee('Resumo do atendimento')
+            ->assertDontSee('Campos do chamado')
+            ->assertDontSee('Campo vazio')
+            ->assertDontSee('Campo interno')
+            ->assertDontSee('Segredo operacional')
+            ->assertDontSee('Historico')
+            ->assertDontSee('Auditoria')
+            ->assertDontSee('Campo interno alterado')
+            ->assertDontSee('1 evento')
+            ->assertDontSee('Atualizacoes operacionais')
+            ->assertDontSee('Prazos em blocos menores');
+    }
+
+    public function test_operational_user_sees_history_and_editable_ticket_fields(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $ticket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'title' => 'Chamado operacional',
+        ]);
+
+        TicketField::query()->create([
+            'ticket_board_id' => $board->id,
+            'name' => 'Campo vazio operacional',
+            'slug' => 'campo-vazio-operacional',
+            'type' => TicketFieldType::TEXT,
+            'settings' => [],
+            'sort_order' => 1,
+            'is_required' => false,
+            'show_on_board' => false,
+            'is_active' => true,
+        ]);
+        $ticket->activityLogs()->create([
+            'sector_id' => $sector->id,
+            'causer_id' => $operator->id,
+            'event' => 'ticket.updated',
+            'description' => 'Campo operacional atualizado.',
+            'properties' => [],
+        ]);
+
+        Livewire::actingAs($operator)
+            ->test(ShowPage::class, ['ticket' => $ticket->fresh()])
+            ->assertSee('Historico')
+            ->assertSee('Auditoria')
+            ->assertSee('1 evento')
+            ->assertSee('Campo operacional atualizado.')
+            ->assertSee('Atualizacoes operacionais')
+            ->assertSee('SLA')
+            ->assertSee('Campos do chamado')
+            ->assertSee('Campo vazio operacional')
+            ->assertSee('wire:change="updateDynamicField', false);
     }
 
     public function test_my_tickets_highlights_closed_tickets_pending_rating(): void
@@ -505,6 +670,7 @@ class TicketMineAndChatFilesTest extends TestCase
             'ticket_board_id' => $attributes['ticket_board_id'],
             'ticket_group_id' => $attributes['ticket_group_id'],
             'ticket_status_id' => $attributes['ticket_status_id'],
+            'service_catalog_item_id' => $attributes['service_catalog_item_id'] ?? null,
             'room_id' => $attributes['room_id'] ?? null,
             'title' => $attributes['title'],
             'description' => $attributes['description'] ?? 'Descricao do chamado.',
