@@ -95,7 +95,7 @@
                             <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
                             @if ($needsRating)
-                                <span class="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Avalie o atendimento</span>
+                                <span class="mt-2 inline-flex rounded-full bg-yellow-300 px-3 py-1 text-xs font-semibold text-yellow-950 ring-1 ring-yellow-400/80 shadow-sm">Avalie o atendimento</span>
                             @endif
                         </td>
                         <td class="px-6 py-4 text-slate-600">
