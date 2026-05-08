@@ -13,6 +13,7 @@ class AccountCreatedNotification extends Notification
     public function __construct(
         private readonly string $email,
         private readonly bool $mustChangePassword,
+        private readonly ?string $accessUrl = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -22,19 +23,23 @@ class AccountCreatedNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        $accessUrl = $this->accessUrl ?: route('login');
+
         $mail = (new MailMessage)
             ->subject('Sua conta foi criada')
             ->greeting("Ola, {$notifiable->name}!")
             ->line('Sua conta no sistema foi criada por um administrador.')
             ->line("Login de acesso: {$this->email}")
-            ->line('No primeiro acesso, entre com a senha temporaria 123456.');
+            ->line("URL de acesso: {$accessUrl}");
 
         if ($this->mustChangePassword) {
-            $mail->line('A troca de senha sera obrigatoria no primeiro acesso.');
+            $mail->line('Use a senha temporaria informada pelo administrador e troque-a no primeiro acesso.');
+        } else {
+            $mail->line('Sua conta esta pronta para uso.');
         }
 
         return $mail
-            ->action('Acessar sistema', route('login'))
+            ->action('Acessar sistema', $accessUrl)
             ->line('Se voce nao esperava este acesso, fale com o administrador responsavel.');
     }
 

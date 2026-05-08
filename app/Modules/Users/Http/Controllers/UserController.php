@@ -65,8 +65,10 @@ class UserController extends Controller
     {
         $this->authorize('create', User::class);
 
-        $user = DB::transaction(function () use ($request) {
-            $resolved = $this->resolvedData($request);
+        $temporaryPassword = $this->issueTemporaryPassword();
+
+        $user = DB::transaction(function () use ($request, $temporaryPassword) {
+            $resolved = $this->resolvedData($request, generatedPassword: $temporaryPassword);
 
             $user = User::query()->create($resolved['payload']);
 
@@ -75,9 +77,22 @@ class UserController extends Controller
             return $user;
         });
 
-        $user->notify(new AccountCreatedNotification($user->email, (bool) $user->must_change_password));
+        $accessUrl = url('/');
 
-        return redirect()->route('users.index')->with('status', 'Usuario criado com sucesso.');
+        $user->notify(new AccountCreatedNotification(
+            $user->email,
+            (bool) $user->must_change_password,
+            $accessUrl,
+        ));
+
+        return redirect()->route('users.index')
+            ->with('status', 'Usuario criado com sucesso.')
+            ->with('created_user_access', [
+                'name' => $user->name,
+                'email' => $user->email,
+                'password' => $temporaryPassword,
+                'login_url' => $accessUrl,
+            ]);
     }
 
     public function edit(User $user): View
@@ -124,7 +139,7 @@ class UserController extends Controller
         ];
     }
 
-    private function resolvedData(UserRequest $request, ?User $user = null): array
+    private function resolvedData(UserRequest $request, ?User $user = null, ?string $generatedPassword = null): array
     {
         $globalRole = auth()->user()->isSuperAdmin()
             ? GlobalUserRole::from((string) $request->input('global_role'))
@@ -147,7 +162,7 @@ class UserController extends Controller
         $payload['is_active'] = $request->boolean('is_active', true);
 
         if (! $user) {
-            $payload['password'] = Hash::make('123456');
+            $payload['password'] = Hash::make($generatedPassword ?? $this->issueTemporaryPassword());
         } elseif (filled($request->input('password'))) {
             $payload['password'] = Hash::make((string) $request->input('password'));
         }
@@ -241,5 +256,9 @@ class UserController extends Controller
             'sector_id' => $primaryAccess['sector_id'] ?? null,
             'room_id' => null,
         ];
+    }
+    private function issueTemporaryPassword(): string
+    {
+        return (string) random_int(100000, 999999);
     }
 }
