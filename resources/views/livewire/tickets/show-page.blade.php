@@ -19,6 +19,18 @@
         $internalMentionableUsersForJs = $internalMentionableUsers
             ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])
             ->values();
+        $messageTemplateForJs = fn ($template) => [
+            'id' => $template->id,
+            'name' => $template->name,
+            'body' => $template->body,
+            'isPersonal' => $template->isPersonal(),
+        ];
+        $publicMessageTemplatesForJs = $publicMessageTemplates
+            ->map($messageTemplateForJs)
+            ->values();
+        $internalMessageTemplatesForJs = $internalMessageTemplates
+            ->map($messageTemplateForJs)
+            ->values();
         $slaItems = $canViewOperationalHistory ? collect($ticket->slaSummary()) : collect();
         $activeSlaItems = $slaItems->reject(fn ($slaItem) => $slaItem['state'] === 'na')->values();
         $primarySlaItem = $activeSlaItems->first();
@@ -220,29 +232,65 @@
                         </div>
 
                         @if ($canComment)
-                            <form wire:submit="sendMessage" class="ticket-chat-composer">
+                            <form
+                                wire:submit="sendMessage"
+                                class="ticket-chat-composer"
+                                x-data="ticketComposerAutocomplete({
+                                    templates: @js($publicMessageTemplatesForJs),
+                                    message: $wire.entangle('message').live,
+                                })"
+                            >
                                 <div>
                                     <p class="text-sm font-semibold text-slate-900">Responder</p>
                                 </div>
 
-                                <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
-                                @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                <div class="ticket-mention-composer">
+                                    <textarea
+                                        x-ref="composerTextarea"
+                                        x-model="message"
+                                        x-on:input="handleAutocompleteInput()"
+                                        x-on:click="refreshAutocompleteMenu()"
+                                        x-on:keyup="if (! ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes($event.key)) refreshAutocompleteMenu()"
+                                        x-on:keydown.arrow-down.prevent="moveAutocomplete(1)"
+                                        x-on:keydown.arrow-up.prevent="moveAutocomplete(-1)"
+                                        x-on:keydown.enter="if (autocompleteOpen) { $event.preventDefault(); selectActiveAutocompleteItem(); }"
+                                        x-on:keydown.tab="if (autocompleteOpen) { $event.preventDefault(); selectActiveAutocompleteItem(); }"
+                                        x-on:keydown.escape="autocompleteOpen = false"
+                                        rows="4"
+                                        class="ui-input ticket-chat-input w-full"
+                                        placeholder="Escreva sua mensagem. Use @ para templates"
+                                    ></textarea>
 
-                                @if ($canUseMessageTemplates && $publicMessageTemplates->isNotEmpty())
-                                    <div class="ticket-template-strip">
-                                        <div>
-                                            <p class="ticket-template-strip-title">Templates</p>
-                                        </div>
-
-                                        <div class="ticket-template-pill-list">
-                                            @foreach ($publicMessageTemplates as $template)
-                                                <button type="button" wire:click="applyMessageTemplate({{ $template->id }})" class="ticket-template-pill {{ $template->isPersonal() ? 'ticket-template-pill-personal' : '' }}">
-                                                    {{ $template->name }}
-                                                </button>
-                                            @endforeach
-                                        </div>
+                                    <div
+                                        x-cloak
+                                        x-show="autocompleteOpen && filteredItems.length > 0"
+                                        x-transition.opacity.duration.120ms
+                                        class="ticket-mention-menu"
+                                        role="listbox"
+                                    >
+                                        <template x-for="(item, index) in filteredItems" :key="item.key">
+                                            <button
+                                                type="button"
+                                                class="ticket-mention-option"
+                                                :class="{ 'ticket-mention-option-active': index === activeAutocompleteIndex }"
+                                                x-on:mousedown.prevent="selectAutocompleteItem(item)"
+                                                x-on:click.prevent="selectAutocompleteItem(item)"
+                                                role="option"
+                                                :aria-selected="(index === activeAutocompleteIndex).toString()"
+                                            >
+                                                <span class="ticket-mention-avatar ticket-mention-avatar-template">T</span>
+                                                <span class="ticket-mention-content">
+                                                    <span class="ticket-mention-title-row">
+                                                        <span class="ticket-mention-name" x-text="item.name"></span>
+                                                        <span class="ticket-mention-type">Template</span>
+                                                    </span>
+                                                    <span class="ticket-mention-preview" x-text="item.preview"></span>
+                                                </span>
+                                            </button>
+                                        </template>
                                     </div>
-                                @endif
+                                </div>
+                                @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
 
                                 <div class="ticket-composer-file-row">
                                     <div wire:loading wire:target="chatFiles" class="ticket-upload-inline-status">
@@ -413,8 +461,9 @@
                                 <form
                                     wire:submit="sendInternalUpdate"
                                     class="ticket-chat-composer"
-                                    x-data="ticketMentionComposer({
+                                    x-data="ticketComposerAutocomplete({
                                         users: @js($internalMentionableUsersForJs),
+                                        templates: @js($internalMessageTemplatesForJs),
                                         message: $wire.entangle('internalMessage').live,
                                         mentionedIds: $wire.entangle('internalMentionedUserIds').live,
                                     })"
@@ -425,60 +474,51 @@
 
                                     <div class="ticket-mention-composer">
                                         <textarea
-                                            x-ref="internalTextarea"
+                                            x-ref="composerTextarea"
                                             x-model="message"
-                                            x-on:input="handleMentionInput()"
-                                            x-on:click="refreshMentionMenu()"
-                                            x-on:keyup="if (! ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes($event.key)) refreshMentionMenu()"
-                                            x-on:keydown.arrow-down.prevent="moveMention(1)"
-                                            x-on:keydown.arrow-up.prevent="moveMention(-1)"
-                                            x-on:keydown.enter="if (mentionOpen) { $event.preventDefault(); selectActiveMention(); }"
-                                            x-on:keydown.tab="if (mentionOpen) { $event.preventDefault(); selectActiveMention(); }"
-                                            x-on:keydown.escape="mentionOpen = false"
+                                            x-on:input="handleAutocompleteInput()"
+                                            x-on:click="refreshAutocompleteMenu()"
+                                            x-on:keyup="if (! ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes($event.key)) refreshAutocompleteMenu()"
+                                            x-on:keydown.arrow-down.prevent="moveAutocomplete(1)"
+                                            x-on:keydown.arrow-up.prevent="moveAutocomplete(-1)"
+                                            x-on:keydown.enter="if (autocompleteOpen) { $event.preventDefault(); selectActiveAutocompleteItem(); }"
+                                            x-on:keydown.tab="if (autocompleteOpen) { $event.preventDefault(); selectActiveAutocompleteItem(); }"
+                                            x-on:keydown.escape="autocompleteOpen = false"
                                             rows="4"
                                             class="ui-input ticket-chat-input w-full"
-                                            placeholder="Atualizacao interna. Use @ para mencionar"
+                                            placeholder="Atualizacao interna. Use @ para pessoas e templates"
                                         ></textarea>
 
                                         <div
                                             x-cloak
-                                            x-show="mentionOpen && filteredUsers.length > 0"
+                                            x-show="autocompleteOpen && filteredItems.length > 0"
                                             x-transition.opacity.duration.120ms
                                             class="ticket-mention-menu"
                                             role="listbox"
                                         >
-                                            <template x-for="(user, index) in filteredUsers" :key="user.id">
+                                            <template x-for="(item, index) in filteredItems" :key="item.key">
                                                 <button
                                                     type="button"
                                                     class="ticket-mention-option"
-                                                    :class="{ 'ticket-mention-option-active': index === activeMentionIndex }"
-                                                    x-on:mousedown.prevent="selectMention(user)"
+                                                    :class="{ 'ticket-mention-option-active': index === activeAutocompleteIndex }"
+                                                    x-on:mousedown.prevent="selectAutocompleteItem(item)"
+                                                    x-on:click.prevent="selectAutocompleteItem(item)"
                                                     role="option"
-                                                    :aria-selected="(index === activeMentionIndex).toString()"
+                                                    :aria-selected="(index === activeAutocompleteIndex).toString()"
                                                 >
-                                                    <span class="ticket-mention-avatar" x-text="initials(user.name)"></span>
-                                                    <span class="ticket-mention-name" x-text="user.name"></span>
+                                                    <span class="ticket-mention-avatar" :class="{ 'ticket-mention-avatar-template': item.type === 'template' }" x-text="item.type === 'template' ? 'T' : initials(item.name)"></span>
+                                                    <span class="ticket-mention-content">
+                                                        <span class="ticket-mention-title-row">
+                                                            <span class="ticket-mention-name" x-text="item.name"></span>
+                                                            <span class="ticket-mention-type" x-text="item.type === 'template' ? 'Template' : 'Pessoa'"></span>
+                                                        </span>
+                                                        <span x-show="item.type === 'template'" class="ticket-mention-preview" x-text="item.preview"></span>
+                                                    </span>
                                                 </button>
                                             </template>
                                         </div>
                                     </div>
                                     @error('internalMessage') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
-
-                                    @if ($canUseMessageTemplates && $internalMessageTemplates->isNotEmpty())
-                                        <div class="ticket-template-strip ticket-template-strip-internal">
-                                            <div>
-                                                <p class="ticket-template-strip-title">Templates internos</p>
-                                            </div>
-
-                                            <div class="ticket-template-pill-list">
-                                                @foreach ($internalMessageTemplates as $template)
-                                                    <button type="button" wire:click="applyMessageTemplate({{ $template->id }})" class="ticket-template-pill {{ $template->isPersonal() ? 'ticket-template-pill-personal' : '' }}">
-                                                        {{ $template->name }}
-                                                    </button>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    @endif
 
                                     @error('internalMentionedUserIds') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
                                     @error('internalMentionedUserIds.*') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
@@ -1592,43 +1632,76 @@
             };
         }
 
-        if (! window.ticketMentionComposer) {
-            window.ticketMentionComposer = function (config) {
+        if (! window.ticketComposerAutocomplete) {
+            window.ticketComposerAutocomplete = function (config) {
                 return {
                     users: Array.isArray(config.users) ? config.users : [],
+                    templates: Array.isArray(config.templates) ? config.templates : [],
                     message: config.message,
-                    mentionedIds: config.mentionedIds,
-                    mentionOpen: false,
-                    mentionQuery: '',
-                    activeMentionIndex: 0,
+                    mentionedIds: config.mentionedIds ?? [],
+                    tracksMentions: Object.prototype.hasOwnProperty.call(config, 'mentionedIds'),
+                    autocompleteOpen: false,
+                    autocompleteQuery: '',
+                    activeAutocompleteIndex: 0,
                     triggerStart: null,
+                    suppressNextRefresh: false,
 
                     init() {
                         this.syncMentionIds();
 
                         this.$watch('message', () => {
                             this.syncMentionIds();
-                            this.refreshMentionMenu();
+
+                            if (this.suppressNextRefresh) {
+                                this.suppressNextRefresh = false;
+                                return;
+                            }
+
+                            this.refreshAutocompleteMenu();
                         });
                     },
 
-                    get filteredUsers() {
-                        const query = this.normalizeText(this.mentionQuery);
+                    get filteredItems() {
+                        const query = this.normalizeText(this.autocompleteQuery);
                         const selectedIds = new Set((this.mentionedIds ?? []).map((id) => Number(id)));
-
-                        return this.users
+                        const users = this.users
                             .filter((user) => ! selectedIds.has(Number(user.id)))
                             .filter((user) => query === '' || this.normalizeText(user.name).includes(query))
-                            .slice(0, 6);
+                            .map((user) => ({
+                                id: Number(user.id),
+                                key: `user-${user.id}`,
+                                type: 'user',
+                                name: user.name,
+                                preview: '',
+                            }));
+                        const templates = this.templates
+                            .filter((template) => {
+                                if (query === '') {
+                                    return true;
+                                }
+
+                                return this.normalizeText(`${template.name} ${template.body}`).includes(query);
+                            })
+                            .map((template) => ({
+                                id: Number(template.id),
+                                key: `template-${template.id}`,
+                                type: 'template',
+                                name: template.name,
+                                body: template.body,
+                                isPersonal: Boolean(template.isPersonal),
+                                preview: this.previewText(template.body),
+                            }));
+
+                        return [...users, ...templates].slice(0, 8);
                     },
 
-                    handleMentionInput() {
+                    handleAutocompleteInput() {
                         this.syncMentionIds();
-                        this.refreshMentionMenu();
+                        this.refreshAutocompleteMenu();
                     },
 
-                    refreshMentionMenu() {
-                        const textarea = this.$refs.internalTextarea;
+                    refreshAutocompleteMenu() {
+                        const textarea = this.$refs.composerTextarea;
 
                         if (! textarea) {
                             return;
@@ -1639,42 +1712,51 @@
                         const atIndex = beforeCaret.lastIndexOf('@');
 
                         if (atIndex < 0) {
-                            this.closeMentionMenu();
+                            this.closeAutocompleteMenu();
                             return;
                         }
 
                         const fragment = beforeCaret.slice(atIndex + 1);
 
                         if (fragment.includes('\n') || fragment.length > 64) {
-                            this.closeMentionMenu();
+                            this.closeAutocompleteMenu();
                             return;
                         }
 
                         this.triggerStart = atIndex;
-                        this.mentionQuery = fragment;
-                        this.mentionOpen = this.filteredUsers.length > 0;
-                        this.activeMentionIndex = Math.min(this.activeMentionIndex, Math.max(this.filteredUsers.length - 1, 0));
+                        this.autocompleteQuery = fragment;
+                        this.autocompleteOpen = this.filteredItems.length > 0;
+                        this.activeAutocompleteIndex = Math.min(this.activeAutocompleteIndex, Math.max(this.filteredItems.length - 1, 0));
                     },
 
-                    moveMention(direction) {
-                        if (! this.mentionOpen || this.filteredUsers.length === 0) {
+                    moveAutocomplete(direction) {
+                        if (! this.autocompleteOpen || this.filteredItems.length === 0) {
                             return;
                         }
 
-                        const total = this.filteredUsers.length;
-                        this.activeMentionIndex = (this.activeMentionIndex + direction + total) % total;
+                        const total = this.filteredItems.length;
+                        this.activeAutocompleteIndex = (this.activeAutocompleteIndex + direction + total) % total;
                     },
 
-                    selectActiveMention() {
-                        if (! this.mentionOpen || this.filteredUsers.length === 0) {
+                    selectActiveAutocompleteItem() {
+                        if (! this.autocompleteOpen || this.filteredItems.length === 0) {
                             return;
                         }
 
-                        this.selectMention(this.filteredUsers[this.activeMentionIndex]);
+                        this.selectAutocompleteItem(this.filteredItems[this.activeAutocompleteIndex]);
                     },
 
-                    selectMention(user) {
-                        const textarea = this.$refs.internalTextarea;
+                    selectAutocompleteItem(item) {
+                        if (item.type === 'template') {
+                            this.selectTemplate(item);
+                            return;
+                        }
+
+                        this.selectUser(item);
+                    },
+
+                    selectUser(user) {
+                        const textarea = this.$refs.composerTextarea;
 
                         if (! textarea || this.triggerStart === null) {
                             return;
@@ -1688,9 +1770,35 @@
                         const nextMessage = `${before}${mention}${spacer}${after}`;
                         const nextCaret = before.length + mention.length + spacer.length;
 
+                        this.suppressNextRefresh = true;
                         this.message = nextMessage;
                         this.mentionedIds = Array.from(new Set([...(this.mentionedIds ?? []).map((id) => Number(id)), Number(user.id)]));
-                        this.closeMentionMenu();
+                        this.closeAutocompleteMenu();
+
+                        this.$nextTick(() => {
+                            textarea.focus();
+                            textarea.setSelectionRange(nextCaret, nextCaret);
+                        });
+                    },
+
+                    selectTemplate(template) {
+                        const textarea = this.$refs.composerTextarea;
+
+                        if (! textarea || this.triggerStart === null) {
+                            return;
+                        }
+
+                        const caret = textarea.selectionStart ?? String(this.message ?? '').length;
+                        const before = String(this.message ?? '').slice(0, this.triggerStart);
+                        const after = String(this.message ?? '').slice(caret);
+                        const replacement = String(template.body ?? '').trim();
+                        const spacer = after === '' || after.startsWith(' ') || after.startsWith('\n') ? '' : ' ';
+                        const nextMessage = `${before}${replacement}${spacer}${after}`;
+                        const nextCaret = before.length + replacement.length + spacer.length;
+
+                        this.suppressNextRefresh = true;
+                        this.message = nextMessage;
+                        this.closeAutocompleteMenu();
 
                         this.$nextTick(() => {
                             textarea.focus();
@@ -1699,6 +1807,10 @@
                     },
 
                     syncMentionIds() {
+                        if (! this.tracksMentions) {
+                            return;
+                        }
+
                         const currentIds = (this.mentionedIds ?? []).map((id) => Number(id));
                         const nextIds = currentIds.filter((id) => {
                             const user = this.users.find((candidate) => Number(candidate.id) === id);
@@ -1715,10 +1827,10 @@
                         return String(this.message ?? '').includes(`@${user.name}`);
                     },
 
-                    closeMentionMenu() {
-                        this.mentionOpen = false;
-                        this.mentionQuery = '';
-                        this.activeMentionIndex = 0;
+                    closeAutocompleteMenu() {
+                        this.autocompleteOpen = false;
+                        this.autocompleteQuery = '';
+                        this.activeAutocompleteIndex = 0;
                         this.triggerStart = null;
                     },
 
@@ -1728,6 +1840,12 @@
                             .replace(/[\u0300-\u036f]/g, '')
                             .toLowerCase()
                             .trim();
+                    },
+
+                    previewText(value) {
+                        const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+
+                        return text.length > 90 ? `${text.slice(0, 87)}...` : text;
                     },
 
                     initials(name) {

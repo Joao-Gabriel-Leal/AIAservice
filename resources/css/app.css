@@ -2272,7 +2272,7 @@
 
     .ticket-mention-option {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.6rem;
         width: 100%;
         border: 0;
@@ -2303,6 +2303,25 @@
         color: #1d4ed8;
     }
 
+    .ticket-mention-avatar-template {
+        background: #fef3c7;
+        color: #b45309;
+    }
+
+    .ticket-mention-content {
+        display: grid;
+        min-width: 0;
+        flex: 1;
+        gap: 0.18rem;
+    }
+
+    .ticket-mention-title-row {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
     .ticket-mention-name {
         min-width: 0;
         overflow: hidden;
@@ -2310,6 +2329,28 @@
         white-space: nowrap;
         font-size: 0.82rem;
         font-weight: 750;
+    }
+
+    .ticket-mention-type {
+        flex-shrink: 0;
+        border-radius: 999px;
+        padding: 0.12rem 0.38rem;
+        background: rgba(15, 23, 42, 0.06);
+        font-size: 0.62rem;
+        font-weight: 850;
+        line-height: 1.25;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+
+    .ticket-mention-preview {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.74rem;
+        line-height: 1.35;
+        color: #64748b;
     }
 
     .ticket-template-strip {
@@ -3720,6 +3761,20 @@
     html.dark .ticket-mention-avatar {
         background: rgba(37, 99, 235, 0.22);
         color: #dbeafe;
+    }
+
+    html.dark .ticket-mention-avatar-template {
+        background: rgba(242, 169, 0, 0.22);
+        color: #fde68a;
+    }
+
+    html.dark .ticket-mention-type {
+        background: rgba(148, 163, 184, 0.14);
+        color: #9ab0da;
+    }
+
+    html.dark .ticket-mention-preview {
+        color: #7890bd;
     }
 
     html.dark .ticket-collapsible-highlight-title {

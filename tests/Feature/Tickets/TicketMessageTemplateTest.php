@@ -75,6 +75,54 @@ class TicketMessageTemplateTest extends TestCase
         ]);
     }
 
+    public function test_templates_are_available_in_at_autocomplete_without_composer_chips(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $ticket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'assignee_id' => $operator->id,
+        ]);
+
+        TicketMessageTemplate::query()->create([
+            'ticket_board_id' => $board->id,
+            'user_id' => null,
+            'channel' => TicketMessageTemplate::CHANNEL_PUBLIC,
+            'name' => 'Resposta rapida',
+            'body' => 'Retorno padrao para o solicitante.',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        TicketMessageTemplate::query()->create([
+            'ticket_board_id' => $board->id,
+            'user_id' => null,
+            'channel' => TicketMessageTemplate::CHANNEL_INTERNAL,
+            'name' => 'Nota interna',
+            'body' => 'Alinhar internamente antes do retorno.',
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+
+        Livewire::actingAs($operator)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->assertSee('ticketComposerAutocomplete', false)
+            ->assertSee('Resposta rapida')
+            ->assertSee('Nota interna')
+            ->assertDontSee('ticket-template-strip', false)
+            ->assertDontSee('ticket-template-pill', false);
+    }
+
     public function test_operator_can_create_edit_and_delete_personal_template(): void
     {
         ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
