@@ -1,83 +1,78 @@
-<x-layouts.portal title="Patrimonios" subtitle="Cadastro, lotacao atual, filtros operacionais e acesso rapido por QR Code." :show-header="false">
+<x-layouts.portal title="Patrimonios" subtitle="Cadastro, lotacao atual, filtros operacionais e acesso rapido por QR Code." header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Patrimonio operacional"
             title="Busca e controle do parque"
             description="Barra rapida para codigo, status, saneamento patrimonial, local e responsavel com acesso direto ao cadastro."
         >
-            <form method="GET" action="{{ route('assets.index') }}" class="space-y-3" data-asset-filter-form>
-                <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-slate-900">Filtros operacionais</p>
-                        <p class="mt-1 text-xs text-slate-500">Refine por codigo, status, saneamento, local ou responsavel sem perder a visao do parque.</p>
-                    </div>
+            <x-slot:actions>
+                <a href="{{ route('assets.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo patrimonio</a>
+                <a href="{{ route('assets.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+            </x-slot:actions>
+        </x-portal.page-intro>
 
-                    <div class="flex flex-wrap gap-2">
-                        <a href="{{ route('assets.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo patrimonio</a>
-                        <a href="{{ route('assets.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
-                        <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                        <a href="{{ route('assets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-                    </div>
-                </div>
+        <x-portal.filter-bar title="Filtros operacionais" description="Refine por codigo, status, saneamento, local ou responsavel sem perder a visao do parque.">
+            <form method="GET" action="{{ route('assets.index') }}" class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.8fr)_repeat(5,minmax(110px,0.56fr))_auto_auto]" data-asset-filter-form>
+                <label class="block">
+                    <span class="sr-only">Busca</span>
+                    <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por codigo, nome ou serial" class="ui-input h-11 w-full px-3">
+                </label>
 
-                <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.8fr)_repeat(5,minmax(110px,0.56fr))]">
-                    <label class="block">
-                        <span class="sr-only">Busca</span>
-                        <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por codigo, nome ou serial" class="ui-input h-11 w-full px-3">
-                    </label>
+                <label class="block">
+                    <span class="sr-only">Status</span>
+                    <select name="status" class="ui-native-select h-11 w-full text-sm text-slate-700">
+                        <option value="">Status</option>
+                        @foreach ($statuses as $statusOption)
+                            <option value="{{ $statusOption->value }}" @selected($filters['status'] === $statusOption->value)>{{ $statusOption->label() }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
-                    <label class="block">
-                        <span class="sr-only">Status</span>
-                        <select name="status" class="ui-native-select h-11 w-full text-sm text-slate-700">
-                            <option value="">Status</option>
-                            @foreach ($statuses as $statusOption)
-                                <option value="{{ $statusOption->value }}" @selected($filters['status'] === $statusOption->value)>{{ $statusOption->label() }}</option>
-                            @endforeach
-                        </select>
-                    </label>
+                <label class="block">
+                    <span class="sr-only">Saneamento</span>
+                    <select name="allocation_status" class="ui-native-select h-11 w-full text-sm text-slate-700">
+                        <option value="">Saneamento</option>
+                        @foreach ($allocationStatuses as $allocationStatus)
+                            <option value="{{ $allocationStatus->value }}" @selected($filters['allocation_status'] === $allocationStatus->value)>{{ $allocationStatus->label() }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
-                    <label class="block">
-                        <span class="sr-only">Saneamento</span>
-                        <select name="allocation_status" class="ui-native-select h-11 w-full text-sm text-slate-700">
-                            <option value="">Saneamento</option>
-                            @foreach ($allocationStatuses as $allocationStatus)
-                                <option value="{{ $allocationStatus->value }}" @selected($filters['allocation_status'] === $allocationStatus->value)>{{ $allocationStatus->label() }}</option>
-                            @endforeach
-                        </select>
-                    </label>
+                <label class="block">
+                    <span class="sr-only">Setor</span>
+                    <select name="sector_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-sector>
+                        <option value="">Setor</option>
+                        @foreach ($sectors as $sectorOption)
+                            <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
-                    <label class="block">
-                        <span class="sr-only">Setor</span>
-                        <select name="sector_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-sector>
-                            <option value="">Setor</option>
-                            @foreach ($sectors as $sectorOption)
-                                <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
+                <label class="block">
+                    <span class="sr-only">Sala</span>
+                    <select name="room_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-room>
+                        <option value="">Sala</option>
+                        @foreach ($rooms as $roomOption)
+                            <option value="{{ $roomOption->id }}" @selected((string) $filters['room_id'] === (string) $roomOption->id) data-sector-id="{{ $roomOption->sector_id }}">{{ $roomOption->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
-                    <label class="block">
-                        <span class="sr-only">Sala</span>
-                        <select name="room_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-room>
-                            <option value="">Sala</option>
-                            @foreach ($rooms as $roomOption)
-                                <option value="{{ $roomOption->id }}" @selected((string) $filters['room_id'] === (string) $roomOption->id) data-sector-id="{{ $roomOption->sector_id }}">{{ $roomOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
+                <label class="block">
+                    <span class="sr-only">Colaborador</span>
+                    <select name="user_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-user>
+                        <option value="">Colaborador</option>
+                        @foreach ($collaborators as $collaboratorOption)
+                            <option value="{{ $collaboratorOption->id }}" @selected((string) $filters['user_id'] === (string) $collaboratorOption->id) data-sector-ids="{{ $collaboratorOption->sectorAccesses->pluck('sector_id')->implode(',') }}">{{ $collaboratorOption->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
-                    <label class="block">
-                        <span class="sr-only">Colaborador</span>
-                        <select name="user_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-user>
-                            <option value="">Colaborador</option>
-                            @foreach ($collaborators as $collaboratorOption)
-                                <option value="{{ $collaboratorOption->id }}" @selected((string) $filters['user_id'] === (string) $collaboratorOption->id) data-sector-ids="{{ $collaboratorOption->sectorAccesses->pluck('sector_id')->implode(',') }}">{{ $collaboratorOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                </div>
+                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
+                <a href="{{ route('assets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         @if ($latestImportBatch)
             <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">

@@ -1,7 +1,7 @@
-<x-layouts.portal title="Empresas" :show-header="false">
+<x-layouts.portal title="Empresas" header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
-            compact
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Administracao"
             title="Empresas"
             description="Gerencie a estrutura juridica e operacional que organiza os setores do portal."
@@ -10,7 +10,9 @@
                 <a href="{{ route('companies.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova empresa</a>
                 <a href="{{ route('companies.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
             </x-slot:actions>
+        </x-portal.page-intro>
 
+        <x-portal.filter-bar title="Busca e status" description="Refine por nome, documento, contato ou situacao operacional.">
             <form method="GET" action="{{ route('companies.index') }}" class="grid gap-2 md:grid-cols-[minmax(260px,1.5fr)_180px_auto_auto]">
                 <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por nome, documento ou email" class="ui-input w-full">
                 <select name="status" class="ui-native-select w-full text-sm text-slate-700">
@@ -21,7 +23,7 @@
                 <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
                 <a href="{{ route('companies.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">

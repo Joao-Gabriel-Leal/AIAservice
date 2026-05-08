@@ -13,11 +13,10 @@
     x-on:resize.window="refreshDragTarget()"
     x-on:keydown.escape.window="cancelPointerDrag()"
 >
-    <x-portal.section-hero
+    <x-portal.page-intro
         eyebrow="Quadro operacional"
         :title="$board?->name ?? 'Quadro de chamados'"
         :description="$board?->description ?: 'Acompanhe os chamados agrupados por etapa.'"
-        :badge="$board ? $groups->count().' etapa(s)' : null"
     >
         <x-slot:actions>
             <a href="{{ route('tickets.central') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
@@ -30,56 +29,57 @@
                 </a>
             @endif
         </x-slot:actions>
+        <x-slot:meta>
+            @if ($board)
+                <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
+                <span class="portal-chip">{{ $groups->count() }} etapa(s)</span>
+            @else
+                <span class="portal-chip">Sem setor disponivel</span>
+            @endif
+        </x-slot:meta>
+    </x-portal.page-intro>
 
-        <div class="portal-toolbar">
-            <div>
-                @if ($board)
-                    <div class="flex flex-wrap items-center gap-2">
-                        <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
+    <x-portal.filter-bar title="Visualizacao do quadro" description="Alterne entre lista e kanban sem sair da mesma tela operacional.">
+        @if (! $board)
+            <p class="text-sm font-semibold text-slate-900">Nenhum setor disponivel para exibir o quadro.</p>
+        @endif
+        
+        <div class="{{ $board ? '' : 'mt-4' }} portal-toolbar-group sm:justify-end">
+            @if ($board)
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                    <div class="flex items-center gap-1">
+                        <button
+                            type="button"
+                            x-on:click="$wire.setViewMode('list')"
+                            class="rounded-xl px-4 py-2 text-sm font-medium transition"
+                            :class="viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
+                        >
+                            Lista
+                        </button>
+                        <button
+                            type="button"
+                            x-on:click="$wire.setViewMode('kanban')"
+                            class="rounded-xl px-4 py-2 text-sm font-medium transition"
+                            :class="viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
+                        >
+                            Kanban
+                        </button>
                     </div>
-                @else
-                    <p class="text-sm font-semibold text-slate-900">Nenhum setor disponivel para exibir o quadro.</p>
-                @endif
-                <p class="mt-1 text-sm text-slate-500">Alterne entre visao em lista e kanban sem sair da mesma tela operacional.</p>
-            </div>
+                </div>
+            @endif
 
-            <div class="portal-toolbar-group sm:justify-end">
-                @if ($board)
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                        <div class="flex items-center gap-1">
-                            <button
-                                type="button"
-                                x-on:click="$wire.setViewMode('list')"
-                                class="rounded-xl px-4 py-2 text-sm font-medium transition"
-                                :class="viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
-                            >
-                                Lista
-                            </button>
-                            <button
-                                type="button"
-                                x-on:click="$wire.setViewMode('kanban')"
-                                class="rounded-xl px-4 py-2 text-sm font-medium transition"
-                                :class="viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
-                            >
-                                Kanban
-                            </button>
-                        </div>
-                    </div>
-                @endif
-
-                @if ($sectorOptions->count() > 1)
-                    <label class="text-sm text-slate-600">
-                        <span class="mb-1 block font-medium">Setor</span>
-                        <select wire:model.live="selectedSectorId" class="ui-native-select min-w-[240px]">
-                            @foreach ($sectorOptions as $sectorOption)
-                                <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                @endif
-            </div>
+            @if ($sectorOptions->count() > 1)
+                <label class="text-sm text-slate-600">
+                    <span class="mb-1 block font-medium">Setor</span>
+                    <select wire:model.live="selectedSectorId" class="ui-native-select min-w-[240px]">
+                        @foreach ($sectorOptions as $sectorOption)
+                            <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            @endif
         </div>
-    </x-portal.section-hero>
+    </x-portal.filter-bar>
 
     @if (! $board)
         <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">

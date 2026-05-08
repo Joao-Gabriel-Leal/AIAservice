@@ -64,6 +64,7 @@ class BoardDirectoryPage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Quadros',
             'subtitle' => 'Escolha um quadro para acompanhar demandas em lista, etapas ou kanban.',
+            'headerVariant' => 'none',
         ]);
     }
 

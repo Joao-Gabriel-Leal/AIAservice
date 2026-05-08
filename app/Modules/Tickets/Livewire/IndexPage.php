@@ -589,6 +589,7 @@ class IndexPage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Quadros',
             'subtitle' => 'Acompanhe chamados em lista, etapas ou kanban no mesmo fluxo operacional.',
+            'headerVariant' => 'none',
         ]);
     }
 

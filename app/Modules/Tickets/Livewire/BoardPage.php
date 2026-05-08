@@ -206,6 +206,7 @@ class BoardPage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Quadro de chamados',
             'subtitle' => 'Visualizacao operacional dos chamados por etapa.',
+            'headerVariant' => 'none',
         ]);
     }
 

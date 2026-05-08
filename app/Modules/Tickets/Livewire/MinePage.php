@@ -93,6 +93,7 @@ class MinePage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Meus chamados',
             'subtitle' => 'Acompanhe somente as demandas abertas por voce.',
+            'headerVariant' => 'none',
         ]);
     }
 

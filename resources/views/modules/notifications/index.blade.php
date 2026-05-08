@@ -1,4 +1,4 @@
-<x-layouts.portal title="Notificacoes" subtitle="Inbox interna com atualizacoes dos chamados no seu contexto." :show-header="false">
+<x-layouts.portal title="Notificacoes" subtitle="Inbox interna com atualizacoes dos chamados no seu contexto." header-variant="none">
     @php
         $filterLabels = [
             'all' => 'Todas',
@@ -8,8 +8,8 @@
     @endphp
 
     <div class="space-y-5">
-        <x-portal.section-hero
-            compact
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Inbox interna"
             title="Central de notificacoes"
             description="Acompanhe as atualizacoes mais recentes e destaque o que ainda precisa de leitura."
@@ -22,7 +22,9 @@
                     </form>
                 @endif
             </x-slot:actions>
+        </x-portal.page-intro>
 
+        <x-portal.filter-bar title="Recorte da inbox" description="Alterne entre lidas e nao lidas sem competir com o titulo da pagina.">
             <div class="flex flex-wrap items-center gap-2">
                 @foreach ($filterLabels as $filterValue => $filterLabel)
                     <a
@@ -33,7 +35,7 @@
                     </a>
                 @endforeach
             </div>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         <div class="space-y-3">
             @forelse ($notifications as $notification)

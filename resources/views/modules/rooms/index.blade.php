@@ -1,7 +1,7 @@
-<x-layouts.portal title="Salas" :show-header="false">
+<x-layouts.portal title="Salas" header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
-            compact
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Administracao"
             title="Salas"
             description="Mantenha os ambientes fisicos vinculados aos setores para organizar patrimonio e fluxo operacional."
@@ -10,7 +10,9 @@
                 <a href="{{ route('rooms.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova sala</a>
                 <a href="{{ route('rooms.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
             </x-slot:actions>
+        </x-portal.page-intro>
 
+        <x-portal.filter-bar title="Busca e recorte" description="Filtre por sala, setor e status para localizar os ambientes ativos com rapidez.">
             <form method="GET" action="{{ route('rooms.index') }}" class="grid gap-2 md:grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_180px_auto_auto]">
                 <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por sala ou descricao" class="ui-input w-full">
                 <select name="sector_id" class="ui-native-select w-full text-sm text-slate-700">
@@ -27,7 +29,7 @@
                 <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
                 <a href="{{ route('rooms.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">

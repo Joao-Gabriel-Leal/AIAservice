@@ -1,4 +1,4 @@
-<x-layouts.portal :title="$license->displayName()" subtitle="Gestao simples de quem esta com cada licenca desta linha, com transferencia direta e historico abaixo.">
+<x-layouts.portal :title="$license->displayName()" subtitle="Gestao simples de quem esta com cada licenca desta linha, com transferencia direta e historico abaixo." header-variant="none">
     <div class="space-y-6">
         @if ($errors->any())
             <section class="rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
@@ -11,28 +11,33 @@
             </section>
         @endif
 
+        <x-portal.page-intro
+            variant="detail"
+            :eyebrow="$license->sector?->company?->name ?? 'Linha de licenca'"
+            :title="$license->displayName()"
+            description="Gerencie quem esta com cada assento, acompanhe a disponibilidade da linha e execute transferencias sem sair da pagina."
+        >
+            <x-slot:actions>
+                <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar para licencas</a>
+                <a href="{{ route('licenses.edit', $license) }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Editar cadastro</a>
+            </x-slot:actions>
+            <x-slot:meta>
+                <x-sector-badge :sector="$license->sector" mode="chip" />
+                <span class="portal-chip">{{ $license->plan_name ?: 'Sem tipo definido' }}</span>
+                <span class="rounded-full px-3 py-1 text-xs font-medium {{ $license->status?->badgeClasses() }}">{{ $license->status?->label() }}</span>
+                @if ($license->isExpired())
+                    <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">Expirada</span>
+                @elseif ($license->isExpiringSoon())
+                    <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">Vence em breve</span>
+                @endif
+            </x-slot:meta>
+        </x-portal.page-intro>
+
         <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div class="mb-5 flex flex-wrap gap-2 border-b border-slate-200 pb-4 text-sm">
-                <a href="{{ route('licenses.index') }}" class="text-slate-500 hover:text-slate-900">Licencas</a>
-                <span class="text-slate-300">/</span>
-                <span class="font-medium text-slate-900">{{ $license->displayName() }}</span>
-            </div>
-
-            <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="border-b border-slate-200 pb-4">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Linha de licenca</p>
-                    <h2 class="mt-2 text-3xl font-semibold text-slate-900">{{ $license->vendor_name }} - {{ $license->product_name }}</h2>
-                    <p class="mt-2 text-lg font-medium text-slate-900">{{ $license->plan_name ?: 'Sem tipo definido' }}</p>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                    <span class="rounded-full px-3 py-1 text-xs font-medium {{ $license->status?->badgeClasses() }}">{{ $license->status?->label() }}</span>
-                    @if ($license->isExpired())
-                        <span class="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">Expirada</span>
-                    @elseif ($license->isExpiringSoon())
-                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">Vence em breve</span>
-                    @endif
-                    <a href="{{ route('licenses.edit', $license) }}" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Editar cadastro</a>
+                    <h2 class="text-lg font-semibold text-slate-900">Capacidade e contexto</h2>
+                    <p class="mt-1 text-sm text-slate-500">Resumo rapido da linha para decidir disponibilidade, transferencia e alocacao do proximo assento.</p>
                 </div>
             </div>
 

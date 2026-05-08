@@ -1,5 +1,5 @@
 <div class="space-y-6">
-    <x-portal.section-hero
+    <x-portal.page-intro
         eyebrow="Acompanhamento pessoal"
         title="Meus chamados"
         description="Veja somente os chamados que foram abertos por voce, com status, responsavel e SLA no mesmo painel."
@@ -15,16 +15,13 @@
                 </a>
             @endif
         </x-slot:actions>
-
-        <div class="portal-toolbar">
-            <div>
-                <p class="text-sm font-semibold text-slate-900">Filtros pessoais</p>
-                <p class="mt-1 text-sm text-slate-500">A lista ignora chamados de outros solicitantes, mesmo quando voce tem acesso operacional ao setor.</p>
-            </div>
-
+        <x-slot:meta>
             <span class="portal-chip">{{ $tickets->total() }} chamado(s)</span>
-        </div>
+            <span class="portal-chip">Somente solicitacoes do seu usuario</span>
+        </x-slot:meta>
+    </x-portal.page-intro>
 
+    <x-portal.filter-bar title="Filtros pessoais" description="A lista ignora chamados de outros solicitantes, mesmo quando voce tem acesso operacional ao setor.">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Titulo</span>
@@ -70,7 +67,7 @@
                 <input wire:model.live="updatedTo" type="date" class="ui-input w-full">
             </label>
         </div>
-    </x-portal.section-hero>
+    </x-portal.filter-bar>
 
     <div class="portal-table-surface">
         <table class="min-w-full divide-y divide-slate-200 text-sm">

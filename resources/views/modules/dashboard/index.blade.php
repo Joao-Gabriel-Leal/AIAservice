@@ -1,4 +1,4 @@
-<x-layouts.portal title="Dashboard" subtitle="Indicadores operacionais e visao recente dos chamados no seu escopo." :show-header="false">
+<x-layouts.portal title="Dashboard" subtitle="Indicadores operacionais e visao recente dos chamados no seu escopo." header-variant="none">
     @php
         $sectorQuery = array_filter(['period' => $period, 'sector_id' => $selectedSectorId]);
         $selectedSector = $availableSectors->firstWhere('id', $selectedSectorId);
@@ -25,58 +25,58 @@
     @endphp
 
     <div class="space-y-6">
-        <x-portal.section-hero
+        <x-portal.page-intro
             eyebrow="Painel operacional"
-            title="Dash completo para decidir rapido sem perder contexto"
-            description="Tickets, SLA, produtividade, licencas, ativos e base de conhecimento no mesmo recorte de periodo e setor."
+            title="Dashboard operacional"
+            description="Tickets, SLA, produtividade, licencas, ativos e conhecimento no mesmo recorte de periodo e setor."
         >
             <x-slot:actions>
                 <a
                     href="{{ route('dashboard.export', $sectorQuery) }}"
-                    class="border border-white/16 bg-white/6 text-white hover:bg-white/12 ui-action rounded-2xl px-4 py-2 text-sm font-medium"
+                    class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm font-medium"
                 >
                     Exportar Excel
                 </a>
                 @foreach ($periodOptions as $optionValue => $optionLabel)
                     <a
                         href="{{ route('dashboard', array_filter(['period' => $optionValue, 'sector_id' => $selectedSectorId])) }}"
-                        class="{{ (int) $period === (int) $optionValue ? 'bg-white text-[#1f3152]' : 'border border-white/16 bg-white/6 text-white hover:bg-white/12' }} ui-action rounded-2xl px-4 py-2 text-sm font-medium"
+                        class="{{ (int) $period === (int) $optionValue ? 'ui-action-primary text-white' : 'ui-action-secondary' }} ui-action rounded-2xl px-4 py-2 text-sm font-medium"
                     >
                         {{ $optionLabel }}
                     </a>
                 @endforeach
             </x-slot:actions>
+        </x-portal.page-intro>
 
-            <div class="space-y-5">
-                @if ($availableSectors->count() > 1)
-                    <form method="GET" action="{{ route('dashboard') }}" class="flex max-w-xl gap-2">
-                        <input type="hidden" name="period" value="{{ $period }}">
-                        <select name="sector_id" class="ui-native-select min-w-0 flex-1 rounded-2xl border-white/20 bg-white/95 text-sm">
-                            <option value="">Todos os setores</option>
-                            @foreach ($availableSectors as $sector)
-                                <option value="{{ $sector->id }}" @selected((int) $selectedSectorId === (int) $sector->id)>
-                                    {{ $sector->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <button type="submit" class="ui-action rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-[#1f3152]">
-                            Filtrar
-                        </button>
-                    </form>
-                @endif
+        @if ($availableSectors->count() > 1)
+            <x-portal.filter-bar title="Recorte do painel" description="Use o setor para afinar os indicadores antes de mergulhar nas tabelas e graficos.">
+                <form method="GET" action="{{ route('dashboard') }}" class="flex max-w-xl gap-2">
+                    <input type="hidden" name="period" value="{{ $period }}">
+                    <select name="sector_id" class="ui-native-select min-w-0 flex-1 rounded-2xl text-sm">
+                        <option value="">Todos os setores</option>
+                        @foreach ($availableSectors as $sector)
+                            <option value="{{ $sector->id }}" @selected((int) $selectedSectorId === (int) $sector->id)>
+                                {{ $sector->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm font-semibold">
+                        Filtrar
+                    </button>
+                </form>
+            </x-portal.filter-bar>
+        @endif
 
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                    @foreach ($alerts as $alert)
-                        @continue($alert['hidden'] ?? false)
-                        <article class="rounded-3xl border p-5 shadow-sm {{ $alertToneClasses[$alert['tone']] ?? $alertToneClasses['slate'] }}">
-                            <p class="text-sm font-semibold">{{ $alert['label'] }}</p>
-                            <p class="mt-3 text-4xl font-semibold">{{ $alert['value'] }}</p>
-                            <p class="mt-2 text-sm opacity-80">{{ $alert['hint'] }}</p>
-                        </article>
-                    @endforeach
-                </div>
-            </div>
-        </x-portal.section-hero>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+            @foreach ($alerts as $alert)
+                @continue($alert['hidden'] ?? false)
+                <article class="rounded-3xl border p-5 shadow-sm {{ $alertToneClasses[$alert['tone']] ?? $alertToneClasses['slate'] }}">
+                    <p class="text-sm font-semibold">{{ $alert['label'] }}</p>
+                    <p class="mt-3 text-4xl font-semibold">{{ $alert['value'] }}</p>
+                    <p class="mt-2 text-sm opacity-80">{{ $alert['hint'] }}</p>
+                </article>
+            @endforeach
+        </div>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             @foreach ($summaryCards as $card)
@@ -164,114 +164,59 @@
             </section>
         </div>
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-            <section class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="flex flex-col gap-4 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900">Fila de atencao</h3>
-                        <p class="text-sm text-slate-500">Chamados que pedem decisao: SLA, triagem, prioridade ou inatividade.</p>
-                    </div>
-                    <a href="{{ $ticketsListUrl }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm">
-                        Ver lista
-                    </a>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead class="bg-slate-50 text-left text-slate-500">
-                            <tr>
-                                <th class="px-6 py-3 font-medium">Titulo</th>
-                                <th class="px-6 py-3 font-medium">Motivo</th>
-                                <th class="px-6 py-3 font-medium">Status</th>
-                                <th class="px-6 py-3 font-medium">Responsavel</th>
-                                <th class="px-6 py-3 font-medium">Atualizado</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @forelse ($attentionQueue as $item)
-                                @php
-                                    $ticket = $item['ticket'];
-                                @endphp
-                                <tr class="ui-row-interactive hover:bg-slate-50">
-                                    <td class="px-6 py-4 font-medium text-slate-900">
-                                        <a href="{{ route('tickets.show', $ticket) }}" class="hover:text-sky-700">{{ $ticket->title }}</a>
-                                        <p class="mt-1 text-xs text-slate-500">{{ $ticket->sector?->name ?? 'Sem setor' }}</p>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="rounded-full px-3 py-1 text-xs font-medium {{ $item['tone'] }}">{{ $item['reason'] }}</span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?? '#64748b' }}">
-                                            {{ $ticket->status?->name ?? 'Sem status' }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 text-slate-600">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</td>
-                                    <td class="px-6 py-4 text-slate-500">{{ $ticket->updated_at?->diffForHumans() }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="5" class="px-6 py-10 text-center text-slate-500">Nenhum chamado critico no escopo atual.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-                @if ($licenseSummary['can_view'])
-                    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                        <div class="flex items-start justify-between gap-4">
-                            <div>
-                                <h3 class="text-lg font-semibold text-slate-900">Licencas</h3>
-                                <p class="mt-1 text-sm text-slate-500">Renovacoes, lotacao e assentos.</p>
-                            </div>
-                            <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-3 py-2 text-xs">Abrir</a>
-                        </div>
-
-                        <div class="mt-5 grid grid-cols-2 gap-3">
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                                <p class="text-2xl font-semibold text-slate-900">{{ $licenseSummary['expired'] + $licenseSummary['expiring_soon'] }}</p>
-                                <p class="mt-1 text-xs text-slate-500">Vencidas ou vencendo</p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                                <p class="text-2xl font-semibold text-slate-900">{{ $licenseSummary['full_count'] }}</p>
-                                <p class="mt-1 text-xs text-slate-500">Licencas lotadas</p>
-                            </div>
-                        </div>
-
-                        <div class="mt-5 h-56">
-                            <canvas data-chart='@json($charts["licenses"])'></canvas>
-                        </div>
-                    </section>
-                @endif
-
+        <div class="grid gap-4 md:grid-cols-2">
+            @if ($licenseSummary['can_view'])
                 <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                    <h3 class="text-lg font-semibold text-slate-900">Base de conhecimento</h3>
-                    <p class="mt-1 text-sm text-slate-500">Uso, revisao e retorno dos artigos.</p>
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-900">Licencas</h3>
+                            <p class="mt-1 text-sm text-slate-500">Renovacoes, lotacao e assentos.</p>
+                        </div>
+                        <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-3 py-2 text-xs">Abrir</a>
+                    </div>
 
-                    <div class="mt-5 grid grid-cols-3 gap-3">
+                    <div class="mt-5 grid grid-cols-2 gap-3">
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                            <p class="text-2xl font-semibold text-slate-900">{{ $knowledgeBaseSummary['published'] }}</p>
-                            <p class="mt-1 text-xs text-slate-500">Publicados</p>
+                            <p class="text-2xl font-semibold text-slate-900">{{ $licenseSummary['expired'] + $licenseSummary['expiring_soon'] }}</p>
+                            <p class="mt-1 text-xs text-slate-500">Vencidas ou vencendo</p>
                         </div>
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                            <p class="text-2xl font-semibold text-slate-900">{{ $knowledgeBaseSummary['drafts'] }}</p>
-                            <p class="mt-1 text-xs text-slate-500">Rascunhos</p>
-                        </div>
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                            <p class="text-2xl font-semibold text-slate-900">{{ $knowledgeBaseSummary['generated_from_tickets'] }}</p>
-                            <p class="mt-1 text-xs text-slate-500">De chamados</p>
+                            <p class="text-2xl font-semibold text-slate-900">{{ $licenseSummary['full_count'] }}</p>
+                            <p class="mt-1 text-xs text-slate-500">Licencas lotadas</p>
                         </div>
                     </div>
 
-                    <div class="mt-5 text-sm text-slate-500">
-                        Feedback util: <span class="font-semibold text-slate-900">{{ $knowledgeBaseSummary['helpful_feedback'] }}</span>
-                        <span class="mx-2 text-slate-300">/</span>
-                        Nao util: <span class="font-semibold text-slate-900">{{ $knowledgeBaseSummary['not_helpful_feedback'] }}</span>
+                    <div class="mt-5 h-56">
+                        <canvas data-chart='@json($charts["licenses"])'></canvas>
                     </div>
                 </section>
-            </div>
+            @endif
+
+            <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                <h3 class="text-lg font-semibold text-slate-900">Base de conhecimento</h3>
+                <p class="mt-1 text-sm text-slate-500">Uso, revisao e retorno dos artigos.</p>
+
+                <div class="mt-5 grid grid-cols-3 gap-3">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
+                        <p class="text-2xl font-semibold text-slate-900">{{ $knowledgeBaseSummary['published'] }}</p>
+                        <p class="mt-1 text-xs text-slate-500">Publicados</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
+                        <p class="text-2xl font-semibold text-slate-900">{{ $knowledgeBaseSummary['drafts'] }}</p>
+                        <p class="mt-1 text-xs text-slate-500">Rascunhos</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
+                        <p class="text-2xl font-semibold text-slate-900">{{ $knowledgeBaseSummary['generated_from_tickets'] }}</p>
+                        <p class="mt-1 text-xs text-slate-500">De chamados</p>
+                    </div>
+                </div>
+
+                <div class="mt-5 text-sm text-slate-500">
+                    Feedback util: <span class="font-semibold text-slate-900">{{ $knowledgeBaseSummary['helpful_feedback'] }}</span>
+                    <span class="mx-2 text-slate-300">/</span>
+                    Nao util: <span class="font-semibold text-slate-900">{{ $knowledgeBaseSummary['not_helpful_feedback'] }}</span>
+                </div>
+            </section>
         </div>
 
         <div class="grid gap-4 xl:grid-cols-3">

@@ -1,7 +1,7 @@
-<x-layouts.portal title="Usuarios" :show-header="false">
+<x-layouts.portal title="Usuarios" header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
-            compact
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Administracao"
             title="Usuarios"
             description="Controle perfis globais, acessos por setor e o status operacional de cada conta."
@@ -10,7 +10,9 @@
                 <a href="{{ route('users.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo usuario</a>
                 <a href="{{ route('users.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
             </x-slot:actions>
+        </x-portal.page-intro>
 
+        <x-portal.filter-bar title="Busca e acesso" description="Refine por nome, perfil global, setor ou status sem poluir a leitura da tabela.">
             <form method="GET" action="{{ route('users.index') }}" class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_180px_180px_minmax(220px,1fr)_auto_auto]">
                 <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por nome ou email" class="ui-input w-full">
                 <select name="global_role" class="ui-native-select w-full text-sm text-slate-700">
@@ -33,7 +35,7 @@
                 <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
                 <a href="{{ route('users.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">

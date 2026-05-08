@@ -16,55 +16,54 @@
         <div class="ui-panel rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ session('error') }}</div>
     @endif
 
-    <x-portal.section-hero
-        compact
+    <x-portal.page-intro
+        variant="compact"
         eyebrow="Configuracao operacional"
         :title="$board?->name ?? 'Configurar quadro'"
         :description="$board?->description ?: 'Ajuste etapas, SLA, campos e formularios do setor.'"
-        :badge="$board ? ($board->groups->count().' etapa(s)') : 'Sem setor'"
     >
-        @if ($sectorOptions->count() > 1 || $boardOptions->count() > 1 || $board)
-            <div class="portal-toolbar">
-                <div>
-                    @if ($board)
-                        <div class="mb-2">
-                            <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
-                        </div>
-                    @endif
-                    <p class="text-sm font-semibold text-slate-900">Escopo da configuracao</p>
-                    <p class="mt-1 text-sm text-slate-500">Mantenha a estrutura do quadro alinhada com o setor antes de publicar formularios.</p>
-                </div>
+        <x-slot:actions>
+            @if ($board)
+                <a href="{{ route('tickets.index', ['view' => 'stages', 'sector' => $board->sector_id, 'board' => $board->id]) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar aos quadros</a>
+            @endif
+        </x-slot:actions>
+        <x-slot:meta>
+            @if ($board)
+                <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
+                <span class="portal-chip">{{ $board->groups->count() }} etapa(s)</span>
+            @else
+                <span class="portal-chip">Sem quadro selecionado</span>
+            @endif
+        </x-slot:meta>
+    </x-portal.page-intro>
 
-                <div class="portal-toolbar-group">
-                    @if ($sectorOptions->count() > 1)
-                        <label class="text-sm text-slate-600">
-                            <span class="mb-1 block font-medium">Setor</span>
-                            <select wire:model.live="selectedSectorId" class="ui-native-select min-w-[240px]">
-                                @foreach ($sectorOptions as $sectorOption)
-                                    <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                    @endif
+    @if ($sectorOptions->count() > 1 || $boardOptions->count() > 1 || $board)
+        <x-portal.filter-bar title="Escopo da configuracao" description="Mantenha a estrutura do quadro alinhada com o setor antes de publicar formularios.">
+            <div class="portal-toolbar-group">
+                @if ($sectorOptions->count() > 1)
+                    <label class="text-sm text-slate-600">
+                        <span class="mb-1 block font-medium">Setor</span>
+                        <select wire:model.live="selectedSectorId" class="ui-native-select min-w-[240px]">
+                            @foreach ($sectorOptions as $sectorOption)
+                                <option value="{{ $sectorOption->id }}">{{ $sectorOption->name }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                @endif
 
-                    @if ($boardOptions->isNotEmpty())
-                        <label class="text-sm text-slate-600">
-                            <span class="mb-1 block font-medium">Quadro</span>
-                            <select wire:model.live="selectedBoardId" class="ui-native-select min-w-[240px]">
-                                @foreach ($boardOptions as $boardOption)
-                                    <option value="{{ $boardOption->id }}">{{ $boardOption->name }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                    @endif
-
-                    @if ($board)
-                        <a href="{{ route('tickets.index', ['view' => 'stages', 'sector' => $board->sector_id, 'board' => $board->id]) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar aos quadros</a>
-                    @endif
-                </div>
+                @if ($boardOptions->isNotEmpty())
+                    <label class="text-sm text-slate-600">
+                        <span class="mb-1 block font-medium">Quadro</span>
+                        <select wire:model.live="selectedBoardId" class="ui-native-select min-w-[240px]">
+                            @foreach ($boardOptions as $boardOption)
+                                <option value="{{ $boardOption->id }}">{{ $boardOption->name }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                @endif
             </div>
-        @endif
-    </x-portal.section-hero>
+        </x-portal.filter-bar>
+    @endif
 
     @if (! $board)
         <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">

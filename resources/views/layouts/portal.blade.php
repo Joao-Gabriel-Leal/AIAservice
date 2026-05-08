@@ -3,5 +3,6 @@
     'subtitle' => $subtitle ?? null,
     'portalMode' => $portalMode ?? 'default',
     'showHeader' => $showHeader ?? true,
+    'headerVariant' => $headerVariant ?? null,
     'slot' => $slot,
 ])

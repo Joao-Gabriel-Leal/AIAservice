@@ -348,6 +348,7 @@ class ShowPage extends Component
             'subtitle' => $canViewOperationalHistory
                 ? 'Detalhes, historico e conversa do chamado.'
                 : 'Detalhes e conversa do chamado.',
+            'headerVariant' => 'none',
         ]);
     }
 

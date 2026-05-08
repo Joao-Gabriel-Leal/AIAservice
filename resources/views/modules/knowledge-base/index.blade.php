@@ -1,6 +1,7 @@
-<x-layouts.portal title="Base de conhecimento" subtitle="Consulte orientacoes publicas e conteudos operacionais liberados para o seu acesso." :show-header="false">
+<x-layouts.portal title="Base de conhecimento" subtitle="Consulte orientacoes publicas e conteudos operacionais liberados para o seu acesso." header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Conhecimento compartilhado"
             title="Base de conhecimento"
             description="Pesquise por titulo, resumo, conteudo e priorize os artigos mais uteis para a operacao."
@@ -18,7 +19,9 @@
                     <a href="{{ route('knowledge-base.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
                 </x-slot:actions>
             @endcannot
+        </x-portal.page-intro>
 
+        <x-portal.filter-bar title="Busca por artigos" description="Procure por titulo, resumo ou conteudo antes de abrir o artigo certo.">
             <form method="GET" action="{{ route('knowledge-base.index') }}" class="flex w-full max-w-3xl gap-3">
                 <input
                     type="text"
@@ -30,7 +33,7 @@
                 <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Buscar</button>
                 <a href="{{ route('knowledge-base.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         @if (($featuredArticles ?? collect())->isNotEmpty())
             <section class="grid gap-4 lg:grid-cols-3">

@@ -96,6 +96,7 @@ class SearchPage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Busca global',
             'subtitle' => 'Procure chamados, conhecimento, cadastros, SLAs, licencas e operacao em uma unica tela.',
+            'headerVariant' => 'none',
         ]);
     }
 

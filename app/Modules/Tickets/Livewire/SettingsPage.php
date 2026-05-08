@@ -1562,6 +1562,7 @@ class SettingsPage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Configurar quadro',
             'subtitle' => 'Etapas, SLA, campos e formularios do setor.',
+            'headerVariant' => 'none',
         ]);
     }
 

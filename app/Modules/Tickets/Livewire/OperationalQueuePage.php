@@ -72,6 +72,7 @@ class OperationalQueuePage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Minha fila operacional',
             'subtitle' => 'Um cockpit rapido para chamados atribuidos, sem responsavel, SLA critico e tempos abertos.',
+            'headerVariant' => 'none',
         ]);
     }
 

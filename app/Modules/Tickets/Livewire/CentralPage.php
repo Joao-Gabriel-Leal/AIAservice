@@ -46,6 +46,7 @@ class CentralPage extends Component
         ])->layout('layouts.portal', [
             'title' => 'Central de formularios',
             'subtitle' => 'Escolha o setor, veja os formularios disponiveis e abra o chamado certo com menos atrito.',
+            'headerVariant' => 'none',
         ]);
     }
 

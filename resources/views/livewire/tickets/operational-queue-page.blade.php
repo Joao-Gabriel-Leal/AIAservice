@@ -1,9 +1,16 @@
 <div class="space-y-6">
-    <x-portal.section-hero
+    <x-portal.page-intro
         eyebrow="Operacao diaria"
         title="Minha fila operacional"
         description="Priorize o que precisa de acao: seus chamados, demandas sem dono, SLA critico e apontamentos de tempo abertos."
     >
+        <x-slot:meta>
+            <span class="portal-chip">{{ $stats[$bucket] ?? 0 }} item(ns) no recorte</span>
+            <span class="portal-chip">Fila viva do seu escopo</span>
+        </x-slot:meta>
+    </x-portal.page-intro>
+
+    <x-portal.filter-bar title="Fila do dia" description="Use os cards e filtros abaixo para alternar rapido entre atribuicoes, gargalos e tempos abertos.">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             @foreach ($buckets as $bucketKey => $bucketLabel)
                 <button
@@ -33,7 +40,7 @@
                 </select>
             </label>
         </div>
-    </x-portal.section-hero>
+    </x-portal.filter-bar>
 
     <div class="portal-table-surface">
         <table class="min-w-full divide-y divide-slate-200 text-sm">

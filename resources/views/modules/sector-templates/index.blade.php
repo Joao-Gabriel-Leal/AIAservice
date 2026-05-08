@@ -1,7 +1,7 @@
-<x-layouts.portal title="Templates de setor" :show-header="false">
+<x-layouts.portal title="Templates de setor" header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
-            compact
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Administracao"
             title="Templates de setor"
             description="Salve um onboarding reutilizavel com formulario, catalogo, automacoes e SLA para acelerar a criacao de novos setores."
@@ -9,7 +9,7 @@
             <x-slot:actions>
                 <a href="{{ route('sector-templates.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo template</a>
             </x-slot:actions>
-        </x-portal.section-hero>
+        </x-portal.page-intro>
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">

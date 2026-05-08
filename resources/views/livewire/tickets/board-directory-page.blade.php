@@ -1,22 +1,24 @@
 <div class="space-y-6">
-    <x-portal.section-hero
+    <x-portal.page-intro
         eyebrow="Quadros operacionais"
         title="Quadros"
         description="Abra o quadro certo para trabalhar as demandas em lista, etapas ou kanban."
     >
-        <div class="portal-toolbar">
-            <div>
-                <p class="text-sm font-semibold text-slate-900">{{ $boards->count() }} quadro(s) disponivel(is)</p>
-                <p class="mt-1 text-sm text-slate-500">Busque, favorite e reabra rapidamente os quadros que voce usa todos os dias.</p>
-            </div>
+        <x-slot:meta>
+            <span class="portal-chip">{{ $boards->count() }} quadro(s)</span>
+            <span class="portal-chip">{{ $favoriteCount }} favorito(s)</span>
+            <span class="portal-chip">{{ $recentCount }} recente(s)</span>
+        </x-slot:meta>
+    </x-portal.page-intro>
 
+    <x-portal.filter-bar title="Encontrar um quadro" description="Busque, favorite e reabra rapidamente os quadros que voce usa todos os dias.">
+        <x-slot:actions>
             <div class="portal-toolbar-group">
                 <button type="button" wire:click="setScope('all')" class="ui-action rounded-2xl px-4 py-2 text-sm {{ $scope === 'all' ? 'ui-action-primary' : 'ui-action-secondary' }}">Todos</button>
                 <button type="button" wire:click="setScope('favorites')" class="ui-action rounded-2xl px-4 py-2 text-sm {{ $scope === 'favorites' ? 'ui-action-primary' : 'ui-action-secondary' }}">Favoritos</button>
                 <button type="button" wire:click="setScope('recent')" class="ui-action rounded-2xl px-4 py-2 text-sm {{ $scope === 'recent' ? 'ui-action-primary' : 'ui-action-secondary' }}">Recentes</button>
             </div>
-        </div>
-
+        </x-slot:actions>
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Buscar quadro</span>
@@ -24,11 +26,10 @@
             </label>
 
             <div class="flex items-end gap-2">
-                <span class="portal-chip">{{ $favoriteCount }} favorito(s)</span>
-                <span class="portal-chip">{{ $recentCount }} recente(s)</span>
+                <span class="portal-chip">Escopo {{ $scope === 'all' ? 'total' : ($scope === 'favorites' ? 'favoritos' : 'recentes') }}</span>
             </div>
         </div>
-    </x-portal.section-hero>
+    </x-portal.filter-bar>
 
     @if ($boards->isEmpty())
         <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">

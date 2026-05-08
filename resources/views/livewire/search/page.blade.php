@@ -1,17 +1,18 @@
 <div class="space-y-6">
-    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-                <p class="text-sm font-semibold text-slate-900">Busca absurda</p>
-                <p class="mt-1 text-sm text-slate-500">Digite texto, serial, usuario, setor, SLA, artigo, licenca ou trecho operacional para procurar em todo o sistema.</p>
-            </div>
-
+    <x-portal.page-intro
+        eyebrow="Busca global"
+        title="Encontre o contexto certo em segundos"
+        description="Digite texto, serial, usuario, setor, SLA, artigo, licenca ou trecho operacional para procurar em todo o sistema."
+    >
+        <x-slot:actions>
             <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                 Voltar para chamados
             </a>
-        </div>
+        </x-slot:actions>
+    </x-portal.page-intro>
 
-        <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
+    <x-portal.filter-bar title="Busca em tudo" description="Combine texto livre, tipos, setor e periodo para enxugar o resultado sem pesar o topo da tela.">
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
             <div class="space-y-4">
                 <label class="block text-sm text-slate-600">
                     <span class="mb-2 block font-medium">Buscar em tudo</span>
@@ -76,7 +77,7 @@
                 </div>
             </div>
         </div>
-    </section>
+    </x-portal.filter-bar>
 
     @if (trim($results['query']) === '')
         <section class="ui-panel rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center shadow-sm">

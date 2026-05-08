@@ -1,21 +1,34 @@
-<x-layouts.portal :title="$article->title" :subtitle="$article->sector?->name ? 'Setor: '.$article->sector->name : null">
+<x-layouts.portal :title="$article->title" :subtitle="$article->sector?->name ? 'Setor: '.$article->sector->name : null" header-variant="none">
     <div class="space-y-6">
+        <x-portal.page-intro
+            variant="detail"
+            :eyebrow="$article->sector?->company?->name ?? 'Base de conhecimento'"
+            :title="$article->title"
+            description="Conteudo publicado para consulta operacional, com feedback, anexos e contexto detalhado logo abaixo."
+        >
+            <x-slot:actions>
+                <a href="{{ route('knowledge-base.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar para consulta</a>
+                @can('update', $article)
+                    <a href="{{ route('knowledge-base.edit', $article) }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Editar artigo</a>
+                @endcan
+            </x-slot:actions>
+            <x-slot:meta>
+                <x-sector-badge :sector="$article->sector" mode="chip" />
+                <span class="portal-chip">{{ $article->visibility->label() }}</span>
+                <span class="portal-chip">{{ $article->editorial_status->label() }}</span>
+                @if ($article->author)
+                    <span class="portal-chip">Criado por {{ $article->author->name }}</span>
+                @endif
+                @if ($article->attachments->isNotEmpty())
+                    <span class="portal-chip">{{ $article->attachments->count() }} anexo(s)</span>
+                @endif
+            </x-slot:meta>
+        </x-portal.page-intro>
+
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div class="space-y-6">
                 <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div class="flex flex-wrap items-center gap-2 text-xs">
-                        <x-sector-badge :sector="$article->sector" mode="chip" />
-                        <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{{ $article->visibility->label() }}</span>
-                        <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{{ $article->editorial_status->label() }}</span>
-                        @if ($article->author)
-                            <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">Criado por {{ $article->author->name }}</span>
-                        @endif
-                        @if ($article->attachments->isNotEmpty())
-                            <span class="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">{{ $article->attachments->count() }} anexo(s)</span>
-                        @endif
-                    </div>
-
-                    <div class="mt-6 rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                    <div class="rounded-2xl border border-sky-100 bg-sky-50 p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Resumo</p>
                         <p class="mt-2 text-sm leading-7 text-slate-700">{{ $article->summary }}</p>
                     </div>
@@ -113,13 +126,6 @@
                     </div>
                 </section>
             </aside>
-        </div>
-
-        <div class="flex gap-3">
-            <a href="{{ route('knowledge-base.index') }}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">Voltar para consulta</a>
-            @can('update', $article)
-                <a href="{{ route('knowledge-base.edit', $article) }}" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">Editar artigo</a>
-            @endcan
         </div>
     </div>
 </x-layouts.portal>

@@ -23,22 +23,19 @@
         }
     @endphp
 
-    <x-portal.section-hero
-        compact
+    <x-portal.page-intro
+        variant="detail"
         :eyebrow="($ticket->sector?->company?->name ?? 'Sem empresa').' / '.($ticket->sector?->name ?? 'Sem setor')"
         :title="$ticket->title"
         :description="$ticket->description ?: 'Sem descricao adicional.'"
     >
-        <x-slot:actions>
+        <x-slot:meta>
             <span class="portal-chip">Chamado #{{ $ticket->id }}</span>
             <x-sector-badge :sector="$ticket->sector" mode="chip" />
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium {{ $ticket->priority?->badgeColor() }}">{{ $ticket->priority?->label() }}</span>
             <span class="inline-flex rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->group?->color ?: '#64748b' }}">
                 {{ $ticket->group?->name ?? 'Sem etapa' }}
             </span>
-        </x-slot:actions>
-
-        <div class="flex flex-wrap gap-2">
             <span class="portal-chip">Solicitante: {{ $ticket->requester?->name ?? 'Nao informado' }}</span>
             <span class="portal-chip">Responsavel: {{ $ticket->assignee?->name ?? 'Nao atribuido' }}</span>
             <span class="portal-chip">Catalogo: {{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</span>
@@ -47,8 +44,8 @@
             @if ($canViewOperationalHistory)
                 <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
             @endif
-        </div>
-    </x-portal.section-hero>
+        </x-slot:meta>
+    </x-portal.page-intro>
 
     @if (session('status'))
         <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-sm" role="status">

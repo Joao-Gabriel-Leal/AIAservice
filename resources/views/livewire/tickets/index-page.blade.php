@@ -20,7 +20,7 @@
         }
     @endphp
 
-    <x-portal.section-hero
+    <x-portal.page-intro
         eyebrow="Quadro operacional"
         :title="$board?->name ?? 'Quadro'"
         :description="$board?->description ?: 'Acompanhe as demandas deste quadro em lista, etapas ou kanban.'"
@@ -78,18 +78,16 @@
                 </a>
             @endif
         </x-slot:actions>
-
-        <div class="portal-toolbar">
-            <div>
-                <p class="text-sm font-semibold text-slate-900">Filtros do quadro</p>
-                <p class="mt-1 text-sm text-slate-500">Este painel mostra somente demandas do quadro aberto.</p>
-            </div>
-
+        <x-slot:meta>
             @if ($board)
                 <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
+                <span class="portal-chip">{{ $groups->count() }} etapa(s)</span>
+                <span class="portal-chip">{{ $savedViews->count() }} view(s) salva(s)</span>
             @endif
-        </div>
+        </x-slot:meta>
+    </x-portal.page-intro>
 
+    <x-portal.filter-bar title="Operacao do quadro" description="Use atalhos, views salvas e filtros sem perder o foco no quadro aberto.">
         @if ($board)
             <div class="grid gap-4 xl:grid-cols-[1fr_1fr]">
                 <div class="rounded-3xl border border-slate-200 bg-white/70 p-4">
@@ -149,7 +147,7 @@
             </div>
         @endif
 
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div class="{{ $board ? 'mt-4' : '' }} grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Titulo</span>
                 <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por titulo">
@@ -221,7 +219,7 @@
         </div>
 
         @if ($fieldOptions->isNotEmpty())
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 @foreach ($fieldOptions as $field)
                     <label class="text-sm text-slate-600">
                         <span class="mb-1 block font-medium">{{ $field->name }}</span>
@@ -250,7 +248,7 @@
                 @endforeach
             </div>
         @endif
-    </x-portal.section-hero>
+    </x-portal.filter-bar>
 
     @if ($lastManualTicketId)
         <div class="ui-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

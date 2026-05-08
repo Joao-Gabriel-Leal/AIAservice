@@ -1,6 +1,9 @@
 @php($portalMode = $portalMode ?? 'default')
 @php($isFocusedForm = $portalMode === 'focused-form')
 @php($showHeader = $showHeader ?? true)
+@php($headerVariant = $headerVariant ?? null)
+@php($headerVariant = $headerVariant ?? ($showHeader ? 'quiet' : 'none'))
+@php($headerVariant = in_array($headerVariant, ['hero', 'quiet', 'none'], true) ? $headerVariant : 'quiet')
 
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -125,15 +128,15 @@
                             @endif
                         </div>
                     </header>
-                @elseif ($showHeader)
+                @elseif ($headerVariant !== 'none')
                     <header class="px-6 pt-6">
-                        <div class="portal-layout-header">
+                        <div class="portal-layout-header {{ $headerVariant === 'hero' ? 'portal-layout-header-hero' : 'portal-layout-header-quiet' }}">
                             <div class="flex flex-col gap-4">
                                 <div>
                                     <p class="portal-layout-kicker">Portal interno</p>
-                                    <h1 class="mt-3 text-3xl font-semibold text-white">{{ $title ?? config('app.name') }}</h1>
+                                    <h1 class="portal-layout-title">{{ $title ?? config('app.name') }}</h1>
                                     @if (! empty($subtitle))
-                                        <p class="mt-2 max-w-3xl text-sm text-slate-200/78">{{ $subtitle }}</p>
+                                        <p class="portal-layout-subtitle">{{ $subtitle }}</p>
                                     @endif
                                 </div>
                             </div>

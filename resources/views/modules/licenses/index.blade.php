@@ -1,43 +1,38 @@
-<x-layouts.portal title="Licencas" subtitle="Veja por setor quais licencas existem, quantas estao em uso e onde vale abrir para gerir as atribuicoes.">
+<x-layouts.portal title="Licencas" subtitle="Veja por setor quais licencas existem, quantas estao em uso e onde vale abrir para gerir as atribuicoes." header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Gestao simples"
             title="Licencas por setor"
             description="Cada linha representa um tipo de licenca. Abra a linha para ver com quem cada licenca esta atribuida e transferir quando precisar."
         >
-            <form method="GET" action="{{ route('licenses.index') }}" class="space-y-3">
-                <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-slate-900">Busca rapida</p>
-                        <p class="mt-1 text-xs text-slate-500">Busque por fornecedor, produto, tipo, email ou referencia.</p>
-                    </div>
+            <x-slot:actions>
+                <a href="{{ route('licenses.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova licenca</a>
+                <a href="{{ route('licenses.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+            </x-slot:actions>
+        </x-portal.page-intro>
 
-                    <div class="flex flex-wrap gap-2">
-                        <a href="{{ route('licenses.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova licenca</a>
-                        <a href="{{ route('licenses.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
-                        <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                        <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-                    </div>
-                </div>
+        <x-portal.filter-bar title="Busca rapida" description="Busque por fornecedor, produto, tipo, email ou referencia.">
+            <form method="GET" action="{{ route('licenses.index') }}" class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.8fr)_minmax(180px,0.9fr)_auto_auto]">
+                <label class="block">
+                    <span class="sr-only">Busca</span>
+                    <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por fornecedor, produto, email ou referencia" class="ui-input h-11 w-full px-3">
+                </label>
 
-                <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.8fr)_minmax(180px,0.9fr)]">
-                    <label class="block">
-                        <span class="sr-only">Busca</span>
-                        <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por fornecedor, produto, email ou referencia" class="ui-input h-11 w-full px-3">
-                    </label>
+                <label class="block">
+                    <span class="sr-only">Setor</span>
+                    <select name="sector_id" class="ui-native-select h-11 w-full text-sm text-slate-700">
+                        <option value="">Todos os setores</option>
+                        @foreach ($sectors as $sectorOption)
+                            <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
 
-                    <label class="block">
-                        <span class="sr-only">Setor</span>
-                        <select name="sector_id" class="ui-native-select h-11 w-full text-sm text-slate-700">
-                            <option value="">Todos os setores</option>
-                            @foreach ($sectors as $sectorOption)
-                                <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                </div>
+                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
+                <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">

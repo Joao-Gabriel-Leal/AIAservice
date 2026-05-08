@@ -1,7 +1,7 @@
-<x-layouts.portal title="Gerenciar base de conhecimento" subtitle="Cadastre e mantenha os artigos por setor com controle de visibilidade." :show-header="false">
+<x-layouts.portal title="Gerenciar base de conhecimento" subtitle="Cadastre e mantenha os artigos por setor com controle de visibilidade." header-variant="none">
     <div class="space-y-6">
-        <x-portal.section-hero
-            compact
+        <x-portal.page-intro
+            variant="compact"
             eyebrow="Gestao editorial"
             title="Gerenciar base de conhecimento"
             description="Cadastre, revise e mantenha os artigos por setor com controle de visibilidade."
@@ -10,7 +10,9 @@
                 <a href="{{ route('knowledge-base.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo artigo</a>
                 <a href="{{ route('knowledge-base.manage.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
             </x-slot:actions>
+        </x-portal.page-intro>
 
+        <x-portal.filter-bar title="Busca editorial" description="Procure por titulo, resumo ou conteudo antes de ajustar a linha na tabela.">
             <form method="GET" action="{{ route('knowledge-base.manage') }}" class="flex w-full max-w-2xl gap-3">
                 <input
                     type="text"
@@ -22,7 +24,7 @@
                 <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Buscar</button>
                 <a href="{{ route('knowledge-base.manage') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
             </form>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">

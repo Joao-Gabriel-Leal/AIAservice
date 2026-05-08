@@ -4,53 +4,51 @@
             Nenhum setor ativo disponivel para abertura de chamados.
         </div>
     @else
-        <x-portal.section-hero
+        <x-portal.page-intro
             eyebrow="Central de formularios"
             title="Escolha o setor e siga pelo formulario certo"
             description="Selecione uma area para ver os formularios ativos disponiveis naquele setor."
-            :badge="$sectors->count().' setor(es)'"
         >
             <x-slot:actions>
                 <a href="{{ route('tickets.index') }}" class="portal-layout-action">
                     Ver meus chamados
                 </a>
             </x-slot:actions>
+            <x-slot:meta>
+                <span class="portal-chip">{{ $sectors->count() }} setor(es)</span>
+                @if ($selectedSector)
+                    <span class="portal-chip">{{ $selectedSector->name }}</span>
+                @endif
+            </x-slot:meta>
+        </x-portal.page-intro>
 
-            <div>
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <p class="text-sm font-semibold text-slate-900">Setores disponiveis</p>
-                        <p class="mt-1 text-sm text-slate-500">A selecao abaixo atualiza o conteudo da central sem trocar de rota.</p>
-                    </div>
-                </div>
+        <x-portal.filter-bar title="Setores disponiveis" description="A selecao abaixo atualiza o conteudo da central sem trocar de rota.">
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                @foreach ($sectors as $sector)
+                    @php($formCount = $sector->boards?->sum(fn ($board) => $board->forms?->count() ?? 0) ?? 0)
 
-                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    @foreach ($sectors as $sector)
-                        @php($formCount = $sector->boards?->sum(fn ($board) => $board->forms?->count() ?? 0) ?? 0)
-
-                        <button
-                            type="button"
-                            wire:click="selectSector({{ $sector->id }})"
-                            wire:key="central-sector-{{ $sector->id }}"
-                            class="ui-panel ui-panel-interactive flex min-h-[132px] flex-col items-start rounded-3xl border p-5 text-left transition"
-                            style="{{ $selectedSector?->id === $sector->id
-                                ? 'border-color: '.$sector->displayColor().'; background-color: '.$sector->softColor().'; box-shadow: inset 0 0 0 1px '.$sector->borderColor().'; color: #0f172a;'
-                                : 'border-color: #e2e8f0; background-color: #ffffff; color: #334155;' }}"
-                        >
-                            <div class="flex items-center gap-2">
-                                <span class="size-3 rounded-full" style="background-color: {{ $sector->displayColor() }}"></span>
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{{ $sector->company?->name ?? 'Sem empresa' }}</p>
-                            </div>
-                            <p class="mt-3 text-lg font-semibold">{{ $sector->name }}</p>
-                            <p class="mt-2 line-clamp-2 text-sm text-slate-500">{{ $sector->description ?: 'Setor ativo para abertura e acompanhamento de solicitacoes.' }}</p>
-                            <div class="mt-auto pt-4 text-xs font-medium text-slate-500">
-                                {{ $formCount }} formulario(s) ativo(s)
-                            </div>
-                        </button>
-                    @endforeach
-                </div>
+                    <button
+                        type="button"
+                        wire:click="selectSector({{ $sector->id }})"
+                        wire:key="central-sector-{{ $sector->id }}"
+                        class="ui-panel ui-panel-interactive flex min-h-[132px] flex-col items-start rounded-3xl border p-5 text-left transition"
+                        style="{{ $selectedSector?->id === $sector->id
+                            ? 'border-color: '.$sector->displayColor().'; background-color: '.$sector->softColor().'; box-shadow: inset 0 0 0 1px '.$sector->borderColor().'; color: #0f172a;'
+                            : 'border-color: #e2e8f0; background-color: #ffffff; color: #334155;' }}"
+                    >
+                        <div class="flex items-center gap-2">
+                            <span class="size-3 rounded-full" style="background-color: {{ $sector->displayColor() }}"></span>
+                            <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{{ $sector->company?->name ?? 'Sem empresa' }}</p>
+                        </div>
+                        <p class="mt-3 text-lg font-semibold">{{ $sector->name }}</p>
+                        <p class="mt-2 line-clamp-2 text-sm text-slate-500">{{ $sector->description ?: 'Setor ativo para abertura e acompanhamento de solicitacoes.' }}</p>
+                        <div class="mt-auto pt-4 text-xs font-medium text-slate-500">
+                            {{ $formCount }} formulario(s) ativo(s)
+                        </div>
+                    </button>
+                @endforeach
             </div>
-        </x-portal.section-hero>
+        </x-portal.filter-bar>
 
         @if ($selectedSector)
             <section class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
