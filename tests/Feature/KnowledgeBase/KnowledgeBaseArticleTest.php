@@ -625,7 +625,7 @@ class KnowledgeBaseArticleTest extends TestCase
             'used_by_id' => $technician->id,
         ]);
 
-        $this->actingAs($technician)
+        $response = $this->actingAs($technician)
             ->get(route('knowledge-base.index'))
             ->assertOk()
             ->assertSeeInOrder([
@@ -633,6 +633,40 @@ class KnowledgeBaseArticleTest extends TestCase
                 'Email alternativo',
                 'Manual antigo',
             ]);
+
+        $content = $response->getContent();
+
+        $this->assertSame(1, substr_count($content, 'VPN confiavel'));
+        $this->assertSame(1, substr_count($content, 'Email alternativo'));
+        $this->assertSame(1, substr_count($content, 'Manual antigo'));
+        $this->assertSame(2, substr_count($content, 'Mais util'));
+    }
+
+    public function test_knowledge_base_index_does_not_highlight_articles_without_helpful_votes_or_usages(): void
+    {
+        [$sectorA] = $this->seedSectors();
+        $technician = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'title' => 'Procedimento sem metricas',
+            'summary' => 'Ainda sem validacao',
+            'content' => 'Conteudo sem metricas',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($technician)
+            ->get(route('knowledge-base.index'))
+            ->assertOk()
+            ->assertSeeText('Procedimento sem metricas')
+            ->assertDontSeeText('Mais util');
     }
 
     private function seedSectors(): array

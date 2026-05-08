@@ -48,7 +48,6 @@ class KnowledgeBaseArticleController extends Controller
         return view('modules.knowledge-base.index', [
             'articles' => $this->searchService->paginateVisible($request->user(), $search),
             'search' => $search,
-            'featuredArticles' => trim($search) === '' ? $this->searchService->topUseful($request->user()) : collect(),
         ]);
     }
 

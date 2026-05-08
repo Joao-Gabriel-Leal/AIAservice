@@ -35,33 +35,18 @@
             </form>
         </x-portal.filter-bar>
 
-        @if (($featuredArticles ?? collect())->isNotEmpty())
-            <section class="grid gap-4 lg:grid-cols-3">
-                @foreach ($featuredArticles as $featuredArticle)
-                    @php($helpfulVotes = $featuredArticle->helpful_feedback_count ?? 0)
-                    @php($ticketUsages = $featuredArticle->ticket_usages_count ?? 0)
-                    <article class="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Mais util</p>
-                        <h2 class="mt-3 text-lg font-semibold text-slate-900">{{ $featuredArticle->title }}</h2>
-                        <p class="mt-2 text-sm text-slate-600">{{ $featuredArticle->summary }}</p>
-                        <p class="mt-4 text-xs text-slate-500">
-                            {{ trans_choice('ui.helpful_vote', $helpfulVotes, ['count' => $helpfulVotes]) }}
-                            - {{ trans_choice('ui.ticket_usage', $ticketUsages, ['count' => $ticketUsages]) }}
-                        </p>
-                        <a href="{{ route('knowledge-base.show', $featuredArticle) }}" class="mt-4 inline-flex rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-700">Abrir artigo</a>
-                    </article>
-                @endforeach
-            </section>
-        @endif
-
         <div class="grid gap-6">
             @forelse ($articles as $article)
                 @php($helpfulVotes = $article->helpful_feedback_count ?? 0)
                 @php($ticketUsages = $article->ticket_usages_count ?? 0)
+                @php($isHighlighted = trim($search) === '' && $articles->currentPage() === 1 && $loop->iteration <= 3 && ($helpfulVotes > 0 || $ticketUsages > 0))
                 <article class="portal-surface p-6">
                     <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div class="space-y-3">
                             <div class="flex flex-wrap items-center gap-2 text-xs">
+                                @if ($isHighlighted)
+                                    <span class="rounded-full bg-amber-100 px-3 py-1 font-semibold uppercase tracking-[0.12em] text-amber-700">Mais util</span>
+                                @endif
                                 <x-sector-badge :sector="$article->sector" mode="chip" />
                                 <span class="rounded-full {{ $article->visibility->value === 'public' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700' }} px-3 py-1 font-medium">
                                     {{ $article->visibility->label() }}
