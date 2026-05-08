@@ -70,7 +70,7 @@ class NotificationsController extends Controller
         $data = is_array($notification->data) ? $notification->data : [];
 
         if ($notification->type === AccountCreatedNotification::class) {
-            return (bool) data_get($data, 'must_change_password', false)
+            return auth()->user()?->must_change_password
                 ? route('password.force-change')
                 : route('dashboard');
         }

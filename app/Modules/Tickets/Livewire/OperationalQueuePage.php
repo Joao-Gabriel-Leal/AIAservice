@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Support\TicketIndexQuery;
+use App\Modules\Tickets\Support\TicketReferenceCode;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -120,7 +121,9 @@ class OperationalQueuePage extends Component
         $search = trim($this->search);
 
         if ($search !== '') {
-            $query->where(function (Builder $searchQuery) use ($search): void {
+            $normalizedReference = TicketReferenceCode::normalizeLookup($search);
+
+            $query->where(function (Builder $searchQuery) use ($search, $normalizedReference): void {
                 $searchQuery
                     ->where('title', 'like', "%{$search}%")
                     ->orWhereHas('requester', fn (Builder $userQuery) => $userQuery
@@ -129,6 +132,14 @@ class OperationalQueuePage extends Component
                     ->orWhereHas('assignee', fn (Builder $userQuery) => $userQuery
                         ->where('name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%"));
+
+                if ($normalizedReference !== '') {
+                    $searchQuery->orWhere('reference_lookup', 'like', $normalizedReference.'%');
+                }
+
+                if (ctype_digit($search)) {
+                    $searchQuery->orWhere('id', (int) $search);
+                }
             });
         }
 

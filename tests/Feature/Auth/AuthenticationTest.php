@@ -77,6 +77,20 @@ class AuthenticationTest extends TestCase
         $this->assertFalse($user->fresh()->must_change_password);
     }
 
+    public function test_force_change_requires_current_password_after_first_mandatory_reset(): void
+    {
+        $user = User::factory()->create([
+            'must_change_password' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('password.force-change.update'), [
+                'password' => 'Senha@123',
+                'password_confirmation' => 'Senha@123',
+            ])
+            ->assertSessionHasErrors('current_password');
+    }
+
     public function test_users_can_not_authenticate_with_invalid_password(): void
     {
         $user = User::factory()->create();
@@ -87,6 +101,37 @@ class AuthenticationTest extends TestCase
         ]);
 
         $response->assertSessionHasErrorsIn('email');
+
+        $this->assertGuest();
+    }
+
+    public function test_inactive_users_cannot_authenticate_using_the_login_screen(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => false,
+        ]);
+
+        $response = $this->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertSessionHasErrorsIn('email');
+
+        $this->assertGuest();
+    }
+
+    public function test_inactive_authenticated_users_are_logged_out_on_the_next_request(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user);
+
+        $user->forceFill(['is_active' => false])->save();
+
+        $this->get(route('dashboard'))
+            ->assertRedirect(route('login', absolute: false))
+            ->assertSessionHasErrors('email');
 
         $this->assertGuest();
     }

@@ -69,8 +69,8 @@ class TicketMineAndChatFilesTest extends TestCase
                 ->get(route('tickets.mine'))
                 ->assertOk()
                 ->assertSee('Meus chamados')
-                ->assertDontSee('Veja somente os chamados que foram abertos por voce, com status, responsavel e SLA no mesmo painel.')
-                ->assertDontSee('A lista ignora chamados de outros solicitantes, mesmo quando voce tem acesso operacional ao setor.');
+                ->assertSee('Somente solicitacoes do seu usuario')
+                ->assertSee('Filtros pessoais');
         }
 
         Livewire::actingAs($operator)
@@ -565,7 +565,8 @@ class TicketMineAndChatFilesTest extends TestCase
         $this->actingAs($requester)
             ->get(route('tickets.attachments.inline', $attachment))
             ->assertOk()
-            ->assertHeader('Content-Disposition', 'inline; filename="print.png"');
+            ->assertHeader('Content-Disposition', 'inline; filename="print.png"')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
 
         $video = UploadedFile::fake()->create('evidencia.mp4', 100, 'video/mp4');
 
@@ -622,13 +623,72 @@ class TicketMineAndChatFilesTest extends TestCase
             ->call('sendMessage')
             ->assertHasErrors(['chatFiles' => 'max']);
 
-        $largeFile = UploadedFile::fake()->create('arquivo-grande.zip', 25601, 'application/zip');
+        $largeFile = UploadedFile::fake()->create('arquivo-grande.zip', 10241, 'application/zip');
 
         Livewire::actingAs($requester)
             ->test(ShowPage::class, ['ticket' => $ticket])
             ->set('chatFiles', [$largeFile])
             ->call('sendMessage')
-            ->assertHasErrors();
+            ->assertHasErrors(['chatFiles.0']);
+
+        $unsupportedFile = UploadedFile::fake()->create('script.html', 10, 'text/html');
+
+        Livewire::actingAs($requester)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->set('chatFiles', [$unsupportedFile])
+            ->call('sendMessage')
+            ->assertHasErrors(['chatFiles.0']);
+
+        $tooLargeBatch = [
+            UploadedFile::fake()->create('evidencia-1.zip', 9000, 'application/zip'),
+            UploadedFile::fake()->create('evidencia-2.zip', 9000, 'application/zip'),
+            UploadedFile::fake()->create('evidencia-3.zip', 9000, 'application/zip'),
+        ];
+
+        Livewire::actingAs($requester)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->set('chatFiles', $tooLargeBatch)
+            ->call('sendMessage')
+            ->assertHasErrors(['chatFiles']);
+    }
+
+    public function test_inline_preview_is_blocked_for_non_safe_attachment_types(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $ticket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'title' => 'Download seguro',
+        ]);
+
+        $attachment = TicketAttachment::query()->create([
+            'ticket_id' => $ticket->id,
+            'ticket_message_id' => null,
+            'uploaded_by_id' => $requester->id,
+            'source' => 'chat',
+            'disk' => 'database',
+            'path' => 'tickets/'.$ticket->id.'/manual.pdf',
+            'original_name' => 'manual.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 12,
+            'content' => (new TicketAttachment)->encodeContentForStorage('%PDF-sample%'),
+        ]);
+
+        $this->actingAs($requester)
+            ->get(route('tickets.attachments.inline', $attachment))
+            ->assertNotFound();
+
+        $this->actingAs($requester)
+            ->get(route('tickets.attachments.show', $attachment))
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 
     private function ticketContext(string $sectorName = 'Suporte'): array

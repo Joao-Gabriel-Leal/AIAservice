@@ -11,6 +11,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Services\TicketWorkflowService;
+use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
@@ -31,6 +32,12 @@ class ShowPage extends Component
     public string $message = '';
 
     public array $chatFiles = [];
+
+    public string $internalMessage = '';
+
+    public array $internalChatFiles = [];
+
+    public array $internalMentionedUserIds = [];
 
     public ?int $ratingValue = null;
 
@@ -84,17 +91,16 @@ class ShowPage extends Component
 
         $validated = $this->validate([
             'message' => [$hasFiles ? 'nullable' : 'required', 'string', 'max:4000'],
-            'chatFiles' => ['array', 'max:5'],
-            'chatFiles.*' => ['file', 'max:25600'],
+            ...TicketAttachmentRules::validationRules('chatFiles'),
         ], [
             'message.required' => 'Escreva uma mensagem ou anexe ao menos um arquivo.',
-            'chatFiles.max' => 'Envie no maximo 5 arquivos por mensagem.',
-            'chatFiles.*.max' => 'Cada arquivo pode ter no maximo 25 MB.',
+            ...TicketAttachmentRules::validationMessages('chatFiles'),
         ]);
 
         $message = trim((string) ($validated['message'] ?? ''));
+        $attachments = TicketAttachmentRules::validate($validated['chatFiles'] ?? [], 'chatFiles');
 
-        if ($message === '' && ! $hasFiles) {
+        if ($message === '' && $attachments === []) {
             $this->addError('message', 'Escreva uma mensagem ou anexe ao menos um arquivo.');
 
             return;
@@ -102,9 +108,47 @@ class ShowPage extends Component
 
         $ticket = $this->ticket();
         $this->authorize('comment', $ticket);
-        $workflowService->addMessage(auth()->user(), $ticket, $message, $this->chatFiles);
+        $workflowService->addMessage(auth()->user(), $ticket, $message, $attachments);
 
         $this->reset('message', 'chatFiles');
+    }
+
+    public function sendInternalUpdate(TicketWorkflowService $workflowService): void
+    {
+        $hasFiles = collect($this->internalChatFiles)->filter()->isNotEmpty();
+
+        $validated = $this->validate([
+            'internalMessage' => [$hasFiles ? 'nullable' : 'required', 'string', 'max:4000'],
+            'internalMentionedUserIds' => ['nullable', 'array'],
+            'internalMentionedUserIds.*' => ['integer'],
+            ...TicketAttachmentRules::validationRules('internalChatFiles'),
+        ], [
+            'internalMessage.required' => 'Escreva uma atualizacao interna ou anexe ao menos um arquivo.',
+            ...TicketAttachmentRules::validationMessages('internalChatFiles'),
+        ]);
+
+        $message = trim((string) ($validated['internalMessage'] ?? ''));
+        $attachments = TicketAttachmentRules::validate($validated['internalChatFiles'] ?? [], 'internalChatFiles');
+
+        if ($message === '' && $attachments === []) {
+            $this->addError('internalMessage', 'Escreva uma atualizacao interna ou anexe ao menos um arquivo.');
+
+            return;
+        }
+
+        $ticket = $this->ticket();
+        $this->authorize('commentInternally', $ticket);
+
+        $workflowService->addMessage(
+            auth()->user(),
+            $ticket,
+            $message,
+            $attachments,
+            isInternal: true,
+            mentionedUserIds: $this->normalizeInternalMentionedUserIds($ticket, $validated['internalMentionedUserIds'] ?? []),
+        );
+
+        $this->reset('internalMessage', 'internalChatFiles', 'internalMentionedUserIds');
     }
 
     public function closeOwnTicket(TicketWorkflowService $workflowService): void
@@ -276,6 +320,8 @@ class ShowPage extends Component
         $assignees = $board ? $this->boardAssignees($board) : collect();
         $canRate = auth()->user()->can('rate', $ticket);
         $canComment = auth()->user()->can('comment', $ticket);
+        $canViewInternalUpdates = auth()->user()->can('viewInternalUpdates', $ticket);
+        $canCommentInternally = auth()->user()->can('commentInternally', $ticket);
         $canViewTimeTracking = auth()->user()->can('viewTimeTracking', $ticket);
         $canViewOperationalHistory = $canViewTimeTracking;
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
@@ -295,6 +341,22 @@ class ShowPage extends Component
         $canCreateKnowledgeArticle = auth()->user()->can('createFromTicket', [KnowledgeBaseArticle::class, $ticket]);
         $knowledgeArticle = $ticket->generatedKnowledgeBaseArticle;
         $knowledgeArticleIdsUsed = $ticket->knowledgeBaseUsages->pluck('knowledge_base_article_id')->all();
+        $messages = $ticket->messages->sortBy('created_at')->values();
+        $publicMessages = $messages
+            ->reject(fn ($ticketMessage) => $ticketMessage->is_internal)
+            ->values();
+        $internalMessages = $canViewInternalUpdates
+            ? $messages->filter(fn ($ticketMessage) => $ticketMessage->is_internal)->values()
+            : collect();
+        $visibleAttachments = $ticket->attachments
+            ->filter(fn ($attachment) => ! ($attachment->message?->is_internal && ! $canViewInternalUpdates))
+            ->values();
+        $internalAudienceUsers = $canViewInternalUpdates
+            ? $assignees->values()
+            : collect();
+        $internalMentionableUsers = $canViewInternalUpdates
+            ? $internalAudienceUsers->reject(fn (User $user) => $user->id === auth()->id())->values()
+            : collect();
         $helpfulKnowledgeArticles = $ticket->isClosed() && auth()->user()->hasOperationalAccess($ticket->sector_id)
             ? KnowledgeBaseArticle::query()
                 ->withCount([
@@ -315,6 +377,9 @@ class ShowPage extends Component
 
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
+            'messages' => $publicMessages,
+            'internalMessages' => $internalMessages,
+            'visibleAttachments' => $visibleAttachments,
             'board' => $board,
             'fields' => $fields,
             'requesterFields' => $this->requesterVisibleFields($ticket, $fields),
@@ -328,6 +393,10 @@ class ShowPage extends Component
             'priorities' => TicketPriority::cases(),
             'canRate' => $canRate,
             'canComment' => $canComment,
+            'canViewInternalUpdates' => $canViewInternalUpdates,
+            'canCommentInternally' => $canCommentInternally,
+            'internalAudienceUsers' => $internalAudienceUsers,
+            'internalMentionableUsers' => $internalMentionableUsers,
             'canCloseOwn' => $canCloseOwn,
             'canReopenOwn' => $canReopenOwn,
             'canViewOperationalHistory' => $canViewOperationalHistory,
@@ -344,7 +413,7 @@ class ShowPage extends Component
             'knowledgeArticleIdsUsed' => $knowledgeArticleIdsUsed,
             'helpfulKnowledgeArticles' => $helpfulKnowledgeArticles,
         ])->layout('layouts.portal', [
-            'title' => "Chamado #{$ticket->id}",
+            'title' => $ticket->publicReference().' - '.$ticket->title,
             'subtitle' => $canViewOperationalHistory
                 ? 'Detalhes, historico e conversa do chamado.'
                 : 'Detalhes e conversa do chamado.',
@@ -407,6 +476,7 @@ class ShowPage extends Component
                 'fieldValues.field.options',
                 'messages.user',
                 'messages.attachments.uploader',
+                'attachments.message',
                 'attachments.uploader',
                 'activityLogs.causer',
                 'rating.user',
@@ -443,6 +513,22 @@ class ShowPage extends Component
             ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
+    }
+
+    private function normalizeInternalMentionedUserIds(Ticket $ticket, array $mentionedUserIds): array
+    {
+        $allowedIds = User::query()
+            ->where('is_active', true)
+            ->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician'])
+            ->pluck('id');
+
+        return collect($mentionedUserIds)
+            ->map(fn (mixed $userId) => (int) $userId)
+            ->filter(fn (int $userId) => $userId > 0 && $userId !== auth()->id())
+            ->intersect($allowedIds)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function requesterVisibleFields(Ticket $ticket, Collection $fields): Collection

@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Models;
 
 use App\Models\User;
+use App\Modules\Tickets\Support\TicketAttachmentRules;
 use App\Support\DatabaseBinary;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -54,12 +55,17 @@ class TicketAttachment extends Model
 
     public function isImage(): bool
     {
-        return str_starts_with((string) $this->mime_type, 'image/');
+        return TicketAttachmentRules::isSafeInlineImage($this->mime_type);
     }
 
     public function isVideo(): bool
     {
-        return str_starts_with((string) $this->mime_type, 'video/');
+        return TicketAttachmentRules::isSafeInlineVideo($this->mime_type);
+    }
+
+    public function canBePreviewedInline(): bool
+    {
+        return TicketAttachmentRules::isSafeInlinePreview($this->mime_type);
     }
 
     public function displaySize(): string

@@ -193,6 +193,7 @@ class GlobalSearchTest extends TestCase
             ->assertSee('SLAs')
             ->assertSee('Licencas')
             ->assertSee('Templates de setor')
+            ->assertSee($ticket->publicReference())
             ->assertSee('Falha lunar no VPN')
             ->assertSee('Mensagem lunar registrada na conversa.')
             ->assertSee('Historico lunar registrado para auditoria.')
@@ -208,6 +209,42 @@ class GlobalSearchTest extends TestCase
             ->assertSee('SLA - Quadro Lunar Operacional')
             ->assertSee('LunarSoft - OrbitDesk - Enterprise Lunar')
             ->assertSee('Template Lunar');
+    }
+
+    public function test_global_search_finds_ticket_by_public_reference_with_and_without_hyphen(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $superAdmin = User::factory()->superAdmin()->create();
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'VPN sem acesso externo',
+            'description' => 'Busca por referencia publica.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::HIGH,
+            'last_activity_at' => now(),
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->get(route('search', ['q' => strtolower($ticket->reference_code), 'types' => ['tickets']]))
+            ->assertOk()
+            ->assertSee($ticket->publicReference())
+            ->assertSee($ticket->title);
+
+        $this->actingAs($superAdmin)
+            ->get(route('search', ['q' => $ticket->reference_lookup, 'types' => ['tickets']]))
+            ->assertOk()
+            ->assertSee($ticket->publicReference())
+            ->assertSee($ticket->title);
     }
 
     public function test_super_admin_can_filter_by_type_and_period_and_prioritizes_exact_ticket_id(): void

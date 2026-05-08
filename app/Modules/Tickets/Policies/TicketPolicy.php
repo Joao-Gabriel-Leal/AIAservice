@@ -44,6 +44,16 @@ class TicketPolicy
         return $this->view($user, $ticket) && ! $ticket->isClosed();
     }
 
+    public function viewInternalUpdates(User $user, Ticket $ticket): bool
+    {
+        return $user->canOperateBoard($ticket->board);
+    }
+
+    public function commentInternally(User $user, Ticket $ticket): bool
+    {
+        return $this->viewInternalUpdates($user, $ticket) && ! $ticket->isClosed();
+    }
+
     public function rate(User $user, Ticket $ticket): bool
     {
         return $ticket->canBeRatedBy($user);

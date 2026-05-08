@@ -136,10 +136,10 @@ Se voce restaurar o dump da demo no banco local, rode primeiro o restore e depoi
 & $php -c $ini artisan migrate --force
 ```
 
-O login principal da demo restaurada fica:
+Depois de restaurar a demo, trate a base como ambiente local:
 
-- email: `admin@anadem.com.br`
-- senha: `Anadem@2026!`
+- usuario administrativo inicial: `admin@anadem.com.br`
+- redefina a senha pelo fluxo `Esqueci minha senha` antes do primeiro acesso
 
 ## Passo 8: build do frontend
 

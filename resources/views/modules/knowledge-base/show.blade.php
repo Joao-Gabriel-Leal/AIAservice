@@ -107,9 +107,9 @@
                                 <p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Chamado de origem</p>
                                 <p class="mt-1 text-slate-800">
                                     @can('view', $article->sourceTicket)
-                                        <a href="{{ route('tickets.show', $article->sourceTicket) }}" class="text-sky-700 hover:text-sky-800">#{{ $article->sourceTicket->id }} - {{ $article->sourceTicket->title }}</a>
+                                        <a href="{{ route('tickets.show', $article->sourceTicket) }}" class="text-sky-700 hover:text-sky-800">{{ $article->sourceTicket->fullReference() }} - {{ $article->sourceTicket->title }}</a>
                                     @else
-                                        #{{ $article->sourceTicket->id }}
+                                        {{ $article->sourceTicket->fullReference() }}
                                     @endcan
                                 </p>
                             </div>

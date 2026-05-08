@@ -17,26 +17,27 @@ class LicenseManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_operational_users_only_see_licenses_from_their_own_sectors(): void
+    public function test_license_module_is_restricted_to_global_admins(): void
     {
         $context = $this->licenseContext();
+        $license = $this->createLicense($context['sectorA'], 'Microsoft', 'Microsoft 365', 'Business Standard');
 
-        $licenseA = $this->createLicense($context['sectorA'], 'Microsoft', 'Microsoft 365', 'Business Standard');
-        $licenseB = $this->createLicense($context['sectorB'], 'SAP', 'SAP Business One', 'Profissional');
+        $this->actingAs($context['developer'])
+            ->get(route('licenses.index'))
+            ->assertOk()
+            ->assertSee($license->product_name);
+
+        $this->actingAs($context['developer'])
+            ->get(route('licenses.show', $license))
+            ->assertOk()
+            ->assertSee($license->displayName());
 
         $this->actingAs($context['sectorAdminA'])
             ->get(route('licenses.index'))
-            ->assertOk()
-            ->assertSee($licenseA->product_name)
-            ->assertDontSee($licenseB->product_name);
+            ->assertForbidden();
 
         $this->actingAs($context['technicianA'])
-            ->get(route('licenses.show', $licenseA))
-            ->assertOk()
-            ->assertSee($licenseA->displayName());
-
-        $this->actingAs($context['sectorAdminA'])
-            ->get(route('licenses.show', $licenseB))
+            ->get(route('licenses.show', $license))
             ->assertForbidden();
 
         $this->actingAs($context['requesterA'])
@@ -44,14 +45,19 @@ class LicenseManagementTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_operational_menu_shows_licenses_and_requester_does_not_see_the_link(): void
+    public function test_only_global_admin_sees_license_navigation_link(): void
     {
         $context = $this->licenseContext();
+
+        $this->actingAs($context['developer'])
+            ->get(route('knowledge-base.index'))
+            ->assertOk()
+            ->assertSee('Licencas');
 
         $this->actingAs($context['technicianA'])
             ->get(route('knowledge-base.index'))
             ->assertOk()
-            ->assertSee('Licencas');
+            ->assertDontSee('Licencas');
 
         $this->actingAs($context['requesterA'])
             ->get(route('knowledge-base.index'))
@@ -59,12 +65,12 @@ class LicenseManagementTest extends TestCase
             ->assertDontSee('Licencas');
     }
 
-    public function test_sector_admin_can_create_license_only_inside_allowed_sector(): void
+    public function test_global_admin_can_create_license_for_any_sector(): void
     {
         $context = $this->licenseContext();
 
-        $response = $this->actingAs($context['sectorAdminA'])->post(route('licenses.store'), [
-            'sector_id' => $context['sectorA']->id,
+        $response = $this->actingAs($context['developer'])->post(route('licenses.store'), [
+            'sector_id' => $context['sectorB']->id,
             'vendor_name' => 'Microsoft',
             'product_name' => 'Microsoft 365',
             'plan_name' => 'E3',
@@ -77,7 +83,7 @@ class LicenseManagementTest extends TestCase
             'renewal_date' => null,
             'expires_at' => null,
             'auto_renew' => false,
-            'notes' => 'Primeira carga do setor.',
+            'notes' => 'Linha global com setor organizacional.',
         ]);
 
         $license = License::query()->firstOrFail();
@@ -86,28 +92,21 @@ class LicenseManagementTest extends TestCase
 
         $this->assertDatabaseHas('licenses', [
             'id' => $license->id,
-            'sector_id' => $context['sectorA']->id,
-            'vendor_name' => 'Microsoft',
-            'product_name' => 'Microsoft 365',
-            'plan_name' => 'E3',
-            'created_by' => $context['sectorAdminA']->id,
+            'sector_id' => $context['sectorB']->id,
+            'created_by' => $context['developer']->id,
         ]);
 
-        $blockedResponse = $this->actingAs($context['sectorAdminA'])
-            ->from(route('licenses.create'))
+        $this->actingAs($context['sectorAdminA'])
             ->post(route('licenses.store'), [
-                'sector_id' => $context['sectorB']->id,
+                'sector_id' => $context['sectorA']->id,
                 'vendor_name' => 'SAP',
                 'product_name' => 'SAP Business One',
                 'plan_name' => 'Profissional',
                 'seats_total' => 2,
                 'status' => LicenseStatus::ACTIVE->value,
                 'auto_renew' => false,
-            ]);
-
-        $blockedResponse->assertRedirect(route('licenses.create', absolute: false));
-        $blockedResponse->assertSessionHasErrors('sector_id');
-        $this->assertDatabaseCount('licenses', 1);
+            ])
+            ->assertForbidden();
     }
 
     public function test_license_index_uses_the_compact_layout_requested(): void
@@ -115,7 +114,7 @@ class LicenseManagementTest extends TestCase
         $context = $this->licenseContext();
         $license = $this->createLicense($context['sectorA'], 'Microsoft', 'Microsoft 365', 'Business Standard', 4);
 
-        $this->actingAs($context['technicianA'])
+        $this->actingAs($context['developer'])
             ->get(route('licenses.index'))
             ->assertOk()
             ->assertSee('Licenca')
@@ -128,10 +127,10 @@ class LicenseManagementTest extends TestCase
             ->assertDontSee('Assentos');
     }
 
-    public function test_license_show_focuses_on_current_assignments_and_hides_released_lines(): void
+    public function test_license_show_focuses_on_current_assignments_and_marks_legacy_records(): void
     {
         $context = $this->licenseContext();
-        $license = $this->createLicense($context['sectorA'], 'SAP', 'SAP Business One', 'Profissional', 2);
+        $license = $this->createLicense($context['sectorA'], 'SAP', 'SAP Business One', 'Profissional', 3);
 
         LicenseAssignment::query()->create([
             'license_id' => $license->id,
@@ -141,7 +140,17 @@ class LicenseManagementTest extends TestCase
             'external_reference' => 'ACTIVE-REF',
             'status' => LicenseAssignmentStatus::ACTIVE->value,
             'assigned_at' => now(),
-            'created_by' => $context['technicianA']->id,
+            'created_by' => $context['developer']->id,
+        ]);
+
+        LicenseAssignment::query()->create([
+            'license_id' => $license->id,
+            'assigned_email' => 'legacy@empresa.test',
+            'display_name' => 'Conta legado',
+            'external_reference' => 'LEGACY-REF',
+            'status' => LicenseAssignmentStatus::ACTIVE->value,
+            'assigned_at' => now()->subDay(),
+            'created_by' => $context['developer']->id,
         ]);
 
         LicenseAssignment::query()->create([
@@ -150,12 +159,12 @@ class LicenseManagementTest extends TestCase
             'display_name' => 'Conta liberada',
             'external_reference' => 'OLD-REF',
             'status' => LicenseAssignmentStatus::RELEASED->value,
-            'assigned_at' => now()->subDay(),
-            'released_at' => now(),
-            'created_by' => $context['technicianA']->id,
+            'assigned_at' => now()->subDays(2),
+            'released_at' => now()->subDay(),
+            'created_by' => $context['developer']->id,
         ]);
 
-        $this->actingAs($context['technicianA'])
+        $this->actingAs($context['developer'])
             ->get(route('licenses.show', $license))
             ->assertOk()
             ->assertSee('Licencas atribuidas')
@@ -163,16 +172,20 @@ class LicenseManagementTest extends TestCase
             ->assertSee('Transferir')
             ->assertSee('Desatribuir licenca')
             ->assertSee('ACTIVE-REF')
-            ->assertDontSee('OLD-REF')
-            ->assertDontSee('Novo vinculo de assento');
+            ->assertSee('Registro legado sem usuario interno')
+            ->assertDontSee('OLD-REF');
     }
 
     public function test_assignment_capacity_is_enforced_and_release_returns_the_license_with_history(): void
     {
         $context = $this->licenseContext();
         $license = $this->createLicense($context['sectorA'], 'Adobe', 'Creative Cloud', 'All Apps', 1);
+        $secondUser = User::factory()->create([
+            'sector_id' => $context['sectorB']->id,
+            'role' => UserRole::REQUESTER,
+        ]);
 
-        $this->actingAs($context['technicianA'])->post(route('licenses.assignments.store', $license), [
+        $this->actingAs($context['developer'])->post(route('licenses.assignments.store', $license), [
             'user_id' => $context['collaboratorA']->id,
             'status' => LicenseAssignmentStatus::ACTIVE->value,
         ])->assertRedirect(route('licenses.show', $license, absolute: false));
@@ -183,10 +196,10 @@ class LicenseManagementTest extends TestCase
             'event' => 'license.assignment.created',
         ]);
 
-        $blockedResponse = $this->actingAs($context['technicianA'])
+        $blockedResponse = $this->actingAs($context['developer'])
             ->from(route('licenses.show', $license))
             ->post(route('licenses.assignments.store', $license), [
-                'assigned_email' => 'extra@empresa.test',
+                'user_id' => $secondUser->id,
                 'status' => LicenseAssignmentStatus::ACTIVE->value,
             ]);
 
@@ -196,7 +209,7 @@ class LicenseManagementTest extends TestCase
 
         $assignment = LicenseAssignment::query()->firstOrFail();
 
-        $this->actingAs($context['technicianA'])
+        $this->actingAs($context['developer'])
             ->post(route('licenses.assignments.release', [$license, $assignment]))
             ->assertRedirect(route('licenses.show', $license, absolute: false));
 
@@ -211,8 +224,8 @@ class LicenseManagementTest extends TestCase
             'event' => 'license.assignment.released',
         ]);
 
-        $this->actingAs($context['technicianA'])->post(route('licenses.assignments.store', $license), [
-            'assigned_email' => 'extra@empresa.test',
+        $this->actingAs($context['developer'])->post(route('licenses.assignments.store', $license), [
+            'user_id' => $secondUser->id,
             'external_reference' => 'NEW-REF',
             'status' => LicenseAssignmentStatus::ACTIVE->value,
         ])->assertRedirect(route('licenses.show', $license, absolute: false));
@@ -221,17 +234,66 @@ class LicenseManagementTest extends TestCase
         $this->assertSame(1, $license->fresh()->activeAssignments()->count());
     }
 
+    public function test_any_active_user_can_receive_license_regardless_of_sector_and_inactive_users_are_rejected(): void
+    {
+        $context = $this->licenseContext();
+        $license = $this->createLicense($context['sectorA'], 'SAP', 'SAP Business One', 'Profissional', 2);
+        $crossSectorUser = User::factory()->create([
+            'sector_id' => $context['sectorB']->id,
+            'role' => UserRole::REQUESTER,
+            'email' => 'financeiro@empresa.test',
+            'name' => 'Pessoa Financeiro',
+        ]);
+        $inactiveUser = User::factory()->create([
+            'sector_id' => $context['sectorB']->id,
+            'role' => UserRole::REQUESTER,
+            'is_active' => false,
+            'email' => 'inativo@empresa.test',
+            'name' => 'Pessoa Inativa',
+        ]);
+
+        $this->actingAs($context['developer'])
+            ->get(route('licenses.show', $license))
+            ->assertOk()
+            ->assertSee($crossSectorUser->name)
+            ->assertDontSee($inactiveUser->name);
+
+        $this->actingAs($context['developer'])
+            ->post(route('licenses.assignments.store', $license), [
+                'user_id' => $crossSectorUser->id,
+                'status' => LicenseAssignmentStatus::ACTIVE->value,
+            ])
+            ->assertRedirect(route('licenses.show', $license, absolute: false));
+
+        $this->assertDatabaseHas('license_assignments', [
+            'license_id' => $license->id,
+            'user_id' => $crossSectorUser->id,
+            'assigned_email' => $crossSectorUser->email,
+            'display_name' => $crossSectorUser->name,
+        ]);
+
+        $response = $this->actingAs($context['developer'])
+            ->from(route('licenses.show', $license))
+            ->post(route('licenses.assignments.store', $license), [
+                'user_id' => $inactiveUser->id,
+                'status' => LicenseAssignmentStatus::ACTIVE->value,
+            ]);
+
+        $response->assertRedirect(route('licenses.show', $license, absolute: false));
+        $response->assertSessionHasErrors('user_id');
+    }
+
     public function test_same_collaborator_cannot_receive_same_active_license_twice(): void
     {
         $context = $this->licenseContext();
         $license = $this->createLicense($context['sectorA'], 'Microsoft', 'Power BI', 'Pro', 3);
 
-        $this->actingAs($context['technicianA'])->post(route('licenses.assignments.store', $license), [
+        $this->actingAs($context['developer'])->post(route('licenses.assignments.store', $license), [
             'user_id' => $context['collaboratorA']->id,
             'status' => LicenseAssignmentStatus::ACTIVE->value,
         ])->assertRedirect(route('licenses.show', $license, absolute: false));
 
-        $response = $this->actingAs($context['technicianA'])
+        $response = $this->actingAs($context['developer'])
             ->from(route('licenses.show', $license))
             ->post(route('licenses.assignments.store', $license), [
                 'user_id' => $context['collaboratorA']->id,
@@ -250,7 +312,7 @@ class LicenseManagementTest extends TestCase
         $context = $this->licenseContext();
         $license = $this->createLicense($context['sectorA'], 'Microsoft', 'Microsoft 365', 'Business Premium', 2);
         $targetUser = User::factory()->create([
-            'sector_id' => $context['sectorA']->id,
+            'sector_id' => $context['sectorB']->id,
             'role' => UserRole::REQUESTER,
         ]);
 
@@ -262,10 +324,10 @@ class LicenseManagementTest extends TestCase
             'external_reference' => 'M365-001',
             'status' => LicenseAssignmentStatus::ACTIVE->value,
             'assigned_at' => now()->subDay(),
-            'created_by' => $context['technicianA']->id,
+            'created_by' => $context['developer']->id,
         ]);
 
-        $this->actingAs($context['technicianA'])
+        $this->actingAs($context['developer'])
             ->post(route('licenses.assignments.transfer', [$license, $assignment]), [
                 'user_id' => $targetUser->id,
                 'external_reference' => 'M365-002',
@@ -287,7 +349,7 @@ class LicenseManagementTest extends TestCase
             'event' => 'license.assignment.transferred',
         ]);
 
-        $this->actingAs($context['technicianA'])
+        $this->actingAs($context['developer'])
             ->get(route('licenses.show', $license))
             ->assertOk()
             ->assertSee('Licenca transferida.')
@@ -295,51 +357,12 @@ class LicenseManagementTest extends TestCase
             ->assertSee('M365-002');
     }
 
-    public function test_assignment_transfer_replaces_stale_email_with_selected_collaborator_email(): void
-    {
-        $context = $this->licenseContext();
-        $license = $this->createLicense($context['sectorA'], 'SAP', 'SAP Business One', 'Profissional', 2);
-        $targetUser = User::factory()->create([
-            'sector_id' => $context['sectorA']->id,
-            'role' => UserRole::REQUESTER,
-            'email' => 'sap.fernanda-oliveira@aia-tech.local',
-            'name' => 'FERNANDA OLIVEIRA',
-        ]);
-
-        $assignment = LicenseAssignment::query()->create([
-            'license_id' => $license->id,
-            'user_id' => $context['collaboratorA']->id,
-            'assigned_email' => 'sap.amanda-alves@aia-tech.local',
-            'display_name' => 'AMANDA ALVES',
-            'external_reference' => 'AMANDA.ALVES',
-            'status' => LicenseAssignmentStatus::ACTIVE->value,
-            'assigned_at' => now()->subDay(),
-            'created_by' => $context['technicianA']->id,
-        ]);
-
-        $this->actingAs($context['technicianA'])
-            ->post(route('licenses.assignments.transfer', [$license, $assignment]), [
-                'user_id' => $targetUser->id,
-                'assigned_email' => 'sap.amanda-alves@aia-tech.local',
-                'external_reference' => 'FERNANDA.OLIVEIRA',
-            ])
-            ->assertRedirect(route('licenses.show', $license, absolute: false));
-
-        $this->assertDatabaseHas('license_assignments', [
-            'id' => $assignment->id,
-            'user_id' => $targetUser->id,
-            'assigned_email' => $targetUser->email,
-            'display_name' => $targetUser->name,
-            'external_reference' => 'FERNANDA.OLIVEIRA',
-        ]);
-    }
-
     public function test_assignment_transfer_cannot_duplicate_same_active_license_for_target_collaborator(): void
     {
         $context = $this->licenseContext();
         $license = $this->createLicense($context['sectorA'], 'SAP', 'SAP Business One', 'Profissional', 2);
         $targetUser = User::factory()->create([
-            'sector_id' => $context['sectorA']->id,
+            'sector_id' => $context['sectorB']->id,
             'role' => UserRole::REQUESTER,
         ]);
 
@@ -351,7 +374,7 @@ class LicenseManagementTest extends TestCase
             'external_reference' => 'SAP-001',
             'status' => LicenseAssignmentStatus::ACTIVE->value,
             'assigned_at' => now()->subDay(),
-            'created_by' => $context['technicianA']->id,
+            'created_by' => $context['developer']->id,
         ]);
 
         LicenseAssignment::query()->create([
@@ -362,14 +385,13 @@ class LicenseManagementTest extends TestCase
             'external_reference' => 'SAP-002',
             'status' => LicenseAssignmentStatus::ACTIVE->value,
             'assigned_at' => now()->subHours(12),
-            'created_by' => $context['technicianA']->id,
+            'created_by' => $context['developer']->id,
         ]);
 
-        $response = $this->actingAs($context['technicianA'])
+        $response = $this->actingAs($context['developer'])
             ->from(route('licenses.show', $license))
             ->post(route('licenses.assignments.transfer', [$license, $assignmentToTransfer]), [
                 'user_id' => $targetUser->id,
-                'assigned_email' => $targetUser->email,
             ]);
 
         $response->assertRedirect(route('licenses.show', $license, absolute: false));
@@ -394,10 +416,10 @@ class LicenseManagementTest extends TestCase
             'display_name' => $context['collaboratorA']->name,
             'status' => LicenseAssignmentStatus::ACTIVE->value,
             'assigned_at' => now(),
-            'created_by' => $context['sectorAdminA']->id,
+            'created_by' => $context['developer']->id,
         ]);
 
-        $response = $this->actingAs($context['sectorAdminA'])
+        $response = $this->actingAs($context['developer'])
             ->from(route('licenses.edit', $license))
             ->put(route('licenses.update', $license), [
                 'sector_id' => $context['sectorA']->id,
@@ -445,6 +467,8 @@ class LicenseManagementTest extends TestCase
             'is_active' => true,
         ]);
 
+        $developer = User::factory()->developer()->create();
+
         $sectorAdminA = User::factory()->create([
             'sector_id' => $sectorA->id,
             'role' => UserRole::SECTOR_ADMIN,
@@ -465,12 +489,7 @@ class LicenseManagementTest extends TestCase
             'role' => UserRole::REQUESTER,
         ]);
 
-        $sectorAdminB = User::factory()->create([
-            'sector_id' => $sectorB->id,
-            'role' => UserRole::SECTOR_ADMIN,
-        ]);
-
-        return compact('company', 'sectorA', 'sectorB', 'sectorAdminA', 'technicianA', 'requesterA', 'collaboratorA', 'sectorAdminB');
+        return compact('company', 'sectorA', 'sectorB', 'developer', 'sectorAdminA', 'technicianA', 'requesterA', 'collaboratorA');
     }
 
     private function createLicense(

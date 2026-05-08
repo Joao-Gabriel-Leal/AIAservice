@@ -10,7 +10,7 @@ class AccessScope
 {
     public static function applySectorScope(Builder $query, User $user, string $column = 'sector_id', array $levels = []): Builder
     {
-        if ($user->isSuperAdmin()) {
+        if ($user->isGlobalAdmin()) {
             return $query;
         }
 

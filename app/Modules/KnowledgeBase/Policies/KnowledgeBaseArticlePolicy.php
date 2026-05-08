@@ -18,13 +18,13 @@ class KnowledgeBaseArticlePolicy
     public function view(User $user, KnowledgeBaseArticle $article): bool
     {
         if ($article->editorial_status === KnowledgeBaseArticleStatus::DRAFT) {
-            return $user->isSuperAdmin()
+            return $user->isGlobalAdmin()
                 || $user->isSectorAdmin($article->sector_id)
                 || $article->created_by === $user->id;
         }
 
         if (! $article->is_active) {
-            return $user->isSuperAdmin()
+            return $user->isGlobalAdmin()
                 || $user->isSectorAdmin($article->sector_id);
         }
 
@@ -32,12 +32,12 @@ class KnowledgeBaseArticlePolicy
             return true;
         }
 
-        return $user->isSuperAdmin() || $user->hasOperationalAccess($article->sector_id);
+        return $user->isGlobalAdmin() || $user->hasOperationalAccess($article->sector_id);
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin();
+        return $user->isGlobalAdmin() || $user->isSectorAdmin();
     }
 
     public function createFromTicket(User $user, Ticket $ticket): bool
@@ -47,11 +47,11 @@ class KnowledgeBaseArticlePolicy
 
     public function update(User $user, KnowledgeBaseArticle $article): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($article->sector_id);
+        return $user->isGlobalAdmin() || $user->isSectorAdmin($article->sector_id);
     }
 
     public function delete(User $user, KnowledgeBaseArticle $article): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($article->sector_id);
+        return $user->isGlobalAdmin() || $user->isSectorAdmin($article->sector_id);
     }
 }

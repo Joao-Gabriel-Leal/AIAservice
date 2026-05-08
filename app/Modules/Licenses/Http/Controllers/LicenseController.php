@@ -5,7 +5,6 @@ namespace App\Modules\Licenses\Http\Controllers;
 use App\Enums\LicenseAssignmentStatus;
 use App\Enums\LicenseBillingCycle;
 use App\Enums\LicenseStatus;
-use App\Enums\SectorAccessLevel;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Licenses\Exports\LicensesExport;
@@ -103,7 +102,7 @@ class LicenseController extends Controller
                     $assignment->resolvedAssignedEmail() ?? '',
                 ]))
                 ->values(),
-            'collaborators' => $this->assignmentCandidates($license),
+            'collaborators' => $this->assignmentCandidates(),
             'activityLogs' => $license->activityLogs()
                 ->with('causer')
                 ->limit(12)
@@ -145,25 +144,19 @@ class LicenseController extends Controller
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (! $user->isSuperAdmin()) {
-            $query->whereIn('id', $user->operationalSectorIds());
+        if (! $user->isGlobalAdmin()) {
+            $query->whereRaw('1 = 0');
         }
 
         return $query->get();
     }
 
-    private function assignmentCandidates(License $license)
+    private function assignmentCandidates()
     {
         return User::query()
             ->where('is_active', true)
-            ->whereHas('sectorAccesses', fn ($sectorAccessQuery) => $sectorAccessQuery
-                ->where('sector_id', $license->sector_id)
-                ->whereIn('access_level', [
-                    SectorAccessLevel::SECTOR_ADMIN->value,
-                    SectorAccessLevel::TECHNICIAN->value,
-                    SectorAccessLevel::REQUESTER->value,
-                ]))
             ->orderBy('name')
+            ->orderBy('email')
             ->get();
     }
 }

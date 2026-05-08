@@ -32,8 +32,8 @@ class LicenseIndexQuery
                     ->where('status', LicenseAssignmentStatus::ACTIVE->value),
             ]);
 
-        if (! $user->isSuperAdmin()) {
-            $query->whereIn('sector_id', $user->operationalSectorIds());
+        if (! $user->isGlobalAdmin()) {
+            $query->whereRaw('1 = 0');
         }
 
         return $query

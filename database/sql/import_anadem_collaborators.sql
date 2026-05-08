@@ -1,6 +1,6 @@
 -- Importa apenas a estrutura de colaboradores da ANADEM.
 -- Referencia de origem: database/sql/reset_demo_anadem.sql
--- Senha temporaria para todos os logins: Anadem@2026!
+-- As credenciais importadas devem ser redefinidas apos o restore.
 
 BEGIN;
 SET TIME ZONE 'America/Sao_Paulo';

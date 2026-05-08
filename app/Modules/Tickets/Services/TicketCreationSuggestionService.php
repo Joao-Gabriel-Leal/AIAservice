@@ -77,6 +77,7 @@ class TicketCreationSuggestionService
             ->get()
             ->map(fn (Ticket $ticket) => [
                 'id' => $ticket->id,
+                'reference' => $ticket->publicReference(),
                 'title' => $ticket->title,
                 'url' => route('tickets.show', $ticket),
                 'sector_name' => $ticket->sector?->name,
@@ -96,6 +97,7 @@ class TicketCreationSuggestionService
             ->with([
                 'messages' => fn ($query) => $query
                     ->where('is_system', false)
+                    ->where('is_internal', false)
                     ->latest('created_at')
                     ->limit(1),
             ])
@@ -108,6 +110,7 @@ class TicketCreationSuggestionService
 
                 return [
                     'id' => $ticket->id,
+                    'reference' => $ticket->publicReference(),
                     'title' => $ticket->title,
                     'url' => route('tickets.show', $ticket),
                     'sector_name' => $ticket->sector?->name,

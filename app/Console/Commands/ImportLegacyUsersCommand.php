@@ -54,7 +54,7 @@ class ImportLegacyUsersCommand extends Command
             [
                 ['Empresa', $summary['company']['created'], $summary['company']['updated'], $summary['company']['reactivated'], $summary['company']['name']],
                 ['Setores', $summary['sectors']['created'], $summary['sectors']['updated'], $summary['sectors']['reactivated'], 'provisionados: '.$summary['sectors']['provisioned']],
-                ['Usuarios', $summary['users']['created'], $summary['users']['updated'], $summary['users']['reactivated'], 'sem setor: '.$summary['users']['without_sector'].' | super admins preservados: '.$summary['users']['preserved_super_admin']],
+                ['Usuarios', $summary['users']['created'], $summary['users']['updated'], $summary['users']['reactivated'], 'sem setor: '.$summary['users']['without_sector'].' | admins globais preservados: '.$summary['users']['preserved_super_admin']],
                 ['Acessos', $summary['accesses']['created'], $summary['accesses']['updated'], 0, 'removidos: '.$summary['accesses']['removed']],
                 ['Chamados demo', $summary['demo']['tickets_created'], $summary['demo']['tickets_updated'], 0, 'mensagens criadas: '.$summary['demo']['messages_created']],
             ],

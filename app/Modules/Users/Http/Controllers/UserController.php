@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class UserController extends Controller
@@ -85,7 +86,8 @@ class UserController extends Controller
             $accessUrl,
         ));
 
-        return redirect()->route('users.index')
+        return redirect()
+            ->route('users.index')
             ->with('status', 'Usuario criado com sucesso.')
             ->with('created_user_access', [
                 'name' => $user->name,
@@ -106,6 +108,8 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
+        $wasActive = (bool) $user->is_active;
+
         DB::transaction(function () use ($request, $user) {
             $resolved = $this->resolvedData($request, $user);
 
@@ -113,6 +117,10 @@ class UserController extends Controller
 
             $this->syncSectorAccesses($user, $resolved['sector_accesses']);
         });
+
+        if ($wasActive && ! $user->fresh()->is_active) {
+            $this->invalidateUserAccess($user);
+        }
 
         return redirect()->route('users.index')->with('status', 'Usuario atualizado com sucesso.');
     }
@@ -141,7 +149,7 @@ class UserController extends Controller
 
     private function resolvedData(UserRequest $request, ?User $user = null, ?string $generatedPassword = null): array
     {
-        $globalRole = auth()->user()->isSuperAdmin()
+        $globalRole = auth()->user()->isGlobalAdmin()
             ? GlobalUserRole::from((string) $request->input('global_role'))
             : GlobalUserRole::COLLABORATOR;
 
@@ -162,7 +170,7 @@ class UserController extends Controller
         $payload['is_active'] = $request->boolean('is_active', true);
 
         if (! $user) {
-            $payload['password'] = Hash::make($generatedPassword ?? $this->issueTemporaryPassword());
+            $payload['password'] = Hash::make($generatedPassword ?? Str::random(40));
         } elseif (filled($request->input('password'))) {
             $payload['password'] = Hash::make((string) $request->input('password'));
         }
@@ -186,7 +194,7 @@ class UserController extends Controller
 
     private function syncSectorAccesses(User $user, Collection $sectorAccesses): void
     {
-        $manageableSectorIds = auth()->user()->isSuperAdmin()
+        $manageableSectorIds = auth()->user()->isGlobalAdmin()
             ? null
             : auth()->user()->adminSectorIds();
 
@@ -208,7 +216,7 @@ class UserController extends Controller
     private function availableGlobalRoles(): array
     {
         return collect(GlobalUserRole::cases())
-            ->reject(fn (GlobalUserRole $role) => ! auth()->user()->isSuperAdmin() && $role === GlobalUserRole::SUPER_ADMIN)
+            ->reject(fn (GlobalUserRole $role) => $role === GlobalUserRole::SUPER_ADMIN)
             ->mapWithKeys(fn (GlobalUserRole $role) => [$role->value => $role->label()])
             ->all();
     }
@@ -217,7 +225,7 @@ class UserController extends Controller
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isGlobalAdmin()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
 
@@ -226,15 +234,7 @@ class UserController extends Controller
 
     private function legacySnapshot(GlobalUserRole $globalRole, Collection $sectorAccesses): array
     {
-        if ($globalRole === GlobalUserRole::SUPER_ADMIN) {
-            return [
-                'role' => UserRole::SUPER_ADMIN,
-                'sector_id' => null,
-                'room_id' => null,
-            ];
-        }
-
-        if ($globalRole === GlobalUserRole::DEV) {
+        if (in_array($globalRole, [GlobalUserRole::SUPER_ADMIN, GlobalUserRole::DEV], true)) {
             return [
                 'role' => UserRole::DEV,
                 'sector_id' => null,
@@ -260,5 +260,16 @@ class UserController extends Controller
     private function issueTemporaryPassword(): string
     {
         return (string) random_int(100000, 999999);
+    }
+
+    private function invalidateUserAccess(User $user): void
+    {
+        DB::table(config('session.table', 'sessions'))
+            ->where('user_id', $user->id)
+            ->delete();
+
+        $user->forceFill([
+            'remember_token' => Str::random(60),
+        ])->saveQuietly();
     }
 }

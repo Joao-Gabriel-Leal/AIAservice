@@ -87,7 +87,9 @@ class NotificationsTest extends TestCase
 
     public function test_account_created_notification_points_to_force_change_screen(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create([
+            'must_change_password' => true,
+        ]);
 
         $user->notify(new AccountCreatedNotification($user->email, true));
         $notification = $user->notifications()->firstOrFail();

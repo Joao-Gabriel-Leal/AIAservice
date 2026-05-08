@@ -121,6 +121,15 @@ class User extends Authenticatable
         });
     }
 
+    public function scopeGlobalAdmins(Builder $query): Builder
+    {
+        return $query->where(function (Builder $globalAdminQuery) {
+            $globalAdminQuery
+                ->whereIn('global_role', [GlobalUserRole::DEV->value, GlobalUserRole::SUPER_ADMIN->value])
+                ->orWhereIn('role', [UserRole::DEV->value, UserRole::SUPER_ADMIN->value]);
+        });
+    }
+
     public function sectorAccesses(): HasMany
     {
         return $this->hasMany(UserSectorAccess::class)->with('sector');
@@ -193,22 +202,28 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->global_role === GlobalUserRole::SUPER_ADMIN;
+        return $this->isGlobalAdmin();
+    }
+
+    public function isGlobalAdmin(): bool
+    {
+        return in_array($this->global_role, [GlobalUserRole::DEV, GlobalUserRole::SUPER_ADMIN], true)
+            || in_array($this->role, [UserRole::DEV, UserRole::SUPER_ADMIN], true);
     }
 
     public function isDeveloper(): bool
     {
-        return $this->global_role === GlobalUserRole::DEV;
+        return $this->isGlobalAdmin();
     }
 
     public function canManageRooms(): bool
     {
-        return $this->isSuperAdmin() || $this->isDeveloper();
+        return $this->isGlobalAdmin();
     }
 
     public function isSectorAdmin(?int $sectorId = null): bool
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return true;
         }
 
@@ -221,7 +236,7 @@ class User extends Authenticatable
 
     public function isTechnician(?int $sectorId = null): bool
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return true;
         }
 
@@ -238,12 +253,12 @@ class User extends Authenticatable
             return $this->hasSectorAccess($sectorId, [SectorAccessLevel::REQUESTER]);
         }
 
-        return ! $this->isSuperAdmin() && ! $this->hasOperationalAccess();
+        return ! $this->isGlobalAdmin() && ! $this->hasOperationalAccess();
     }
 
     public function sectorAccessLevel(int $sectorId): ?SectorAccessLevel
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return SectorAccessLevel::SECTOR_ADMIN;
         }
 
@@ -254,7 +269,7 @@ class User extends Authenticatable
 
     public function hasSectorAccess(int $sectorId, array $levels = []): bool
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return true;
         }
 
@@ -292,7 +307,7 @@ class User extends Authenticatable
 
     public function operationalBoardIds(): array
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return TicketBoard::query()
                 ->where('is_active', true)
                 ->pluck('id')
@@ -323,7 +338,7 @@ class User extends Authenticatable
 
     public function hasOperationalAccess(?int $sectorId = null): bool
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return true;
         }
 
@@ -346,7 +361,7 @@ class User extends Authenticatable
             return false;
         }
 
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return true;
         }
 
@@ -355,12 +370,8 @@ class User extends Authenticatable
 
     public function accessSummary(): string
     {
-        if ($this->isSuperAdmin()) {
-            return 'Acesso total';
-        }
-
-        if ($this->isDeveloper()) {
-            return 'Acesso tecnico global';
+        if ($this->isGlobalAdmin()) {
+            return 'Acesso global';
         }
 
         $count = count($this->allSectorIds());
@@ -459,7 +470,7 @@ class User extends Authenticatable
 
     private function sectorIds(array $levels = []): array
     {
-        if ($this->isSuperAdmin()) {
+        if ($this->isGlobalAdmin()) {
             return Sector::query()->pluck('id')->all();
         }
 

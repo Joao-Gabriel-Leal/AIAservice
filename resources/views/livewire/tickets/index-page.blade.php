@@ -175,8 +175,8 @@
         <div class="{{ $board ? 'portal-filter-section' : '' }}">
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
-                <span class="mb-1 block font-medium">Titulo</span>
-                <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por titulo">
+                <span class="mb-1 block font-medium">ID ou titulo</span>
+                <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por codigo ou titulo">
             </label>
 
             <label class="text-sm text-slate-600">
@@ -279,7 +279,13 @@
 
     @if ($lastManualTicketId)
         <div class="ui-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            <span>Chamado #{{ $lastManualTicketId }} criado direto no quadro.</span>
+            <span>
+                Chamado {{ $lastManualTicketReferenceCode ?? ('#'.$lastManualTicketId) }} criado direto no quadro
+                @if ($lastManualTicketReferenceCode)
+                    (ID interno #{{ $lastManualTicketId }})
+                @endif
+                .
+            </span>
             <a href="{{ route('tickets.show', $lastManualTicketId) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">
                 Abrir chamado
             </a>
@@ -315,6 +321,7 @@
                                         </span>
                                     @endif
                                 </div>
+                                <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                                 <p class="text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
                             </td>
                             <td class="px-6 py-4 text-slate-600">

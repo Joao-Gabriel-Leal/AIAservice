@@ -114,7 +114,7 @@ class BoardDirectoryPage extends Component
             ])
             ->where('is_active', true);
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isGlobalAdmin()) {
             $query->whereIn('id', auth()->user()->operationalBoardIds());
         }
 
@@ -168,7 +168,7 @@ class BoardDirectoryPage extends Component
     {
         $user = auth()->user();
 
-        if (! $user->isSectorAdmin() || $user->isSuperAdmin()) {
+        if (! $user->isSectorAdmin() || $user->isGlobalAdmin()) {
             return;
         }
 
@@ -188,7 +188,7 @@ class BoardDirectoryPage extends Component
             ->orderByDesc('is_default')
             ->orderBy('name');
 
-        if (! auth()->user()->isSuperAdmin()) {
+        if (! auth()->user()->isGlobalAdmin()) {
             $query->whereIn('id', auth()->user()->operationalBoardIds());
         }
 

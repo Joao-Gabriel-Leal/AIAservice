@@ -70,13 +70,54 @@ class TicketFlowTest extends TestCase
             'priority' => TicketPriority::HIGH->value,
         ]);
 
+        $ticket = Ticket::query()->where('title', 'Notebook sem rede')->firstOrFail();
+
+        $this->assertMatchesRegularExpression('/^SUP-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/', $ticket->reference_code);
+        $this->assertSame(str_replace('-', '', $ticket->reference_code), $ticket->reference_lookup);
+
         Notification::assertSentTo(
             $requester,
             TicketCreatedNotification::class,
             fn (TicketCreatedNotification $notification, array $channels) => in_array('database', $channels, true)
                 && in_array('mail', $channels, true)
                 && data_get($notification->toArray($requester), 'title') === 'Novo chamado criado'
+                && data_get($notification->toArray($requester), 'ticket_reference_code') === $ticket->reference_code
         );
+    }
+
+    public function test_ticket_public_reference_remains_stable_after_sector_slug_changes(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $ticket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Referencia estavel',
+            'description' => 'Teste de estabilidade do codigo publico.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $originalReferenceCode = $ticket->reference_code;
+        $originalReferenceLookup = $ticket->reference_lookup;
+
+        $sector->update([
+            'slug' => 'tecnologia-infraestrutura',
+        ]);
+
+        $ticket->refresh();
+
+        $this->assertSame($originalReferenceCode, $ticket->reference_code);
+        $this->assertSame($originalReferenceLookup, $ticket->reference_lookup);
     }
 
     public function test_create_page_suggests_articles_similar_tickets_and_previous_solutions(): void

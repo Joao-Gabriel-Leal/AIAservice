@@ -6,6 +6,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -27,6 +28,7 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureActions();
+        $this->configureAuthentication();
         $this->configureViews();
         $this->configureRateLimiting();
     }
@@ -40,55 +42,36 @@ class FortifyServiceProvider extends ServiceProvider
     }
 
     /**
+     * Authenticate only active users.
+     */
+    private function configureAuthentication(): void
+    {
+        Fortify::authenticateUsing(function (Request $request) {
+            $email = Str::lower(trim((string) $request->input(Fortify::username())));
+
+            $user = User::query()
+                ->where('email', $email)
+                ->first();
+
+            if (! $user || ! $user->is_active) {
+                return null;
+            }
+
+            return Hash::check((string) $request->input('password'), $user->password)
+                ? $user
+                : null;
+        });
+    }
+
+    /**
      * Configure Fortify views.
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn () => view('pages::auth.login', [
-            'loginHints' => $this->resolveLoginHints(),
-        ]));
+        Fortify::loginView(fn () => view('pages::auth.login'));
         Fortify::confirmPasswordView(fn () => view('pages::auth.confirm-password'));
         Fortify::resetPasswordView(fn () => view('pages::auth.reset-password'));
         Fortify::requestPasswordResetLinkView(fn () => view('pages::auth.forgot-password'));
-    }
-
-    /**
-     * Resolve local login hints for faster manual validation on auth screens.
-     *
-     * @return array<int, array{label: string, email: string, password: string}>
-     */
-    private function resolveLoginHints(): array
-    {
-        if (! $this->app->environment('local') && ! config('app.debug')) {
-            return [];
-        }
-
-        $candidates = [
-            [
-                'label' => 'Super admin local',
-                'email' => (string) env('SUPER_ADMIN_EMAIL', 'admin@aiaservice.local'),
-                'password' => (string) env('SUPER_ADMIN_PASSWORD', 'password'),
-            ],
-            [
-                'label' => 'Demo Anadem',
-                'email' => 'admin@anadem.com.br',
-                'password' => 'Anadem@2026!',
-            ],
-        ];
-
-        try {
-            $availableEmails = User::query()
-                ->whereIn('email', collect($candidates)->pluck('email')->unique())
-                ->pluck('email')
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return array_values(array_filter(
-            $candidates,
-            static fn (array $candidate): bool => in_array($candidate['email'], $availableEmails, true),
-        ));
     }
 
     /**

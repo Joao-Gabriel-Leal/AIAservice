@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureActiveUserSession;
 use App\Http\Middleware\EnsurePasswordChangeIsCompleted;
 use App\Modules\Shared\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
+            EnsureActiveUserSession::class,
             EnsurePasswordChangeIsCompleted::class,
         ]);
     })

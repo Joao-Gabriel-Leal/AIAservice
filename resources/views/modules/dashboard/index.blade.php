@@ -377,6 +377,7 @@
                                 <tr class="ui-row-interactive hover:bg-slate-50">
                                     <td class="px-6 py-4 font-medium text-slate-900">
                                         <a href="{{ route('tickets.show', $ticket) }}" class="hover:text-sky-700">{{ $ticket->title }}</a>
+                                        <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                                         <p class="mt-1 text-xs text-slate-500">{{ $ticket->sector?->name ?? 'Sem setor' }}</p>
                                     </td>
                                     <td class="ui-person-column-cell">

@@ -101,6 +101,7 @@
                                                 <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
                                             </div>
 
+                                            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                                             <p class="text-xs text-slate-400">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
                                         </div>
                                     </td>
@@ -281,6 +282,7 @@
                     >
                         <div>
                             <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                            <p class="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                             <p class="text-sm text-slate-500">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
                         </div>
 

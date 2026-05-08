@@ -344,7 +344,7 @@ class KnowledgeBaseArticleController extends Controller
             '## Passos da solucao',
             $steps !== '' ? $steps : '1. Descrever os passos executados para resolver o chamado.',
             '## Observacoes finais',
-            'Chamado #'.$ticket->id
+            $ticket->fullReference()
                 .($ticket->resolved_at ? ' encerrado em '.$ticket->resolved_at->format('d/m/Y H:i').'.' : '.'),
         ]));
     }

@@ -8,22 +8,22 @@ class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function view(User $user, User $model): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function update(User $user, User $model): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function delete(User $user, User $model): bool
@@ -32,6 +32,6 @@ class UserPolicy
             return false;
         }
 
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 }

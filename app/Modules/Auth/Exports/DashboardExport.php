@@ -81,8 +81,9 @@ class DashboardExport
     {
         return new ExcelSheetData(
             'Fila de atencao',
-            ['Titulo', 'Motivo', 'Solicitante', 'Setor', 'Status', 'Prioridade', 'Responsavel', 'Atualizado em'],
+            ['Codigo', 'Titulo', 'Motivo', 'Solicitante', 'Setor', 'Status', 'Prioridade', 'Responsavel', 'Atualizado em'],
             $this->data['attentionQueue']->map(fn (array $item) => [
+                $item['ticket']->publicReference(),
                 $item['ticket']->title,
                 $item['reason'],
                 $item['ticket']->requester?->name ?? 'N/A',
@@ -99,8 +100,9 @@ class DashboardExport
     {
         return new ExcelSheetData(
             'Chamados recentes',
-            ['Titulo', 'Solicitante', 'Setor', 'Status', 'Responsavel', 'Avaliacao', 'Atualizado em'],
+            ['Codigo', 'Titulo', 'Solicitante', 'Setor', 'Status', 'Responsavel', 'Avaliacao', 'Atualizado em'],
             $this->data['recentTickets']->map(fn ($ticket) => [
+                $ticket->publicReference(),
                 $ticket->title,
                 $ticket->requester?->name ?? 'N/A',
                 $ticket->sector?->name ?? 'Sem setor',

@@ -20,7 +20,7 @@
                         wire:model.live.debounce.350ms="query"
                         type="text"
                         class="ui-input h-12 w-full"
-                        placeholder="Ex.: 123, serial, setor, artigo, SLA, licenca ou mensagem"
+                        placeholder="Ex.: TI-AB7K9, 123, serial, setor, artigo, SLA, licenca ou mensagem"
                     >
                 </label>
 

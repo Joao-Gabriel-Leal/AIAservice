@@ -12,6 +12,7 @@ use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketCreationSuggestionService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
+use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
@@ -168,6 +169,7 @@ class CreatePage extends Component
 
         $this->sanitizeDynamicValuesForVisibility($allFields);
         $validated = $this->validate($this->rules($visibleFields));
+        $attachments = TicketAttachmentRules::validate($validated['attachments'] ?? [], 'attachments');
         $groupId = $catalog?->default_ticket_group_id
             ?? $board->defaultGroup()?->id;
         $legacyStatusId = $this->legacyStatusIdForGroup($board, $groupId);
@@ -183,9 +185,11 @@ class CreatePage extends Component
             'description' => $validated['description'] ?? null,
             'requester_id' => auth()->id(),
             'priority' => $validated['priority'],
-        ], $this->visibleDynamicValues($visibleFields), $this->attachments);
+        ], $this->visibleDynamicValues($visibleFields), $attachments);
 
-        return redirect()->route('tickets.show', $ticket)->with('status', 'Chamado criado com sucesso.');
+        return redirect()
+            ->route('tickets.show', $ticket)
+            ->with('status', 'Chamado '.$ticket->fullReference().' criado com sucesso.');
     }
 
     public function render(): View
@@ -228,7 +232,7 @@ class CreatePage extends Component
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string'],
             'priority' => ['required', 'string'],
-            'attachments.*' => ['nullable', 'file', 'max:10240'],
+            ...TicketAttachmentRules::validationRules('attachments'),
         ];
 
         foreach ($fields as $field) {

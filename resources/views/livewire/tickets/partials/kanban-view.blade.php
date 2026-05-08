@@ -86,6 +86,7 @@
                                     <div wire:key="ticket-title-kanban-{{ $ticket->id }}">
                                         <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-full text-sm font-medium" />
                                     </div>
+                                    <p class="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
 
                                     <div class="mt-3 flex flex-wrap items-center gap-2">
                                         <span class="ui-tone-chip ui-tone-chip-neutral">{{ $ticket->requester?->name ?? 'Nao informado' }}</span>

@@ -15,10 +15,10 @@ class SuperAdminSeeder extends Seeder
         User::query()->updateOrCreate(
             ['email' => env('SUPER_ADMIN_EMAIL', 'admin@aiaservice.local')],
             [
-                'name' => env('SUPER_ADMIN_NAME', 'Super Admin'),
+                'name' => env('SUPER_ADMIN_NAME', 'Dev Admin'),
                 'password' => Hash::make(env('SUPER_ADMIN_PASSWORD', 'password')),
-                'role' => UserRole::SUPER_ADMIN,
-                'global_role' => GlobalUserRole::SUPER_ADMIN,
+                'role' => UserRole::DEV,
+                'global_role' => GlobalUserRole::DEV,
                 'sector_id' => null,
                 'room_id' => null,
                 'must_change_password' => false,

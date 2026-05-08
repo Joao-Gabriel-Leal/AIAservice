@@ -54,7 +54,7 @@
                             <td class="px-6 py-4 text-slate-600">
                                 {{ $article->editorial_status->label() }}
                                 @if ($article->sourceTicket)
-                                    <p class="text-xs text-sky-700">Chamado #{{ $article->sourceTicket->id }}</p>
+                                    <p class="text-xs text-sky-700">{{ $article->sourceTicket->fullReference() }}</p>
                                 @endif
                             </td>
                             <td class="px-6 py-4 text-slate-600">{{ $article->attachments_count ?? 0 }}</td>

@@ -10,7 +10,7 @@
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-300">Patrimonio identificado</p>
                     <div class="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
-                            <p class="text-sm text-slate-300">Dados principais do patrimonio</p>
+                            <p class="text-sm text-slate-300">Dados principais do patrimonio com acesso autenticado</p>
                             <h1 class="mt-2 text-3xl font-semibold">{{ $asset->name }}</h1>
                             <p class="mt-3 text-sm text-slate-300">Codigo {{ $asset->asset_code }}</p>
                         </div>
@@ -78,7 +78,7 @@
                             </div>
 
                             <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-4 text-xs leading-5 text-slate-500">
-                                Esta e a pagina publica do QR code. Para historico completo, movimentacoes e edicao, acesse o sistema interno.
+                                O QR direciona para esta tela protegida por login. Para historico completo, movimentacoes e edicao, acesse o sistema interno.
                             </div>
                         </dl>
                     </aside>

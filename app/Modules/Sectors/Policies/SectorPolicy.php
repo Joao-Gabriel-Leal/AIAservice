@@ -9,26 +9,26 @@ class SectorPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin();
+        return $user->isGlobalAdmin() || $user->isSectorAdmin();
     }
 
     public function view(User $user, Sector $sector): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($sector->id);
+        return $user->isGlobalAdmin() || $user->isSectorAdmin($sector->id);
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 
     public function update(User $user, Sector $sector): bool
     {
-        return $user->isSuperAdmin() || $user->isSectorAdmin($sector->id);
+        return $user->isGlobalAdmin() || $user->isSectorAdmin($sector->id);
     }
 
     public function delete(User $user, Sector $sector): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isGlobalAdmin();
     }
 }

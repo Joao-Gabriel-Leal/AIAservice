@@ -69,12 +69,12 @@ class ExcelExportTest extends TestCase
         $this->assertSame('PAT-000001', $expected->asset_code);
     }
 
-    public function test_licenses_export_respects_sector_scope_and_search_filters(): void
+    public function test_licenses_export_is_restricted_to_global_admins_and_respects_search_filters(): void
     {
         $company = Company::query()->create(['name' => 'Empresa Licencas Export', 'is_active' => true]);
         $sectorA = Sector::query()->create(['company_id' => $company->id, 'name' => 'TI Export', 'slug' => 'ti-export', 'is_active' => true]);
         $sectorB = Sector::query()->create(['company_id' => $company->id, 'name' => 'RH Export', 'slug' => 'rh-export', 'is_active' => true]);
-        $technician = User::factory()->create(['sector_id' => $sectorA->id, 'role' => UserRole::TECHNICIAN]);
+        $admin = User::factory()->superAdmin()->create();
         $collaborator = User::factory()->create(['sector_id' => $sectorA->id]);
 
         $visibleLicense = License::query()->create([
@@ -107,7 +107,7 @@ class ExcelExportTest extends TestCase
         ]);
 
         $spreadsheet = $this->spreadsheetFromResponse(
-            $this->actingAs($technician)->get(route('licenses.export', [
+            $this->actingAs($admin)->get(route('licenses.export', [
                 'search' => $collaborator->email,
             ])),
         );
@@ -125,7 +125,7 @@ class ExcelExportTest extends TestCase
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketScope();
         $requester = User::factory()->create(['sector_id' => $sector->id, 'room_id' => $room->id]);
 
-        Ticket::query()->create([
+        $ticket = Ticket::query()->create([
             'sector_id' => $sector->id,
             'ticket_board_id' => $board->id,
             'ticket_group_id' => $group->id,
@@ -155,7 +155,9 @@ class ExcelExportTest extends TestCase
         ], $spreadsheet->getSheetNames());
         $summaryRows = $this->sheetValues($spreadsheet->getSheet(0));
         $this->assertContains('Periodo | 30 dias', $summaryRows);
-        $this->assertStringContainsString('Chamado exportado', implode("\n", $this->sheetValues($spreadsheet->getSheet(2))));
+        $recentTicketRows = implode("\n", $this->sheetValues($spreadsheet->getSheet(2)));
+        $this->assertStringContainsString($ticket->reference_code, $recentTicketRows);
+        $this->assertStringContainsString('Chamado exportado', $recentTicketRows);
     }
 
     public function test_tickets_export_respects_selected_sector(): void
@@ -165,7 +167,7 @@ class ExcelExportTest extends TestCase
         $technician = User::factory()->create(['sector_id' => $sectorA->id, 'room_id' => $roomA->id, 'role' => UserRole::TECHNICIAN]);
         $requester = User::factory()->create(['sector_id' => $sectorA->id, 'room_id' => $roomA->id]);
 
-        Ticket::query()->create([
+        $visibleTicket = Ticket::query()->create([
             'sector_id' => $sectorA->id,
             'ticket_board_id' => $boardA->id,
             'ticket_group_id' => $groupA->id,
@@ -196,8 +198,14 @@ class ExcelExportTest extends TestCase
         );
 
         $rows = $this->sheetValues($spreadsheet->getSheet(0));
-        $this->assertStringContainsString('Chamado TI', implode("\n", $rows));
-        $this->assertStringNotContainsString('Chamado Financeiro', implode("\n", $rows));
+        $content = implode("\n", $rows);
+
+        $this->assertStringContainsString('Codigo', $content);
+        $this->assertStringContainsString('ID interno', $content);
+        $this->assertStringContainsString($visibleTicket->reference_code, $content);
+        $this->assertStringContainsString($visibleTicket->technicalReference(), $content);
+        $this->assertStringContainsString('Chamado TI', $content);
+        $this->assertStringNotContainsString('Chamado Financeiro', $content);
     }
 
     public function test_knowledge_base_export_respects_search(): void

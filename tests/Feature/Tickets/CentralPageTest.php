@@ -5,8 +5,10 @@ namespace Tests\Feature\Tickets;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Tickets\Livewire\CentralPage;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class CentralPageTest extends TestCase
@@ -22,8 +24,9 @@ class CentralPageTest extends TestCase
             ->assertOk()
             ->assertSeeText("Formularios de {$secondSector->name}")
             ->assertSeeText($firstSector->name)
-            ->assertDontSeeText('Selecione uma area para ver os formularios ativos disponiveis naquele setor.')
-            ->assertDontSeeText('A selecao abaixo atualiza o conteudo da central sem trocar de rota.');
+            ->assertSeeText('Selecione uma area para ver os formularios ativos disponiveis naquele setor.')
+            ->assertSeeText('Filtre por nome ou empresa e selecione um setor sem sair desta pagina.')
+            ->assertSee('id="central-sector-results"', false);
     }
 
     public function test_invalid_sector_query_falls_back_to_the_first_active_sector(): void
@@ -58,6 +61,28 @@ class CentralPageTest extends TestCase
             ->assertOk()
             ->assertDontSeeText('Abrir chamado geral')
             ->assertDontSeeText('O chamado geral continua disponivel');
+    }
+
+    public function test_central_page_filters_sectors_by_name_or_company(): void
+    {
+        ['company' => $company] = $this->centralContext();
+
+        Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Comercial',
+            'slug' => 'comercial',
+            'description' => 'Demandas comerciais.',
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs(User::factory()->create())
+            ->test(CentralPage::class)
+            ->set('sectorSearch', 'ti')
+            ->assertSee('TI')
+            ->assertDontSee('Financeiro')
+            ->set('sectorSearch', 'empresa central')
+            ->assertSee('Financeiro')
+            ->assertSee('TI');
     }
 
     private function centralContext(): array

@@ -19,7 +19,7 @@ class LicenseRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->user();
-        $allowedSectorIds = $user && ! $user->isSuperAdmin() ? $user->operationalSectorIds() : [];
+        $allowedSectorIds = $user && ! $user->isGlobalAdmin() ? $user->operationalSectorIds() : [];
 
         $sectorRules = ['required', 'integer', Rule::exists('sectors', 'id')];
 

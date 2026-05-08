@@ -80,6 +80,8 @@ class IndexPage extends Component
 
     public ?int $lastManualTicketId = null;
 
+    public ?string $lastManualTicketReferenceCode = null;
+
     public array $manualTicketForm = [
         'title' => '',
         'description' => '',
@@ -430,6 +432,7 @@ class IndexPage extends Component
         $this->selectedSectorId = $board->sector_id;
         $this->selectedBoardId = $board->id;
         $this->lastManualTicketId = null;
+        $this->lastManualTicketReferenceCode = null;
 
         $this->manualTicketForm = [
             'title' => '',
@@ -510,11 +513,12 @@ class IndexPage extends Component
         ]);
 
         $this->lastManualTicketId = $ticket->id;
+        $this->lastManualTicketReferenceCode = $ticket->publicReference();
         $this->showManualTicketModal = false;
         $this->resetPage();
         $this->syncCollapsedGroups();
 
-        session()->flash('status', "Chamado #{$ticket->id} criado manualmente no quadro {$board->name}.");
+        session()->flash('status', 'Chamado '.$ticket->fullReference().' criado manualmente no quadro '.$board->name.'.');
     }
 
     public function render(): View

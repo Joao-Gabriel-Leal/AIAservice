@@ -18,11 +18,13 @@ use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Notifications\TicketCreatedNotification;
+use App\Modules\Tickets\Notifications\TicketInternalUpdateNotification;
 use App\Modules\Tickets\Notifications\TicketManualTimeEntryPendingApprovalNotification;
 use App\Modules\Tickets\Notifications\TicketMessageNotification;
 use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
 use App\Modules\Tickets\Notifications\TicketTimeEntryReviewedNotification;
 use App\Modules\Tickets\Notifications\TicketUpdateNotification;
+use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -66,7 +68,7 @@ class TicketWorkflowService
         ]);
         $this->notifyUsers(
             $ticket,
-            new TicketCreatedNotification($ticket, 'Novo chamado criado', "O chamado #{$ticket->id} foi criado."),
+            new TicketCreatedNotification($ticket, 'Novo chamado criado', 'O chamado '.$ticket->fullReference().' foi criado.'),
         );
 
         $ticket = $ticket->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee']);
@@ -400,17 +402,34 @@ class TicketWorkflowService
         return $fieldValue;
     }
 
-    public function addMessage(User $actor, Ticket $ticket, string $message, array $attachments = [], array $context = []): TicketMessage
+    public function addMessage(
+        User $actor,
+        Ticket $ticket,
+        string $message,
+        array $attachments = [],
+        array $context = [],
+        bool $isInternal = false,
+        array $mentionedUserIds = [],
+    ): TicketMessage
     {
-        Gate::forUser($actor)->authorize('comment', $ticket);
+        Gate::forUser($actor)->authorize($isInternal ? 'commentInternally' : 'comment', $ticket);
+
+        $mentionedUserIds = collect($mentionedUserIds)
+            ->map(fn (mixed $userId) => (int) $userId)
+            ->filter(fn (int $userId) => $userId > 0 && $userId !== $actor->id)
+            ->unique()
+            ->values()
+            ->all();
 
         /** @var TicketMessage $ticketMessage */
-        $ticketMessage = DB::transaction(function () use ($actor, $ticket, $message, $attachments) {
+        $ticketMessage = DB::transaction(function () use ($actor, $ticket, $message, $attachments, $isInternal, $mentionedUserIds) {
             /** @var TicketMessage $createdMessage */
             $createdMessage = $ticket->messages()->create([
                 'user_id' => $actor->id,
                 'message' => $message,
                 'is_system' => false,
+                'is_internal' => $isInternal,
+                'mentioned_user_ids' => $mentionedUserIds !== [] ? $mentionedUserIds : null,
             ]);
 
             $this->storeAttachments($ticket, $actor, $attachments, $createdMessage, 'chat');
@@ -422,15 +441,27 @@ class TicketWorkflowService
         $this->ticketSlaService->captureFirstResponse($actor, $ticket);
         $this->ticketSlaService->evaluateTicket($ticket->fresh());
 
-        $this->activityLogService->log($actor, $ticket, 'ticket.message.created', 'Nova mensagem no chat.', [
-            'message_id' => $ticketMessage->id,
-            'sector_id' => $ticket->sector_id,
-        ]);
-        $this->notifyUsers(
+        $this->activityLogService->log(
+            $actor,
             $ticket,
-            new TicketMessageNotification($ticket, 'Nova mensagem no chamado', "Ha uma nova mensagem no chamado #{$ticket->id}."),
-            [$actor->id],
+            $isInternal ? 'ticket.internal_message.created' : 'ticket.message.created',
+            $isInternal ? 'Atualizacao interna registrada.' : 'Nova mensagem no chat.',
+            [
+            'message_id' => $ticketMessage->id,
+            'mentioned_user_ids' => $mentionedUserIds,
+            'sector_id' => $ticket->sector_id,
+            ],
         );
+
+        if ($isInternal) {
+            $this->notifyInternalUpdateMentions($ticket, $actor, $mentionedUserIds);
+        } else {
+            $this->notifyUsers(
+                $ticket,
+                new TicketMessageNotification($ticket, 'Nova mensagem no chamado', 'Ha uma nova mensagem no chamado '.$ticket->fullReference().'.'),
+                [$actor->id],
+            );
+        }
 
         $ticketMessage->load(['user', 'attachments']);
 
@@ -500,7 +531,7 @@ class TicketWorkflowService
         $this->ticketSlaService->evaluateTicket($ticket);
         $this->notifyUsers(
             $ticket,
-            new TicketUpdateNotification($ticket, 'Chamado finalizado pelo solicitante', "O chamado #{$ticket->id} foi finalizado pelo solicitante."),
+            new TicketUpdateNotification($ticket, 'Chamado finalizado pelo solicitante', 'O chamado '.$ticket->fullReference().' foi finalizado pelo solicitante.'),
             [$actor->id],
         );
         $this->notifyRequesterToRate($ticket);
@@ -566,7 +597,7 @@ class TicketWorkflowService
         $this->ticketSlaService->evaluateTicket($ticket);
         $this->notifyUsers(
             $ticket,
-            new TicketUpdateNotification($ticket, 'Chamado reaberto pelo solicitante', "O chamado #{$ticket->id} foi reaberto pelo solicitante."),
+            new TicketUpdateNotification($ticket, 'Chamado reaberto pelo solicitante', 'O chamado '.$ticket->fullReference().' foi reaberto pelo solicitante.'),
             [$actor->id],
         );
         $this->handleAutomationEventSafely($ticket, TicketAutomationTrigger::TICKET_UPDATED, [
@@ -655,8 +686,10 @@ class TicketWorkflowService
         ?TicketMessage $message = null,
         string $source = 'opening',
     ): Collection {
-        return collect($attachments)
-            ->filter(fn ($file) => $file instanceof UploadedFile)
+        $field = $message ? 'chatFiles' : 'attachments';
+        $validatedAttachments = TicketAttachmentRules::validate($attachments, $field);
+
+        return collect($validatedAttachments)
             ->map(function (UploadedFile $file) use ($ticket, $actor, $message, $source) {
                 $content = file_get_contents($file->getRealPath());
 
@@ -667,6 +700,7 @@ class TicketWorkflowService
                 $extension = $file->extension() ?: $file->getClientOriginalExtension() ?: 'bin';
                 $path = "tickets/{$ticket->id}/".Str::uuid().".{$extension}";
                 $attachment = new TicketAttachment;
+                $mimeType = $file->getMimeType() ?: $file->getClientMimeType() ?: 'application/octet-stream';
 
                 return TicketAttachment::query()->create([
                     'ticket_id' => $ticket->id,
@@ -676,7 +710,7 @@ class TicketWorkflowService
                     'disk' => 'database',
                     'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
+                    'mime_type' => $mimeType,
                     'size' => $file->getSize() ?: strlen($content),
                     'content' => $attachment->encodeContentForStorage($content),
                 ]);
@@ -710,7 +744,7 @@ class TicketWorkflowService
             ->where('is_active', true)
             ->where(function (Builder $query) use ($ticket) {
                 $query
-                    ->where('global_role', 'super_admin')
+                    ->globalAdmins()
                     ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin']));
             })
             ->whereNotIn('id', $exceptUserIds)
@@ -756,11 +790,40 @@ class TicketWorkflowService
         $notification = new TicketRatingRequestNotification(
             $ticket,
             'Chamado encerrado',
-            "O chamado #{$ticket->id} foi encerrado. Avalie o atendimento quando puder.",
+            'O chamado '.$ticket->fullReference().' foi encerrado. Avalie o atendimento quando puder.',
         );
 
         try {
             $ticket->requester->notify($notification);
+        } catch (Throwable $throwable) {
+            $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
+    }
+
+    private function notifyInternalUpdateMentions(Ticket $ticket, User $actor, array $mentionedUserIds): void
+    {
+        if ($mentionedUserIds === []) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->where('is_active', true)
+            ->whereIn('id', $mentionedUserIds)
+            ->where(function (Builder $query) use ($ticket) {
+                $query
+                    ->globalAdmins()
+                    ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']));
+            })
+            ->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $notification = new TicketInternalUpdateNotification($ticket, $actor);
+
+        try {
+            Notification::send($recipients, $notification);
         } catch (Throwable $throwable) {
             $this->logNotificationFailure($throwable, $ticket, $notification);
         }
@@ -819,7 +882,7 @@ class TicketWorkflowService
             ...User::query()
                 ->where(function ($query) use ($ticket) {
                     $query
-                        ->where('global_role', 'super_admin')
+                        ->globalAdmins()
                         ->orWhere(function ($scopedQuery) use ($ticket) {
                             $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']);
                         });
@@ -843,14 +906,14 @@ class TicketWorkflowService
             return new TicketUpdateNotification(
                 $ticket,
                 'Chamado reaberto',
-                "O chamado #{$ticket->id} foi reaberto e voltou para atendimento.",
+                'O chamado '.$ticket->fullReference().' foi reaberto e voltou para atendimento.',
             );
         }
 
         if (($original['assignee_id'] ?? null) !== $ticket->assignee_id) {
             $message = $ticket->assignee
-                ? "O chamado #{$ticket->id} agora esta atribuido para {$ticket->assignee->name}."
-                : "O chamado #{$ticket->id} ficou sem responsavel definido.";
+                ? 'O chamado '.$ticket->fullReference().' agora esta atribuido para '.$ticket->assignee->name.'.'
+                : 'O chamado '.$ticket->fullReference().' ficou sem responsavel definido.';
 
             return new TicketUpdateNotification($ticket, 'Responsavel do chamado atualizado', $message);
         }
@@ -861,7 +924,7 @@ class TicketWorkflowService
             return new TicketUpdateNotification(
                 $ticket,
                 'Etapa do chamado atualizada',
-                "O chamado #{$ticket->id} foi movido para {$target}.",
+                'O chamado '.$ticket->fullReference().' foi movido para '.$target.'.',
             );
         }
 
@@ -869,7 +932,7 @@ class TicketWorkflowService
             return new TicketUpdateNotification(
                 $ticket,
                 'Prioridade do chamado atualizada',
-                "O chamado #{$ticket->id} agora esta com prioridade {$ticket->priority?->label()}.",
+                'O chamado '.$ticket->fullReference().' agora esta com prioridade '.$ticket->priority?->label().'.',
             );
         }
 
