@@ -70,7 +70,7 @@ class TicketMessageTemplate extends Model
     {
         return match ($channel) {
             self::CHANNEL_INTERNAL => 'Atualizacao interna',
-            default => 'Conversa com solicitante',
+            default => 'Chat do chamado',
         };
     }
 

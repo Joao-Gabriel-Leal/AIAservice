@@ -21,7 +21,7 @@
         </x-slot:meta>
     </x-portal.page-intro>
 
-    <x-portal.filter-bar title="Filtros pessoais" description="A lista ignora chamados de outros solicitantes, mesmo quando voce tem acesso operacional ao setor.">
+    <x-portal.filter-bar title="Filtros" description="Chamados abertos por voce.">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">ID ou titulo</span>

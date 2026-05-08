@@ -25,7 +25,7 @@ class CentralPageTest extends TestCase
             ->assertSeeText("Formularios de {$secondSector->name}")
             ->assertSeeText($firstSector->name)
             ->assertSeeText('Selecione uma area para ver os formularios ativos disponiveis naquele setor.')
-            ->assertSeeText('Filtre por nome ou empresa e selecione um setor sem sair desta pagina.')
+            ->assertSeeText('Busque por nome ou empresa.')
             ->assertSee('id="central-sector-results"', false);
     }
 

@@ -95,16 +95,16 @@ class TicketInternalUpdatesTest extends TestCase
 
         Livewire::actingAs($technician)
             ->test(ShowPage::class, ['ticket' => $ticket])
-            ->set('internalMessage', 'Consegue validar a regra do firewall?')
+            ->set('internalMessage', 'Consegue validar a regra do firewall, @'.$manager->name.'?')
             ->set('internalMentionedUserIds', [$manager->id])
             ->call('sendInternalUpdate')
             ->assertHasNoErrors()
-            ->assertSee('Consegue validar a regra do firewall?')
-            ->assertSee('Marcado: '.$manager->name);
+            ->assertSee('@'.$manager->name)
+            ->assertDontSee('Marcado: '.$manager->name);
 
         $message = TicketMessage::query()
             ->where('ticket_id', $ticket->id)
-            ->where('message', 'Consegue validar a regra do firewall?')
+            ->where('message', 'Consegue validar a regra do firewall, @'.$manager->name.'?')
             ->firstOrFail();
 
         $this->assertTrue($message->is_internal);

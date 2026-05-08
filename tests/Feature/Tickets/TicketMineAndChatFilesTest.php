@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Tickets;
 
-use App\Enums\TicketPriority;
 use App\Enums\TicketFieldType;
+use App\Enums\TicketPriority;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Modules\Companies\Models\Company;
@@ -70,7 +70,7 @@ class TicketMineAndChatFilesTest extends TestCase
                 ->assertOk()
                 ->assertSee('Meus chamados')
                 ->assertSee('Somente solicitacoes do seu usuario')
-                ->assertSee('Filtros pessoais');
+                ->assertSee('Filtros');
         }
 
         Livewire::actingAs($operator)

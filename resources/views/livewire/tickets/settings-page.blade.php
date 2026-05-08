@@ -943,7 +943,7 @@
             <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-900">Templates de mensagem</h3>
-                    <p class="text-sm text-slate-500">Respostas oficiais do quadro para padronizar conversa com solicitantes e notas internas.</p>
+                    <p class="text-sm text-slate-500">Textos compartilhados do quadro.</p>
                 </div>
                 <span class="text-sm text-slate-500">Compartilhados</span>
             </div>
@@ -952,7 +952,7 @@
                 @php
                     $sharedTemplates = $board->messageTemplates->whereNull('user_id')->values();
                     $templateChannelLabels = [
-                        \App\Modules\Tickets\Models\TicketMessageTemplate::CHANNEL_PUBLIC => 'Conversa com solicitante',
+                        \App\Modules\Tickets\Models\TicketMessageTemplate::CHANNEL_PUBLIC => 'Chat do chamado',
                         \App\Modules\Tickets\Models\TicketMessageTemplate::CHANNEL_INTERNAL => 'Atualizacao interna',
                     ];
                 @endphp
@@ -966,7 +966,7 @@
                                     <span class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-700">Registro existente</span>
                                 @endif
                             </div>
-                            <p class="mt-1 text-sm text-slate-500">Operadores do quadro podem aplicar estes textos dentro do chamado.</p>
+                            <p class="mt-1 text-sm text-slate-500">Disponivel no composer do chamado.</p>
                         </div>
 
                         <form wire:submit="saveTemplate" class="space-y-4">

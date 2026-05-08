@@ -16,6 +16,9 @@
         $detailFields = $canViewOperationalHistory ? $fields : $requesterFields;
         $detailFieldsCount = $detailFields->count();
         $internalAudienceUsersById = $internalAudienceUsers->keyBy('id');
+        $internalMentionableUsersForJs = $internalMentionableUsers
+            ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])
+            ->values();
         $slaItems = $canViewOperationalHistory ? collect($ticket->slaSummary()) : collect();
         $activeSlaItems = $slaItems->reject(fn ($slaItem) => $slaItem['state'] === 'na')->values();
         $primarySlaItem = $activeSlaItems->first();
@@ -24,6 +27,9 @@
         $priorityLabel = $ticket->priority?->label() ?? 'Sem prioridade';
         $requesterName = $ticket->requester?->name ?? 'Nao informado';
         $assigneeName = $ticket->assignee?->name ?? 'Nao atribuido';
+        $isOwnRequester = $ticket->requester_id === auth()->id();
+        $requesterMetaLabel = $isOwnRequester ? 'Aberto por' : 'Solicitante';
+        $requesterActionsLabel = $isOwnRequester ? 'Suas acoes' : 'Acoes do solicitante';
 
         if ($latestActivity) {
             $latestActivitySummary = $latestActivity->description ?: $latestActivity->event;
@@ -53,7 +59,7 @@
 
             <div class="ticket-cockpit-meta-grid">
                 <div>
-                    <span>Solicitante</span>
+                    <span>{{ $requesterMetaLabel }}</span>
                     <strong>{{ $requesterName }}</strong>
                 </div>
                 <div>
@@ -132,14 +138,12 @@
                                     </svg>
                                 </div>
                                 <div>
-                                <p class="ticket-panel-kicker">Fluxo de conversa</p>
-                                    <h3 class="ticket-panel-title ticket-chat-title">Conversa com solicitante</h3>
-                                    <p class="ticket-panel-copy">Canal visivel para quem abriu o chamado.</p>
+                                    <p class="ticket-panel-kicker">Conversa</p>
+                                    <h3 class="ticket-panel-title ticket-chat-title">Chat do chamado</h3>
                                 </div>
                             </div>
 
                             <div class="ticket-chat-chip-group">
-                                <span class="ticket-visibility-chip ticket-visibility-chip-public">Visivel para o solicitante</span>
                                 <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
                                 @if ($latestMessage?->created_at)
                                     <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
@@ -219,7 +223,6 @@
                             <form wire:submit="sendMessage" class="ticket-chat-composer">
                                 <div>
                                     <p class="text-sm font-semibold text-slate-900">Responder</p>
-                                    <p class="mt-1 text-sm text-slate-500">Sua mensagem fica registrada no atendimento para quem participa desta conversa.</p>
                                 </div>
 
                                 <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
@@ -229,7 +232,6 @@
                                     <div class="ticket-template-strip">
                                         <div>
                                             <p class="ticket-template-strip-title">Templates</p>
-                                            <p class="ticket-template-strip-copy">Clique para inserir no texto.</p>
                                         </div>
 
                                         <div class="ticket-template-pill-list">
@@ -242,47 +244,41 @@
                                     </div>
                                 @endif
 
-                                <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
-                                    <div class="flex flex-wrap items-center justify-between gap-3">
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-900">Arquivos no chat</p>
-                                            <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por mensagem, com limite de 25 MB cada.</p>
-                                        </div>
-
-                                        <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
-                                            Selecionar arquivos
-                                            <input wire:model="chatFiles" type="file" multiple class="sr-only">
-                                        </label>
+                                <div class="ticket-composer-file-row">
+                                    <div wire:loading wire:target="chatFiles" class="ticket-upload-inline-status">
+                                        Preparando anexos...
                                     </div>
-
-                                    <div wire:loading wire:target="chatFiles" class="mt-3 text-xs text-slate-500">
-                                        Preparando arquivos...
-                                    </div>
-
-                                    @if (count($chatFiles) > 0)
-                                        <div class="mt-3 grid gap-2">
-                                            @foreach ($chatFiles as $index => $file)
-                                                <div wire:key="chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                                                    <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
-                                                    <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    @endif
 
                                     @error('chatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
                                     @error('chatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                                    @if (count($chatFiles) > 0)
+                                        <div class="ticket-upload-chip-list">
+                                            @foreach ($chatFiles as $index => $file)
+                                                <span wire:key="chat-file-{{ $index }}" class="ticket-upload-mini-chip" title="{{ $file->getClientOriginalName() }}">
+                                                    <span>{{ $file->getClientOriginalName() }}</span>
+                                                    <small>{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</small>
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
 
                                 <div class="ticket-chat-composer-footer">
-                                    <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
-
-                                    <div class="flex flex-wrap items-center gap-2">
+                                    <div class="ticket-composer-actions">
                                         @if ($canUseMessageTemplates)
                                             <button type="button" wire:click="openPersonalTemplateForm('public')" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
                                                 Salvar template
                                             </button>
                                         @endif
+
+                                        <label class="ticket-attach-button" title="Anexar arquivos" aria-label="Anexar arquivos">
+                                            <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
+                                                <path d="m21.4 11.1-8.7 8.7a5.2 5.2 0 0 1-7.4-7.4l9.4-9.4a3.5 3.5 0 0 1 5 5l-9.4 9.4a1.8 1.8 0 0 1-2.5-2.5l8.7-8.7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+                                            </svg>
+                                            <span class="sr-only">Anexar arquivos</span>
+                                            <input wire:model="chatFiles" type="file" multiple class="sr-only">
+                                        </label>
 
                                         <button
                                             type="submit"
@@ -291,7 +287,7 @@
                                             wire:target="sendMessage,chatFiles"
                                             class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
                                         >
-                                            <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
+                                            <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar</span>
                                             <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
                                         </button>
                                     </div>
@@ -318,9 +314,8 @@
                                         </svg>
                                     </div>
                                     <div>
-                                    <p class="ticket-panel-kicker">Canal restrito</p>
-                                    <h3 class="ticket-panel-title ticket-chat-title">Atualizacoes internas</h3>
-                                        <p class="ticket-panel-copy">Espaco privado para operadores e gestores alinharem diagnostico.</p>
+                                        <p class="ticket-panel-kicker">Interno</p>
+                                        <h3 class="ticket-panel-title ticket-chat-title">Atualizacoes internas</h3>
                                     </div>
                                 </div>
 
@@ -343,6 +338,7 @@
                                             ->map(fn ($mentionedUserId) => $internalAudienceUsersById->get($mentionedUserId))
                                             ->filter()
                                             ->values();
+                                        $currentUserWasMentioned = $mentionedUsers->contains(fn ($mentionedUser) => $mentionedUser->id === auth()->id());
                                     @endphp
                                     <div class="ticket-chat-message-row {{ $isOwnMessage ? 'ticket-chat-message-row-self' : 'ticket-chat-message-row-other' }}">
                                         @unless ($isOwnMessage)
@@ -364,13 +360,11 @@
                                                 <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
                                             @endif
 
-                                            @if ($mentionedUsers->isNotEmpty())
+                                            @if ($currentUserWasMentioned)
                                                 <div class="mt-3 flex flex-wrap gap-2">
-                                                    @foreach ($mentionedUsers as $mentionedUser)
-                                                        <span class="inline-flex rounded-full bg-slate-900/90 px-3 py-1 text-[11px] font-medium text-white">
-                                                            {{ $mentionedUser->id === auth()->id() ? 'Voce foi marcado' : 'Marcado: '.$mentionedUser->name }}
-                                                        </span>
-                                                    @endforeach
+                                                    <span class="inline-flex rounded-full bg-slate-900/90 px-3 py-1 text-[11px] font-medium text-white">
+                                                        Voce foi mencionado
+                                                    </span>
                                                 </div>
                                             @endif
 
@@ -411,26 +405,69 @@
                                 @empty
                                     <div class="ticket-chat-empty">
                                         <p class="text-base font-medium text-slate-900">Nenhuma atualizacao interna registrada.</p>
-                                        <p class="mt-2 text-sm text-slate-500">Use este espaco para alinhar diagnostico, pedir apoio e marcar operadores ou gestores do quadro.</p>
                                     </div>
                                 @endforelse
                             </div>
 
                             @if ($canCommentInternally)
-                                <form wire:submit="sendInternalUpdate" class="ticket-chat-composer">
+                                <form
+                                    wire:submit="sendInternalUpdate"
+                                    class="ticket-chat-composer"
+                                    x-data="ticketMentionComposer({
+                                        users: @js($internalMentionableUsersForJs),
+                                        message: $wire.entangle('internalMessage').live,
+                                        mentionedIds: $wire.entangle('internalMentionedUserIds').live,
+                                    })"
+                                >
                                     <div>
                                         <p class="text-sm font-semibold text-slate-900">Nova atualizacao interna</p>
-                                        <p class="mt-1 text-sm text-slate-500">Somente operadores e gestores do quadro visualizam este bloco.</p>
                                     </div>
 
-                                    <textarea wire:model="internalMessage" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Registre uma atualizacao interna"></textarea>
+                                    <div class="ticket-mention-composer">
+                                        <textarea
+                                            x-ref="internalTextarea"
+                                            x-model="message"
+                                            x-on:input="handleMentionInput()"
+                                            x-on:click="refreshMentionMenu()"
+                                            x-on:keyup="if (! ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes($event.key)) refreshMentionMenu()"
+                                            x-on:keydown.arrow-down.prevent="moveMention(1)"
+                                            x-on:keydown.arrow-up.prevent="moveMention(-1)"
+                                            x-on:keydown.enter="if (mentionOpen) { $event.preventDefault(); selectActiveMention(); }"
+                                            x-on:keydown.tab="if (mentionOpen) { $event.preventDefault(); selectActiveMention(); }"
+                                            x-on:keydown.escape="mentionOpen = false"
+                                            rows="4"
+                                            class="ui-input ticket-chat-input w-full"
+                                            placeholder="Atualizacao interna. Use @ para mencionar"
+                                        ></textarea>
+
+                                        <div
+                                            x-cloak
+                                            x-show="mentionOpen && filteredUsers.length > 0"
+                                            x-transition.opacity.duration.120ms
+                                            class="ticket-mention-menu"
+                                            role="listbox"
+                                        >
+                                            <template x-for="(user, index) in filteredUsers" :key="user.id">
+                                                <button
+                                                    type="button"
+                                                    class="ticket-mention-option"
+                                                    :class="{ 'ticket-mention-option-active': index === activeMentionIndex }"
+                                                    x-on:mousedown.prevent="selectMention(user)"
+                                                    role="option"
+                                                    :aria-selected="(index === activeMentionIndex).toString()"
+                                                >
+                                                    <span class="ticket-mention-avatar" x-text="initials(user.name)"></span>
+                                                    <span class="ticket-mention-name" x-text="user.name"></span>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
                                     @error('internalMessage') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
 
                                     @if ($canUseMessageTemplates && $internalMessageTemplates->isNotEmpty())
                                         <div class="ticket-template-strip ticket-template-strip-internal">
                                             <div>
                                                 <p class="ticket-template-strip-title">Templates internos</p>
-                                                <p class="ticket-template-strip-copy">Insere sem marcar usuarios automaticamente.</p>
                                             </div>
 
                                             <div class="ticket-template-pill-list">
@@ -443,75 +480,44 @@
                                         </div>
                                     @endif
 
-                                    @if ($internalMentionableUsers->isNotEmpty())
-                                        <div class="rounded-2xl border border-dashed border-amber-300 bg-white/80 px-4 py-3">
-                                            <div>
-                                                <p class="text-sm font-semibold text-slate-900">Marcar operadores ou gestores</p>
-                                                <p class="mt-1 text-xs text-slate-500">Selecione quem deve receber a notificacao desta atualizacao.</p>
-                                            </div>
+                                    @error('internalMentionedUserIds') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    @error('internalMentionedUserIds.*') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
 
-                                            <div class="mt-3 flex flex-wrap gap-2">
-                                                @foreach ($internalMentionableUsers as $mentionedUser)
-                                                    <label class="cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            value="{{ $mentionedUser->id }}"
-                                                            wire:model="internalMentionedUserIds"
-                                                            class="peer sr-only"
-                                                        >
-                                                        <span class="inline-flex rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white">
-                                                            {{ $mentionedUser->name }}
-                                                        </span>
-                                                    </label>
-                                                @endforeach
-                                            </div>
-
-                                            @error('internalMentionedUserIds') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                                            @error('internalMentionedUserIds.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    <div class="ticket-composer-file-row">
+                                        <div wire:loading wire:target="internalChatFiles" class="ticket-upload-inline-status">
+                                            Preparando anexos...
                                         </div>
-                                    @endif
-
-                                    <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
-                                        <div class="flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <p class="text-sm font-semibold text-slate-900">Arquivos internos</p>
-                                                <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por atualizacao, com limite de 25 MB cada.</p>
-                                            </div>
-
-                                            <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
-                                                Selecionar arquivos
-                                                <input wire:model="internalChatFiles" type="file" multiple class="sr-only">
-                                            </label>
-                                        </div>
-
-                                        <div wire:loading wire:target="internalChatFiles" class="mt-3 text-xs text-slate-500">
-                                            Preparando arquivos...
-                                        </div>
-
-                                        @if (count($internalChatFiles) > 0)
-                                            <div class="mt-3 grid gap-2">
-                                                @foreach ($internalChatFiles as $index => $file)
-                                                    <div wire:key="internal-chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                                                        <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
-                                                        <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
-                                                    </div>
-                                                @endforeach
-                                            </div>
-                                        @endif
 
                                         @error('internalChatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
                                         @error('internalChatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                                        @if (count($internalChatFiles) > 0)
+                                            <div class="ticket-upload-chip-list">
+                                                @foreach ($internalChatFiles as $index => $file)
+                                                    <span wire:key="internal-chat-file-{{ $index }}" class="ticket-upload-mini-chip" title="{{ $file->getClientOriginalName() }}">
+                                                        <span>{{ $file->getClientOriginalName() }}</span>
+                                                        <small>{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</small>
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
 
                                     <div class="ticket-chat-composer-footer">
-                                        <p class="text-xs text-slate-500">As notificacoes vao somente para os operadores ou gestores que voce marcar.</p>
-
-                                        <div class="flex flex-wrap items-center gap-2">
+                                        <div class="ticket-composer-actions">
                                             @if ($canUseMessageTemplates)
                                                 <button type="button" wire:click="openPersonalTemplateForm('internal')" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
                                                     Salvar template
                                                 </button>
                                             @endif
+
+                                            <label class="ticket-attach-button" title="Anexar arquivos" aria-label="Anexar arquivos">
+                                                <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
+                                                    <path d="m21.4 11.1-8.7 8.7a5.2 5.2 0 0 1-7.4-7.4l9.4-9.4a3.5 3.5 0 0 1 5 5l-9.4 9.4a1.8 1.8 0 0 1-2.5-2.5l8.7-8.7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
+                                                </svg>
+                                                <span class="sr-only">Anexar arquivos</span>
+                                                <input wire:model="internalChatFiles" type="file" multiple class="sr-only">
+                                            </label>
 
                                             <button
                                                 type="submit"
@@ -520,7 +526,7 @@
                                                 wire:target="sendInternalUpdate,internalChatFiles"
                                                 class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
                                             >
-                                                <span wire:loading.remove wire:target="sendInternalUpdate,internalChatFiles">Publicar atualizacao</span>
+                                                <span wire:loading.remove wire:target="sendInternalUpdate,internalChatFiles">Publicar</span>
                                                 <span wire:loading wire:target="sendInternalUpdate,internalChatFiles">Enviando...</span>
                                             </button>
                                         </div>
@@ -831,7 +837,7 @@
 
                 <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                        <p class="ticket-summary-label">Solicitante</p>
+                        <p class="ticket-summary-label">{{ $requesterMetaLabel }}</p>
                         <p class="ticket-summary-value">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
                     </div>
                     <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -850,7 +856,7 @@
 
                 @if ($canCloseOwn || $canReopenOwn)
                     <div class="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p class="text-sm font-semibold text-slate-900">Acoes do solicitante</p>
+                        <p class="text-sm font-semibold text-slate-900">{{ $requesterActionsLabel }}</p>
                         <p class="mt-1 text-sm text-slate-500">Voce pode encerrar quando a demanda estiver resolvida ou reabrir se ainda precisar de atendimento.</p>
 
                         <div class="mt-3 flex flex-wrap gap-3">
@@ -1377,7 +1383,7 @@
                         <h3 class="text-lg font-semibold text-slate-900">
                             {{ $editingPersonalTemplateId ? 'Editar template pessoal' : 'Salvar template pessoal' }}
                         </h3>
-                        <p class="mt-1 text-sm text-slate-500">Use para respostas recorrentes neste quadro. Templates pessoais so aparecem para voce.</p>
+                        <p class="mt-1 text-sm text-slate-500">Respostas recorrentes deste quadro.</p>
                     </div>
 
                     <button
@@ -1394,7 +1400,7 @@
                         <label class="text-sm text-slate-600">
                             <span class="mb-2 block font-medium">Canal</span>
                             <select wire:model="personalTemplateForm.channel" class="ui-native-select w-full">
-                                <option value="public">Conversa com solicitante</option>
+                                <option value="public">Chat do chamado</option>
                                 <option value="internal">Atualizacao interna</option>
                             </select>
                             @error('personalTemplateForm.channel') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
@@ -1414,7 +1420,7 @@
                     </label>
 
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                        <p class="text-xs text-slate-500">Ao aplicar, o texto entra no composer vazio ou e anexado ao final da mensagem atual.</p>
+                        <p class="text-xs text-slate-500">O texto entra no composer atual.</p>
 
                         <div class="flex flex-wrap gap-3">
                             <button type="button" wire:click="cancelPersonalTemplateForm" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
@@ -1581,6 +1587,156 @@
                         }
 
                         window.Echo.private(this.channelName).stopListening('.ticket.message.created');
+                    },
+                };
+            };
+        }
+
+        if (! window.ticketMentionComposer) {
+            window.ticketMentionComposer = function (config) {
+                return {
+                    users: Array.isArray(config.users) ? config.users : [],
+                    message: config.message,
+                    mentionedIds: config.mentionedIds,
+                    mentionOpen: false,
+                    mentionQuery: '',
+                    activeMentionIndex: 0,
+                    triggerStart: null,
+
+                    init() {
+                        this.syncMentionIds();
+
+                        this.$watch('message', () => {
+                            this.syncMentionIds();
+                            this.refreshMentionMenu();
+                        });
+                    },
+
+                    get filteredUsers() {
+                        const query = this.normalizeText(this.mentionQuery);
+                        const selectedIds = new Set((this.mentionedIds ?? []).map((id) => Number(id)));
+
+                        return this.users
+                            .filter((user) => ! selectedIds.has(Number(user.id)))
+                            .filter((user) => query === '' || this.normalizeText(user.name).includes(query))
+                            .slice(0, 6);
+                    },
+
+                    handleMentionInput() {
+                        this.syncMentionIds();
+                        this.refreshMentionMenu();
+                    },
+
+                    refreshMentionMenu() {
+                        const textarea = this.$refs.internalTextarea;
+
+                        if (! textarea) {
+                            return;
+                        }
+
+                        const caret = textarea.selectionStart ?? String(this.message ?? '').length;
+                        const beforeCaret = String(this.message ?? '').slice(0, caret);
+                        const atIndex = beforeCaret.lastIndexOf('@');
+
+                        if (atIndex < 0) {
+                            this.closeMentionMenu();
+                            return;
+                        }
+
+                        const fragment = beforeCaret.slice(atIndex + 1);
+
+                        if (fragment.includes('\n') || fragment.length > 64) {
+                            this.closeMentionMenu();
+                            return;
+                        }
+
+                        this.triggerStart = atIndex;
+                        this.mentionQuery = fragment;
+                        this.mentionOpen = this.filteredUsers.length > 0;
+                        this.activeMentionIndex = Math.min(this.activeMentionIndex, Math.max(this.filteredUsers.length - 1, 0));
+                    },
+
+                    moveMention(direction) {
+                        if (! this.mentionOpen || this.filteredUsers.length === 0) {
+                            return;
+                        }
+
+                        const total = this.filteredUsers.length;
+                        this.activeMentionIndex = (this.activeMentionIndex + direction + total) % total;
+                    },
+
+                    selectActiveMention() {
+                        if (! this.mentionOpen || this.filteredUsers.length === 0) {
+                            return;
+                        }
+
+                        this.selectMention(this.filteredUsers[this.activeMentionIndex]);
+                    },
+
+                    selectMention(user) {
+                        const textarea = this.$refs.internalTextarea;
+
+                        if (! textarea || this.triggerStart === null) {
+                            return;
+                        }
+
+                        const caret = textarea.selectionStart ?? String(this.message ?? '').length;
+                        const before = String(this.message ?? '').slice(0, this.triggerStart);
+                        const after = String(this.message ?? '').slice(caret);
+                        const mention = `@${user.name}`;
+                        const spacer = after.startsWith(' ') || after.startsWith('\n') ? '' : ' ';
+                        const nextMessage = `${before}${mention}${spacer}${after}`;
+                        const nextCaret = before.length + mention.length + spacer.length;
+
+                        this.message = nextMessage;
+                        this.mentionedIds = Array.from(new Set([...(this.mentionedIds ?? []).map((id) => Number(id)), Number(user.id)]));
+                        this.closeMentionMenu();
+
+                        this.$nextTick(() => {
+                            textarea.focus();
+                            textarea.setSelectionRange(nextCaret, nextCaret);
+                        });
+                    },
+
+                    syncMentionIds() {
+                        const currentIds = (this.mentionedIds ?? []).map((id) => Number(id));
+                        const nextIds = currentIds.filter((id) => {
+                            const user = this.users.find((candidate) => Number(candidate.id) === id);
+
+                            return user && this.messageIncludesUser(user);
+                        });
+
+                        if (nextIds.length !== currentIds.length || nextIds.some((id, index) => id !== currentIds[index])) {
+                            this.mentionedIds = nextIds;
+                        }
+                    },
+
+                    messageIncludesUser(user) {
+                        return String(this.message ?? '').includes(`@${user.name}`);
+                    },
+
+                    closeMentionMenu() {
+                        this.mentionOpen = false;
+                        this.mentionQuery = '';
+                        this.activeMentionIndex = 0;
+                        this.triggerStart = null;
+                    },
+
+                    normalizeText(value) {
+                        return String(value ?? '')
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toLowerCase()
+                            .trim();
+                    },
+
+                    initials(name) {
+                        return String(name ?? '')
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((part) => part.charAt(0).toUpperCase())
+                            .join('');
                     },
                 };
             };

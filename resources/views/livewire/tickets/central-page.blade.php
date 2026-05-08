@@ -23,7 +23,7 @@
             </x-slot:meta>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Setores disponiveis" description="Filtre por nome ou empresa e selecione um setor sem sair desta pagina.">
+        <x-portal.filter-bar title="Setores disponiveis" description="Busque por nome ou empresa.">
             <div class="space-y-4">
                 <label class="block">
                     <span class="sr-only">Buscar setor</span>

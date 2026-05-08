@@ -113,10 +113,10 @@
                     <div class="portal-filter-block-header">
                         <div>
                             <p class="portal-filter-block-title">Views rapidas</p>
-                            <p class="portal-filter-block-copy">Atalhos para o recorte operacional do dia.</p>
+                            <p class="portal-filter-block-copy">Recortes do dia.</p>
                         </div>
 
-                        <span class="portal-filter-summary-chip">Aplicacao imediata</span>
+                        <span class="portal-filter-summary-chip">Atalhos</span>
                     </div>
 
                     <div class="mt-4 flex flex-wrap gap-2">
