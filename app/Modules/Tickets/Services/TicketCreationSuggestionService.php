@@ -97,6 +97,7 @@ class TicketCreationSuggestionService
             ->with([
                 'messages' => fn ($query) => $query
                     ->where('is_system', false)
+                    ->where('is_internal', false)
                     ->latest('created_at')
                     ->limit(1),
             ])

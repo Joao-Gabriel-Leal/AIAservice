@@ -17,12 +17,16 @@ class TicketMessage extends Model
         'user_id',
         'message',
         'is_system',
+        'is_internal',
+        'mentioned_user_ids',
     ];
 
     protected function casts(): array
     {
         return [
             'is_system' => 'boolean',
+            'is_internal' => 'boolean',
+            'mentioned_user_ids' => 'array',
         ];
     }
 

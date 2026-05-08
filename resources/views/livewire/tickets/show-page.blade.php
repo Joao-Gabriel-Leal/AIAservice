@@ -1,18 +1,21 @@
 <div class="space-y-6">
     @php
-        $messages = $ticket->messages->sortBy('created_at')->values();
         $messageCount = $messages->count();
         $latestMessage = $messages->last();
+        $internalMessageCount = $internalMessages->count();
+        $latestInternalMessage = $internalMessages->last();
         $activityLogs = $ticket->activityLogs->sortByDesc('created_at')->values();
         $activityCount = $activityLogs->count();
         $latestActivity = $activityLogs->first();
-        $attachmentCount = $ticket->attachments->count();
+        $attachmentCount = $visibleAttachments->count();
         $messageLabel = $messageCount === 1 ? 'mensagem' : 'mensagens';
+        $internalMessageLabel = $internalMessageCount === 1 ? 'atualizacao interna' : 'atualizacoes internas';
         $attachmentLabel = $attachmentCount === 1 ? 'anexo' : 'anexos';
         $activityLabel = $activityCount === 1 ? 'evento' : 'eventos';
         $latestActivitySummary = null;
         $detailFields = $canViewOperationalHistory ? $fields : $requesterFields;
         $detailFieldsCount = $detailFields->count();
+        $internalAudienceUsersById = $internalAudienceUsers->keyBy('id');
 
         if ($latestActivity) {
             $latestActivitySummary = $latestActivity->description ?: $latestActivity->event;
@@ -49,6 +52,9 @@
             <span class="portal-chip">Catalogo: {{ $ticket->catalogItem?->name ?? 'Nao vinculado' }}</span>
             <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
             <span class="portal-chip">{{ $attachmentCount }} {{ $attachmentLabel }}</span>
+            @if ($canViewInternalUpdates)
+                <span class="portal-chip">{{ $internalMessageCount }} {{ $internalMessageLabel }}</span>
+            @endif
             @if ($canViewOperationalHistory)
                 <span class="portal-chip">{{ $activityCount }} {{ $activityLabel }}</span>
             @endif
@@ -63,156 +69,349 @@
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_360px] xl:items-start">
         <div class="space-y-6">
-            <section
-                class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+            <div
                 wire:poll.5s
+                class="space-y-6"
                 x-data="ticketConversation({{ $ticket->id }})"
                 x-init="boot()"
             >
-                <div class="ticket-conversation-surface">
-                    <div class="ticket-chat-header">
-                        <div>
-                            <p class="ticket-panel-kicker">Fluxo de conversa</p>
-                            <h3 class="ticket-panel-title ticket-chat-title">Conversa</h3>
-                            <p class="ticket-panel-copy">Mensagens do atendimento em tempo real, com foco em leitura e resposta rapida.</p>
+                <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="ticket-conversation-surface">
+                        <div class="ticket-chat-header">
+                            <div>
+                                <p class="ticket-panel-kicker">Fluxo de conversa</p>
+                                <h3 class="ticket-panel-title ticket-chat-title">Conversa</h3>
+                                <p class="ticket-panel-copy">Mensagens do atendimento em tempo real, com foco em leitura e resposta rapida.</p>
+                            </div>
+
+                            <div class="ticket-chat-chip-group">
+                                <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
+                                @if ($latestMessage?->created_at)
+                                    <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
+                                @endif
+                            </div>
                         </div>
 
-                        <div class="ticket-chat-chip-group">
-                            <span class="portal-chip">{{ $messageCount }} {{ $messageLabel }}</span>
-                            @if ($latestMessage?->created_at)
-                                <span class="portal-chip">Ultima mensagem {{ $latestMessage->created_at->diffForHumans() }}</span>
-                            @endif
-                        </div>
-                    </div>
-
-                    <div x-ref="messageList" class="ticket-chat-list">
-                        @forelse ($messages as $ticketMessage)
-                            @php
-                                $isOwnMessage = $ticketMessage->user_id === auth()->id();
-                                $messageAttachments = $ticketMessage->attachments ?? collect();
-                                $hasMessageText = trim((string) $ticketMessage->message) !== '';
-                            @endphp
-                            <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
-                                <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
-                                    <div class="ticket-chat-meta {{ $isOwnMessage ? 'ticket-chat-meta-self' : '' }}">
-                                        <div class="ticket-chat-author-row">
-                                            <span class="ticket-chat-author">{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
-                                            @if ($isOwnMessage)
-                                                <span class="ticket-chat-author-pill">Voce</span>
-                                            @endif
+                        <div x-ref="messageList" class="ticket-chat-list">
+                            @forelse ($messages as $ticketMessage)
+                                @php
+                                    $isOwnMessage = $ticketMessage->user_id === auth()->id();
+                                    $messageAttachments = $ticketMessage->attachments ?? collect();
+                                    $hasMessageText = trim((string) $ticketMessage->message) !== '';
+                                @endphp
+                                <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
+                                    <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
+                                        <div class="ticket-chat-meta {{ $isOwnMessage ? 'ticket-chat-meta-self' : '' }}">
+                                            <div class="ticket-chat-author-row">
+                                                <span class="ticket-chat-author">{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
+                                                @if ($isOwnMessage)
+                                                    <span class="ticket-chat-author-pill">Voce</span>
+                                                @endif
+                                            </div>
+                                            <span class="ticket-chat-time">{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
                                         </div>
-                                        <span class="ticket-chat-time">{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
+
+                                        @if ($hasMessageText)
+                                            <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
+                                        @endif
+
+                                        @if ($messageAttachments->isNotEmpty())
+                                            <div class="mt-3 grid gap-2">
+                                                @foreach ($messageAttachments as $attachment)
+                                                    @if ($attachment->isImage())
+                                                        <a href="{{ route('tickets.attachments.show', $attachment) }}" class="block overflow-hidden rounded-2xl border border-white/40 bg-white/95">
+                                                            <img
+                                                                src="{{ route('tickets.attachments.inline', $attachment) }}"
+                                                                alt="{{ $attachment->original_name }}"
+                                                                class="max-h-80 w-full bg-slate-100 object-contain"
+                                                            >
+                                                        </a>
+                                                    @elseif ($attachment->isVideo())
+                                                        <div class="overflow-hidden rounded-2xl border border-white/40 bg-slate-950">
+                                                            <video controls preload="metadata" class="max-h-80 w-full">
+                                                                <source src="{{ route('tickets.attachments.inline', $attachment) }}" type="{{ $attachment->mime_type }}">
+                                                            </video>
+                                                        </div>
+                                                    @else
+                                                        <a href="{{ route('tickets.attachments.show', $attachment) }}" class="flex items-center justify-between gap-3 rounded-2xl border border-white/40 bg-white/95 px-4 py-3 text-slate-700">
+                                                            <div class="min-w-0">
+                                                                <p class="truncate text-sm font-semibold text-slate-900">{{ $attachment->original_name }}</p>
+                                                                <p class="mt-1 text-xs text-slate-500">{{ $attachment->displaySize() }}</p>
+                                                            </div>
+                                                            <span class="shrink-0 text-sm font-medium text-sky-700">Baixar</span>
+                                                        </a>
+                                                    @endif
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </article>
+                                </div>
+                            @empty
+                                <div class="ticket-chat-empty">
+                                    <p class="text-base font-medium text-slate-900">Nenhuma mensagem por aqui ainda.</p>
+                                    <p class="mt-2 text-sm text-slate-500">Quando a conversa comecar, as atualizacoes do atendimento vao aparecer aqui.</p>
+                                </div>
+                            @endforelse
+                        </div>
+
+                        @if ($canComment)
+                            <form wire:submit="sendMessage" class="ticket-chat-composer">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">Responder</p>
+                                    <p class="mt-1 text-sm text-slate-500">Sua mensagem fica registrada no atendimento para quem participa desta conversa.</p>
+                                </div>
+
+                                <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
+                                @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                                <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-900">Arquivos no chat</p>
+                                            <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por mensagem, com limite de 25 MB cada.</p>
+                                        </div>
+
+                                        <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
+                                            Selecionar arquivos
+                                            <input wire:model="chatFiles" type="file" multiple class="sr-only">
+                                        </label>
                                     </div>
 
-                                    @if ($hasMessageText)
-                                        <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
-                                    @endif
+                                    <div wire:loading wire:target="chatFiles" class="mt-3 text-xs text-slate-500">
+                                        Preparando arquivos...
+                                    </div>
 
-                                    @if ($messageAttachments->isNotEmpty())
+                                    @if (count($chatFiles) > 0)
                                         <div class="mt-3 grid gap-2">
-                                            @foreach ($messageAttachments as $attachment)
-                                                @if ($attachment->isImage())
-                                                    <a href="{{ route('tickets.attachments.show', $attachment) }}" class="block overflow-hidden rounded-2xl border border-white/40 bg-white/95">
-                                                        <img
-                                                            src="{{ route('tickets.attachments.inline', $attachment) }}"
-                                                            alt="{{ $attachment->original_name }}"
-                                                            class="max-h-80 w-full bg-slate-100 object-contain"
-                                                        >
-                                                    </a>
-                                                @elseif ($attachment->isVideo())
-                                                    <div class="overflow-hidden rounded-2xl border border-white/40 bg-slate-950">
-                                                        <video controls preload="metadata" class="max-h-80 w-full">
-                                                            <source src="{{ route('tickets.attachments.inline', $attachment) }}" type="{{ $attachment->mime_type }}">
-                                                        </video>
-                                                    </div>
-                                                @else
-                                                    <a href="{{ route('tickets.attachments.show', $attachment) }}" class="flex items-center justify-between gap-3 rounded-2xl border border-white/40 bg-white/95 px-4 py-3 text-slate-700">
-                                                        <div class="min-w-0">
-                                                            <p class="truncate text-sm font-semibold text-slate-900">{{ $attachment->original_name }}</p>
-                                                            <p class="mt-1 text-xs text-slate-500">{{ $attachment->displaySize() }}</p>
-                                                        </div>
-                                                        <span class="shrink-0 text-sm font-medium text-sky-700">Baixar</span>
-                                                    </a>
-                                                @endif
+                                            @foreach ($chatFiles as $index => $file)
+                                                <div wire:key="chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                                    <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
+                                                    <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
+                                                </div>
                                             @endforeach
                                         </div>
                                     @endif
-                                </article>
+
+                                    @error('chatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    @error('chatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                </div>
+
+                                <div class="ticket-chat-composer-footer">
+                                    <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
+
+                                    <button
+                                        type="submit"
+                                        wire:loading.attr="disabled"
+                                        wire:loading.class="ui-loading"
+                                        wire:target="sendMessage,chatFiles"
+                                        class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
+                                    >
+                                        <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
+                                        <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
+                                    </button>
+                                </div>
+                            </form>
+                        @else
+                            <div class="ticket-chat-composer">
+                                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                                    Este chamado esta finalizado. A conversa fica bloqueada e novas mensagens so serao liberadas se o chamado for reaberto.
+                                </div>
                             </div>
-                        @empty
-                            <div class="ticket-chat-empty">
-                                <p class="text-base font-medium text-slate-900">Nenhuma mensagem por aqui ainda.</p>
-                                <p class="mt-2 text-sm text-slate-500">Quando a conversa comecar, as atualizacoes do atendimento vao aparecer aqui.</p>
-                            </div>
-                        @endforelse
+                        @endif
                     </div>
+                </section>
 
-                    @if ($canComment)
-                        <form wire:submit="sendMessage" class="ticket-chat-composer">
-                            <div>
-                                <p class="text-sm font-semibold text-slate-900">Responder</p>
-                                <p class="mt-1 text-sm text-slate-500">Sua mensagem fica registrada no atendimento para quem participa desta conversa.</p>
+                @if ($canViewInternalUpdates)
+                    <section class="ui-panel rounded-3xl border border-amber-200 bg-amber-50/70 p-6 shadow-sm">
+                        <div class="ticket-conversation-surface">
+                            <div class="ticket-chat-header">
+                                <div>
+                                    <p class="ticket-panel-kicker">Canal restrito</p>
+                                    <h3 class="ticket-panel-title ticket-chat-title">Atualizacoes internas</h3>
+                                    <p class="ticket-panel-copy">Espaco privado para operadores e gestores alinharem contexto do chamado sem expor o solicitante.</p>
+                                </div>
+
+                                <div class="ticket-chat-chip-group">
+                                    <span class="portal-chip">{{ $internalMessageCount }} {{ $internalMessageLabel }}</span>
+                                    @if ($latestInternalMessage?->created_at)
+                                        <span class="portal-chip">Ultima atualizacao {{ $latestInternalMessage->created_at->diffForHumans() }}</span>
+                                    @endif
+                                </div>
                             </div>
 
-                            <textarea wire:model="message" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Escreva sua mensagem"></textarea>
-                            @error('message') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
-
-                            <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
-                                <div class="flex flex-wrap items-center justify-between gap-3">
-                                    <div>
-                                        <p class="text-sm font-semibold text-slate-900">Arquivos no chat</p>
-                                        <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por mensagem, com limite de 25 MB cada.</p>
-                                    </div>
-
-                                    <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
-                                        Selecionar arquivos
-                                        <input wire:model="chatFiles" type="file" multiple class="sr-only">
-                                    </label>
-                                </div>
-
-                                <div wire:loading wire:target="chatFiles" class="mt-3 text-xs text-slate-500">
-                                    Preparando arquivos...
-                                </div>
-
-                                @if (count($chatFiles) > 0)
-                                    <div class="mt-3 grid gap-2">
-                                        @foreach ($chatFiles as $index => $file)
-                                            <div wire:key="chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                                                <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
-                                                <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
+                            <div x-ref="internalMessageList" class="ticket-chat-list">
+                                @forelse ($internalMessages as $ticketMessage)
+                                    @php
+                                        $isOwnMessage = $ticketMessage->user_id === auth()->id();
+                                        $messageAttachments = $ticketMessage->attachments ?? collect();
+                                        $hasMessageText = trim((string) $ticketMessage->message) !== '';
+                                        $mentionedUsers = collect($ticketMessage->mentioned_user_ids ?? [])
+                                            ->map(fn ($mentionedUserId) => $internalAudienceUsersById->get($mentionedUserId))
+                                            ->filter()
+                                            ->values();
+                                    @endphp
+                                    <div class="flex {{ $isOwnMessage ? 'justify-end' : 'justify-start' }}">
+                                        <article class="ticket-chat-bubble {{ $isOwnMessage ? 'ticket-chat-bubble-self' : 'ticket-chat-bubble-other' }}">
+                                            <div class="ticket-chat-meta {{ $isOwnMessage ? 'ticket-chat-meta-self' : '' }}">
+                                                <div class="ticket-chat-author-row">
+                                                    <span class="ticket-chat-author">{{ $ticketMessage->user?->name ?? 'Sistema' }}</span>
+                                                    @if ($isOwnMessage)
+                                                        <span class="ticket-chat-author-pill">Voce</span>
+                                                    @endif
+                                                    <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">Interna</span>
+                                                </div>
+                                                <span class="ticket-chat-time">{{ $ticketMessage->created_at?->format('d/m/Y H:i') }}</span>
                                             </div>
-                                        @endforeach
+
+                                            @if ($hasMessageText)
+                                                <p class="ticket-chat-message">{{ $ticketMessage->message }}</p>
+                                            @endif
+
+                                            @if ($mentionedUsers->isNotEmpty())
+                                                <div class="mt-3 flex flex-wrap gap-2">
+                                                    @foreach ($mentionedUsers as $mentionedUser)
+                                                        <span class="inline-flex rounded-full bg-slate-900/90 px-3 py-1 text-[11px] font-medium text-white">
+                                                            {{ $mentionedUser->id === auth()->id() ? 'Voce foi marcado' : 'Marcado: '.$mentionedUser->name }}
+                                                        </span>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+
+                                            @if ($messageAttachments->isNotEmpty())
+                                                <div class="mt-3 grid gap-2">
+                                                    @foreach ($messageAttachments as $attachment)
+                                                        @if ($attachment->isImage())
+                                                            <a href="{{ route('tickets.attachments.show', $attachment) }}" class="block overflow-hidden rounded-2xl border border-white/40 bg-white/95">
+                                                                <img
+                                                                    src="{{ route('tickets.attachments.inline', $attachment) }}"
+                                                                    alt="{{ $attachment->original_name }}"
+                                                                    class="max-h-80 w-full bg-slate-100 object-contain"
+                                                                >
+                                                            </a>
+                                                        @elseif ($attachment->isVideo())
+                                                            <div class="overflow-hidden rounded-2xl border border-white/40 bg-slate-950">
+                                                                <video controls preload="metadata" class="max-h-80 w-full">
+                                                                    <source src="{{ route('tickets.attachments.inline', $attachment) }}" type="{{ $attachment->mime_type }}">
+                                                                </video>
+                                                            </div>
+                                                        @else
+                                                            <a href="{{ route('tickets.attachments.show', $attachment) }}" class="flex items-center justify-between gap-3 rounded-2xl border border-white/40 bg-white/95 px-4 py-3 text-slate-700">
+                                                                <div class="min-w-0">
+                                                                    <p class="truncate text-sm font-semibold text-slate-900">{{ $attachment->original_name }}</p>
+                                                                    <p class="mt-1 text-xs text-slate-500">{{ $attachment->displaySize() }}</p>
+                                                                </div>
+                                                                <span class="shrink-0 text-sm font-medium text-sky-700">Baixar</span>
+                                                            </a>
+                                                        @endif
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </article>
                                     </div>
-                                @endif
-
-                                @error('chatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                                @error('chatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                @empty
+                                    <div class="ticket-chat-empty">
+                                        <p class="text-base font-medium text-slate-900">Nenhuma atualizacao interna registrada.</p>
+                                        <p class="mt-2 text-sm text-slate-500">Use este espaco para alinhar diagnostico, pedir apoio e marcar operadores ou gestores do quadro.</p>
+                                    </div>
+                                @endforelse
                             </div>
 
-                            <div class="ticket-chat-composer-footer">
-                                <p class="text-xs text-slate-500">Atualizacao em tempo real sempre que uma nova mensagem chegar.</p>
+                            @if ($canCommentInternally)
+                                <form wire:submit="sendInternalUpdate" class="ticket-chat-composer">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-900">Nova atualizacao interna</p>
+                                        <p class="mt-1 text-sm text-slate-500">Somente operadores e gestores do quadro visualizam este bloco.</p>
+                                    </div>
 
-                                <button
-                                    type="submit"
-                                    wire:loading.attr="disabled"
-                                    wire:loading.class="ui-loading"
-                                    wire:target="sendMessage,chatFiles"
-                                    class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
-                                >
-                                    <span wire:loading.remove wire:target="sendMessage,chatFiles">Enviar mensagem</span>
-                                    <span wire:loading wire:target="sendMessage,chatFiles">Enviando...</span>
-                                </button>
-                            </div>
-                        </form>
-                    @else
-                        <div class="ticket-chat-composer">
-                            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                                Este chamado esta finalizado. A conversa fica bloqueada e novas mensagens so serao liberadas se o chamado for reaberto.
-                            </div>
+                                    <textarea wire:model="internalMessage" rows="4" class="ui-input ticket-chat-input w-full" placeholder="Registre uma atualizacao interna"></textarea>
+                                    @error('internalMessage') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
+
+                                    @if ($internalMentionableUsers->isNotEmpty())
+                                        <div class="rounded-2xl border border-dashed border-amber-300 bg-white/80 px-4 py-3">
+                                            <div>
+                                                <p class="text-sm font-semibold text-slate-900">Marcar operadores ou gestores</p>
+                                                <p class="mt-1 text-xs text-slate-500">Selecione quem deve receber a notificacao desta atualizacao.</p>
+                                            </div>
+
+                                            <div class="mt-3 flex flex-wrap gap-2">
+                                                @foreach ($internalMentionableUsers as $mentionedUser)
+                                                    <label class="cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            value="{{ $mentionedUser->id }}"
+                                                            wire:model="internalMentionedUserIds"
+                                                            class="peer sr-only"
+                                                        >
+                                                        <span class="inline-flex rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white">
+                                                            {{ $mentionedUser->name }}
+                                                        </span>
+                                                    </label>
+                                                @endforeach
+                                            </div>
+
+                                            @error('internalMentionedUserIds') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                            @error('internalMentionedUserIds.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                        </div>
+                                    @endif
+
+                                    <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 px-4 py-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <p class="text-sm font-semibold text-slate-900">Arquivos internos</p>
+                                                <p class="mt-1 text-xs text-slate-500">Ate 5 arquivos por atualizacao, com limite de 25 MB cada.</p>
+                                            </div>
+
+                                            <label class="ui-action ui-action-secondary cursor-pointer rounded-xl px-4 py-2 text-sm">
+                                                Selecionar arquivos
+                                                <input wire:model="internalChatFiles" type="file" multiple class="sr-only">
+                                            </label>
+                                        </div>
+
+                                        <div wire:loading wire:target="internalChatFiles" class="mt-3 text-xs text-slate-500">
+                                            Preparando arquivos...
+                                        </div>
+
+                                        @if (count($internalChatFiles) > 0)
+                                            <div class="mt-3 grid gap-2">
+                                                @foreach ($internalChatFiles as $index => $file)
+                                                    <div wire:key="internal-chat-file-{{ $index }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                                        <p class="min-w-0 truncate text-sm font-medium text-slate-700">{{ $file->getClientOriginalName() }}</p>
+                                                        <span class="shrink-0 text-xs text-slate-500">{{ number_format(($file->getSize() ?? 0) / 1024, 1) }} KB</span>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        @error('internalChatFiles') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                        @error('internalChatFiles.*') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    </div>
+
+                                    <div class="ticket-chat-composer-footer">
+                                        <p class="text-xs text-slate-500">As notificacoes vao somente para os operadores ou gestores que voce marcar.</p>
+
+                                        <button
+                                            type="submit"
+                                            wire:loading.attr="disabled"
+                                            wire:loading.class="ui-loading"
+                                            wire:target="sendInternalUpdate,internalChatFiles"
+                                            class="ui-action ui-action-primary rounded-2xl px-5 py-3 text-sm font-medium sm:w-auto"
+                                        >
+                                            <span wire:loading.remove wire:target="sendInternalUpdate,internalChatFiles">Registrar atualizacao interna</span>
+                                            <span wire:loading wire:target="sendInternalUpdate,internalChatFiles">Enviando...</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            @else
+                                <div class="ticket-chat-composer">
+                                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                                        Este chamado esta finalizado. As atualizacoes internas ficam bloqueadas e so voltam a aceitar novas mensagens se o chamado for reaberto.
+                                    </div>
+                                </div>
+                            @endif
                         </div>
-                    @endif
-                </div>
-            </section>
+                    </section>
+                @endif
+            </div>
 
             <div class="grid gap-6 {{ $canViewOperationalHistory ? 'lg:grid-cols-2' : '' }}">
                 <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm {{ $attachmentCount === 0 ? 'ticket-attachments-panel-empty' : '' }}">
@@ -227,13 +426,13 @@
                     </div>
 
                     <div class="mt-4 space-y-3">
-                        @forelse ($ticket->attachments as $attachment)
+                        @forelse ($visibleAttachments as $attachment)
                             <a href="{{ route('tickets.attachments.show', $attachment) }}" class="ui-row-interactive flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <p class="truncate font-medium text-slate-900">{{ $attachment->original_name }}</p>
                                         <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                            {{ $attachment->source === 'chat' ? 'Chat' : 'Abertura' }}
+                                            {{ $attachment->message?->is_internal ? 'Interna' : ($attachment->source === 'chat' ? 'Chat' : 'Abertura') }}
                                         </span>
                                     </div>
                                     <p class="text-xs text-slate-500">{{ $attachment->displaySize() }}</p>
@@ -1138,8 +1337,13 @@
                     },
 
                     scrollToLatest() {
+                        this.scrollList('messageList');
+                        this.scrollList('internalMessageList');
+                    },
+
+                    scrollList(refName) {
                         this.$nextTick(() => {
-                            const container = this.$refs.messageList;
+                            const container = this.$refs[refName];
 
                             if (! container) {
                                 return;

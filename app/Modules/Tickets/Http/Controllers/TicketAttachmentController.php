@@ -11,7 +11,7 @@ class TicketAttachmentController extends Controller
 {
     public function show(TicketAttachment $attachment): StreamedResponse
     {
-        $this->authorize('view', $attachment->ticket);
+        $this->authorizeAttachmentAccess($attachment);
 
         $content = $attachment->binaryContent();
 
@@ -28,7 +28,7 @@ class TicketAttachmentController extends Controller
 
     public function inline(TicketAttachment $attachment): Response
     {
-        $this->authorize('view', $attachment->ticket);
+        $this->authorizeAttachmentAccess($attachment);
         abort_unless($attachment->canBePreviewedInline(), 404);
 
         $content = $attachment->binaryContent();
@@ -41,5 +41,16 @@ class TicketAttachmentController extends Controller
             'Content-Disposition' => 'inline; filename="'.$attachment->original_name.'"',
             'X-Content-Type-Options' => 'nosniff',
         ]);
+    }
+
+    private function authorizeAttachmentAccess(TicketAttachment $attachment): void
+    {
+        $attachment->loadMissing(['ticket.board', 'message']);
+
+        $this->authorize('view', $attachment->ticket);
+
+        if ($attachment->message?->is_internal) {
+            $this->authorize('viewInternalUpdates', $attachment->ticket);
+        }
     }
 }

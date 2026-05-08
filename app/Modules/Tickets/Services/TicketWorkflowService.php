@@ -18,6 +18,7 @@ use App\Modules\Tickets\Models\TicketRating;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Notifications\TicketCreatedNotification;
+use App\Modules\Tickets\Notifications\TicketInternalUpdateNotification;
 use App\Modules\Tickets\Notifications\TicketManualTimeEntryPendingApprovalNotification;
 use App\Modules\Tickets\Notifications\TicketMessageNotification;
 use App\Modules\Tickets\Notifications\TicketRatingRequestNotification;
@@ -401,17 +402,34 @@ class TicketWorkflowService
         return $fieldValue;
     }
 
-    public function addMessage(User $actor, Ticket $ticket, string $message, array $attachments = [], array $context = []): TicketMessage
+    public function addMessage(
+        User $actor,
+        Ticket $ticket,
+        string $message,
+        array $attachments = [],
+        array $context = [],
+        bool $isInternal = false,
+        array $mentionedUserIds = [],
+    ): TicketMessage
     {
-        Gate::forUser($actor)->authorize('comment', $ticket);
+        Gate::forUser($actor)->authorize($isInternal ? 'commentInternally' : 'comment', $ticket);
+
+        $mentionedUserIds = collect($mentionedUserIds)
+            ->map(fn (mixed $userId) => (int) $userId)
+            ->filter(fn (int $userId) => $userId > 0 && $userId !== $actor->id)
+            ->unique()
+            ->values()
+            ->all();
 
         /** @var TicketMessage $ticketMessage */
-        $ticketMessage = DB::transaction(function () use ($actor, $ticket, $message, $attachments) {
+        $ticketMessage = DB::transaction(function () use ($actor, $ticket, $message, $attachments, $isInternal, $mentionedUserIds) {
             /** @var TicketMessage $createdMessage */
             $createdMessage = $ticket->messages()->create([
                 'user_id' => $actor->id,
                 'message' => $message,
                 'is_system' => false,
+                'is_internal' => $isInternal,
+                'mentioned_user_ids' => $mentionedUserIds !== [] ? $mentionedUserIds : null,
             ]);
 
             $this->storeAttachments($ticket, $actor, $attachments, $createdMessage, 'chat');
@@ -423,15 +441,27 @@ class TicketWorkflowService
         $this->ticketSlaService->captureFirstResponse($actor, $ticket);
         $this->ticketSlaService->evaluateTicket($ticket->fresh());
 
-        $this->activityLogService->log($actor, $ticket, 'ticket.message.created', 'Nova mensagem no chat.', [
-            'message_id' => $ticketMessage->id,
-            'sector_id' => $ticket->sector_id,
-        ]);
-        $this->notifyUsers(
+        $this->activityLogService->log(
+            $actor,
             $ticket,
-            new TicketMessageNotification($ticket, 'Nova mensagem no chamado', 'Ha uma nova mensagem no chamado '.$ticket->fullReference().'.'),
-            [$actor->id],
+            $isInternal ? 'ticket.internal_message.created' : 'ticket.message.created',
+            $isInternal ? 'Atualizacao interna registrada.' : 'Nova mensagem no chat.',
+            [
+            'message_id' => $ticketMessage->id,
+            'mentioned_user_ids' => $mentionedUserIds,
+            'sector_id' => $ticket->sector_id,
+            ],
         );
+
+        if ($isInternal) {
+            $this->notifyInternalUpdateMentions($ticket, $actor, $mentionedUserIds);
+        } else {
+            $this->notifyUsers(
+                $ticket,
+                new TicketMessageNotification($ticket, 'Nova mensagem no chamado', 'Ha uma nova mensagem no chamado '.$ticket->fullReference().'.'),
+                [$actor->id],
+            );
+        }
 
         $ticketMessage->load(['user', 'attachments']);
 
@@ -765,6 +795,35 @@ class TicketWorkflowService
 
         try {
             $ticket->requester->notify($notification);
+        } catch (Throwable $throwable) {
+            $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
+    }
+
+    private function notifyInternalUpdateMentions(Ticket $ticket, User $actor, array $mentionedUserIds): void
+    {
+        if ($mentionedUserIds === []) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->where('is_active', true)
+            ->whereIn('id', $mentionedUserIds)
+            ->where(function (Builder $query) use ($ticket) {
+                $query
+                    ->globalAdmins()
+                    ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']));
+            })
+            ->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $notification = new TicketInternalUpdateNotification($ticket, $actor);
+
+        try {
+            Notification::send($recipients, $notification);
         } catch (Throwable $throwable) {
             $this->logNotificationFailure($throwable, $ticket, $notification);
         }
