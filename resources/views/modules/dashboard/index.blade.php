@@ -365,10 +365,10 @@
                         <thead class="bg-slate-50 text-left text-slate-500">
                             <tr>
                                 <th class="px-6 py-3 font-medium">Titulo</th>
-                                <th class="px-6 py-3 font-medium">Solicitante</th>
+                                <th class="ui-person-column-head">Solicitante</th>
                                 <th class="px-6 py-3 font-medium">Status</th>
                                 <th class="px-6 py-3 font-medium">Avaliacao</th>
-                                <th class="px-6 py-3 font-medium">Responsavel</th>
+                                <th class="ui-person-column-head">Responsavel</th>
                                 <th class="px-6 py-3 font-medium">Atualizado</th>
                             </tr>
                         </thead>
@@ -379,7 +379,9 @@
                                         <a href="{{ route('tickets.show', $ticket) }}" class="hover:text-sky-700">{{ $ticket->title }}</a>
                                         <p class="mt-1 text-xs text-slate-500">{{ $ticket->sector?->name ?? 'Sem setor' }}</p>
                                     </td>
-                                    <td class="px-6 py-4 text-slate-600">{{ $ticket->requester?->name ?? 'N/A' }}</td>
+                                    <td class="ui-person-column-cell">
+                                        <x-person-reference :user="$ticket->requester" empty-label="N/A" />
+                                    </td>
                                     <td class="px-6 py-4">
                                         <div class="flex flex-wrap gap-2">
                                             <span class="rounded-full px-3 py-1 text-xs font-medium text-white" style="background-color: {{ $ticket->status?->color ?? '#64748b' }}">
@@ -410,7 +412,9 @@
                                             <span class="text-xs text-slate-400">Aguardando encerramento</span>
                                         @endif
                                     </td>
-                                    <td class="px-6 py-4 text-slate-600">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</td>
+                                    <td class="ui-person-column-cell">
+                                        <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                                    </td>
                                     <td class="px-6 py-4 text-slate-500">{{ $ticket->updated_at?->diffForHumans() }}</td>
                                 </tr>
                             @empty

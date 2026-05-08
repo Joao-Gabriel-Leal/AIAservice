@@ -455,6 +455,49 @@ class AssetManagementTest extends TestCase
             ->assertDontSee($secondAsset->asset_code);
     }
 
+    public function test_asset_index_renders_collaborator_as_avatar_only_reference(): void
+    {
+        $context = $this->assetContext();
+        $context['collaborator']->forceFill(['name' => 'Clara Lima'])->save();
+
+        $admin = User::factory()->superAdmin()->create();
+        $service = app(AssetMovementService::class);
+
+        $assignedAsset = $service->register([
+            'name' => 'Notebook Avatar',
+            'description' => 'Ativo com colaborador.',
+            'serial_number' => 'NB-AVATAR-01',
+            'brand' => 'Dell',
+            'model' => 'Latitude',
+            'status' => AssetStatus::EM_USO->value,
+            'current_sector_id' => $context['sectorA']->id,
+            'current_room_id' => $context['roomA']->id,
+            'current_user_id' => $context['collaborator']->id,
+        ], $admin);
+
+        $unassignedAsset = $service->register([
+            'name' => 'Monitor Livre',
+            'description' => 'Ativo sem colaborador.',
+            'serial_number' => 'MN-LIVRE-01',
+            'brand' => 'LG',
+            'model' => 'UltraWide',
+            'status' => AssetStatus::DISPONIVEL->value,
+            'current_sector_id' => $context['sectorA']->id,
+            'current_room_id' => $context['roomA']->id,
+            'current_user_id' => null,
+        ], $admin);
+
+        $response = $this->actingAs($admin)->get(route('assets.index'));
+
+        $response->assertOk();
+        $response->assertSee($assignedAsset->asset_code);
+        $response->assertSee($unassignedAsset->asset_code);
+        $response->assertSee('title="'.$context['collaborator']->name.'"', false);
+        $response->assertSee('Nao vinculado');
+        $response->assertDontSee('<td class="px-6 py-4 text-slate-600">'.$context['collaborator']->name.'</td>', false);
+        $response->assertDontSee('<td class="px-6 py-4 text-slate-600">Nao vinculado</td>', false);
+    }
+
     private function assetContext(): array
     {
         $company = Company::query()->create([

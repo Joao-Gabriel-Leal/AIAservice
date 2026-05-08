@@ -47,6 +47,7 @@ class TicketFlowTest extends TestCase
         ['sector' => $sector, 'catalog' => $catalog] = $this->ticketContext();
 
         $requester = User::factory()->create([
+            'name' => 'Requester Avatar Board',
             'role' => UserRole::REQUESTER,
             'sector_id' => $sector->id,
         ]);
@@ -409,11 +410,16 @@ class TicketFlowTest extends TestCase
             ->assertSee('Etapas')
             ->assertSee('Kanban')
             ->assertSee('Validar tres modos')
+            ->assertSee('title="'.$requester->name.'"', false)
+            ->assertDontSee('>'.$requester->name.'</td>', false)
             ->set('selectedSectorId', $sector->id)
             ->call('setViewMode', 'stages')
             ->assertSet('viewMode', 'stages')
             ->assertSee($group->name)
             ->assertSee('Validar tres modos')
+            ->assertSee('Formulario padrao')
+            ->assertSee('title="'.$requester->name.'"', false)
+            ->assertDontSee('>'.$requester->name.'</p>', false)
             ->call('setViewMode', 'kanban')
             ->assertSet('viewMode', 'kanban')
             ->assertSee('ui-kanban-grid', false)

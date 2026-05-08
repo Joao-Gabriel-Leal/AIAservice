@@ -139,7 +139,7 @@
                                 <thead class="bg-slate-50/80 text-left text-slate-500">
                                     <tr>
                                         <th>Titulo</th>
-                                        <th>Solicitante</th>
+                                        <th class="ui-person-column-head">Solicitante</th>
                                         <th>Responsavel</th>
                                         <th>Prioridade</th>
                                         <th>Etapa</th>
@@ -158,23 +158,24 @@
 
                                         <tr class="ui-row-interactive align-top hover:bg-slate-50" wire:key="ticket-row-list-{{ $ticket->id }}">
                                             <td>
-                                                @if ($canUpdate)
-                                                    <div wire:key="ticket-title-list-{{ $ticket->id }}">
-                                                        <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
-                                                    </div>
-                                                @else
-                                                    <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
-                                                @endif
-                                            </td>
-
-                                            <td class="text-slate-600">
                                                 <div class="space-y-1">
-                                                    <p class="font-medium text-slate-700">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
+                                                    @if ($canUpdate)
+                                                        <div wire:key="ticket-title-list-{{ $ticket->id }}">
+                                                            <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
+                                                        </div>
+                                                    @else
+                                                        <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                                                    @endif
+
                                                     <p class="text-xs text-slate-400">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
                                                 </div>
                                             </td>
 
-                                            <td>
+                                            <td class="ui-person-column-cell">
+                                                <x-person-reference :user="$ticket->requester" empty-label="Nao informado" />
+                                            </td>
+
+                                            <td @class(['ui-person-column-cell' => ! $canUpdate])>
                                                 @if ($canUpdate)
                                                     <div class="ui-native-pill-select w-52" style="--ui-pill-color: {{ $ticket->assignee_id ? '#3b82f6' : '#94a3b8' }}" wire:key="ticket-assignee-list-{{ $ticket->id }}">
                                                         <span class="ui-native-pill-dot"></span>
@@ -186,7 +187,7 @@
                                                         </select>
                                                     </div>
                                                 @else
-                                                    <span class="text-slate-600">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</span>
+                                                    <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
                                                 @endif
                                             </td>
 

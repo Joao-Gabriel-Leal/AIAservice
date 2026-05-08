@@ -270,6 +270,25 @@
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-pill-color, #64748b) 18%, white);
     }
 
+    .ui-person-column-head {
+        @apply px-4 py-3 text-center font-medium;
+        width: 6rem;
+    }
+
+    .ui-person-column-cell {
+        @apply px-4 py-4 text-center align-middle;
+        width: 6rem;
+    }
+
+    .ui-person-reference {
+        @apply inline-flex items-center justify-center;
+    }
+
+    .ui-person-reference-empty {
+        @apply inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600;
+        box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+    }
+
     .ui-native-pill-select {
         @apply relative;
     }

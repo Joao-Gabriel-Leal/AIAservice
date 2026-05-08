@@ -294,8 +294,8 @@
                         <th class="px-6 py-3 font-medium">Titulo</th>
                         <th class="px-6 py-3 font-medium">Setor</th>
                         <th class="px-6 py-3 font-medium">Etapa</th>
-                        <th class="px-6 py-3 font-medium">Solicitante</th>
-                        <th class="px-6 py-3 font-medium">Responsavel</th>
+                        <th class="ui-person-column-head">Solicitante</th>
+                        <th class="ui-person-column-head">Responsavel</th>
                         <th class="px-6 py-3 font-medium">Atualizado</th>
                         @foreach ($fieldOptions as $field)
                             <th class="px-6 py-3 font-medium">{{ $field->name }}</th>
@@ -331,8 +331,12 @@
                                     </span>
                                 </div>
                             </td>
-                            <td class="px-6 py-4 text-slate-600">{{ $ticket->requester?->name ?? 'Nao informado' }}</td>
-                            <td class="px-6 py-4 text-slate-600">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</td>
+                            <td class="ui-person-column-cell">
+                                <x-person-reference :user="$ticket->requester" empty-label="Nao informado" />
+                            </td>
+                            <td class="ui-person-column-cell">
+                                <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                            </td>
                             <td class="px-6 py-4 text-slate-500">{{ $ticket->updated_at?->diffForHumans() }}</td>
                             @foreach ($fieldOptions as $field)
                                 <td class="px-6 py-4 text-slate-600">{{ $this->displayFieldValue($ticket, $field) ?? '-' }}</td>

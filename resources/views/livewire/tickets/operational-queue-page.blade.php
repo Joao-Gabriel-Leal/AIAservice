@@ -48,8 +48,8 @@
                 <tr>
                     <th class="px-6 py-3 font-medium">Chamado</th>
                     <th class="px-6 py-3 font-medium">Quadro</th>
-                    <th class="px-6 py-3 font-medium">Solicitante</th>
-                    <th class="px-6 py-3 font-medium">Responsavel</th>
+                    <th class="ui-person-column-head">Solicitante</th>
+                    <th class="ui-person-column-head">Responsavel</th>
                     <th class="px-6 py-3 font-medium">SLA</th>
                     <th class="px-6 py-3 font-medium">Atualizado</th>
                     <th class="px-6 py-3 font-medium"></th>
@@ -67,8 +67,12 @@
                             <p class="font-medium text-slate-700">{{ $ticket->board?->name ?? 'Sem quadro' }}</p>
                             <x-sector-badge :sector="$ticket->sector" mode="dot" />
                         </td>
-                        <td class="px-6 py-4 text-slate-600">{{ $ticket->requester?->name ?? 'Nao informado' }}</td>
-                        <td class="px-6 py-4 text-slate-600">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</td>
+                        <td class="ui-person-column-cell">
+                            <x-person-reference :user="$ticket->requester" empty-label="Nao informado" />
+                        </td>
+                        <td class="ui-person-column-cell">
+                            <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                        </td>
                         <td class="px-6 py-4">
                             <span class="ui-tone-chip" style="--ui-pill-color: {{ $slaMeta['color'] }}">
                                 <span class="ui-tone-dot"></span>

@@ -58,7 +58,7 @@
                         <thead class="bg-slate-50/80 text-left text-slate-500">
                             <tr>
                                 <th>Titulo</th>
-                                <th>Solicitante</th>
+                                <th class="ui-person-column-head">Solicitante</th>
                                 <th>Responsavel</th>
                                 <th>Prioridade</th>
                                 <th>Etapa</th>
@@ -85,16 +85,17 @@
                                     }"
                                 >
                                     <td>
-                                        <div wire:key="ticket-title-stages-{{ $ticket->id }}">
-                                            <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
+                                        <div class="space-y-1">
+                                            <div wire:key="ticket-title-stages-{{ $ticket->id }}">
+                                                <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
+                                            </div>
+
+                                            <p class="text-xs text-slate-400">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
                                         </div>
                                     </td>
 
-                                    <td class="text-slate-600">
-                                        <div class="space-y-1">
-                                            <p class="font-medium text-slate-700">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
-                                            <p class="text-xs text-slate-400">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
-                                        </div>
+                                    <td class="ui-person-column-cell">
+                                        <x-person-reference :user="$ticket->requester" empty-label="Nao informado" />
                                     </td>
 
                                     <td>

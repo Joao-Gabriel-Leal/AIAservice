@@ -106,15 +106,24 @@ class OperationalImprovementsTest extends TestCase
         ['board' => $outsideBoard, 'group' => $outsideGroup, 'status' => $outsideStatus, 'sector' => $outsideSector, 'room' => $outsideRoom] = $this->ticketContext('Financeiro Fila');
 
         $operator = User::factory()->create([
+            'name' => 'Quincy Zebra',
             'role' => UserRole::TECHNICIAN,
             'sector_id' => $sector->id,
             'room_id' => $room->id,
         ]);
         $requester = User::factory()->create([
+            'name' => 'Carol Foto',
             'role' => UserRole::REQUESTER,
             'sector_id' => $sector->id,
             'room_id' => $room->id,
         ]);
+        $requester->forceFill([
+            'profile_photo_path' => "profile-photos/{$requester->id}/avatar.png",
+            'profile_photo_original_name' => 'avatar.png',
+            'profile_photo_mime_type' => 'image/png',
+            'profile_photo_size' => 14,
+            'profile_photo_content' => 'avatar-content',
+        ])->save();
         $outsideRequester = User::factory()->create([
             'role' => UserRole::REQUESTER,
             'sector_id' => $outsideSector->id,
@@ -136,6 +145,13 @@ class OperationalImprovementsTest extends TestCase
             ->assertSeeText('Minha fila operacional')
             ->assertSeeText($assignedTicket->title)
             ->assertSeeText($unassignedTicket->title)
+            ->assertSee($requester->profilePhotoUrl(), false)
+            ->assertSee('title="'.$requester->name.'"', false)
+            ->assertSee('title="'.$operator->name.'"', false)
+            ->assertSee('QZ', false)
+            ->assertSee('Nao atribuido')
+            ->assertDontSee('<td class="px-6 py-4 text-slate-600">'.$requester->name.'</td>', false)
+            ->assertDontSee('<td class="px-6 py-4 text-slate-600">'.$operator->name.'</td>', false)
             ->assertDontSeeText($outsideTicket->title);
 
         $this->actingAs($operator)

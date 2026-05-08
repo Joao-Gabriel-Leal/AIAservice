@@ -149,7 +149,7 @@
                         <th class="px-6 py-3 font-medium">Patrimonio</th>
                         <th class="px-6 py-3 font-medium">Status</th>
                         <th class="px-6 py-3 font-medium">Local atual</th>
-                        <th class="px-6 py-3 font-medium">Colaborador</th>
+                        <th class="ui-person-column-head">Colaborador</th>
                         <th class="px-6 py-3 font-medium">QR</th>
                         <th class="px-6 py-3 font-medium"></th>
                     </tr>
@@ -181,7 +181,9 @@
                                     <p class="mt-2 text-xs font-medium text-amber-700">Aguardando saneamento de alocacao.</p>
                                 @endif
                             </td>
-                            <td class="px-6 py-4 text-slate-600">{{ $asset->currentUser?->name ?? 'Nao vinculado' }}</td>
+                            <td class="ui-person-column-cell">
+                                <x-person-reference :user="$asset->currentUser" empty-label="Nao vinculado" />
+                            </td>
                             <td class="px-6 py-4">
                                 <a href="{{ $asset->qrCodeUrl() }}" class="block w-fit" title="Abrir pagina publica do QR code">
                                     <div class="rounded-xl border border-slate-200 bg-white p-1.5" data-qr-target="{{ $asset->qrCodeUrl() }}">

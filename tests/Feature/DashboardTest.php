@@ -488,6 +488,57 @@ class DashboardTest extends TestCase
             ->assertDontSeeText('Chamado fora dos acessos operacionais');
     }
 
+    public function test_dashboard_recent_tickets_render_avatar_only_person_references(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board] = $this->ticketContext();
+
+        $superAdmin = User::factory()->superAdmin()->create();
+        $requester = User::factory()->create([
+            'name' => 'Requester Dashboard Avatar',
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+        $requester->forceFill([
+            'profile_photo_path' => "profile-photos/{$requester->id}/avatar.png",
+            'profile_photo_original_name' => 'avatar.png',
+            'profile_photo_mime_type' => 'image/png',
+            'profile_photo_size' => 14,
+            'profile_photo_content' => 'avatar-content',
+        ])->save();
+
+        $assignee = User::factory()->create([
+            'name' => 'Assignee Dashboard Avatar',
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $board->groups()->where('is_closed', false)->firstOrFail()->id,
+            'ticket_status_id' => $board->statuses()->where('is_closed', false)->firstOrFail()->id,
+            'room_id' => $room->id,
+            'title' => 'Avatar no dashboard',
+            'description' => 'Chamado para validar a coluna de pessoas.',
+            'requester_id' => $requester->id,
+            'assignee_id' => $assignee->id,
+            'priority' => TicketPriority::HIGH,
+            'last_activity_at' => now(),
+        ]);
+
+        $response = $this->actingAs($superAdmin)->get(route('dashboard'));
+
+        $response->assertOk();
+        $response->assertSee('Avatar no dashboard');
+        $response->assertSee($requester->profilePhotoUrl(), false);
+        $response->assertSee('title="'.$requester->name.'"', false);
+        $response->assertSee('title="'.$assignee->name.'"', false);
+        $response->assertDontSee('<td class="px-6 py-4 text-slate-600">'.$requester->name.'</td>', false);
+        $response->assertDontSee('<td class="px-6 py-4 text-slate-600">'.$assignee->name.'</td>', false);
+    }
+
     public function test_dashboard_hides_restricted_module_actions_for_requesters(): void
     {
         ['sector' => $sector, 'room' => $room] = $this->ticketContext();

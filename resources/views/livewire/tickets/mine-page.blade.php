@@ -76,7 +76,7 @@
                     <th class="px-6 py-3 font-medium">Titulo</th>
                     <th class="px-6 py-3 font-medium">Setor</th>
                     <th class="px-6 py-3 font-medium">Etapa</th>
-                    <th class="px-6 py-3 font-medium">Responsavel</th>
+                    <th class="ui-person-column-head">Responsavel</th>
                     <th class="px-6 py-3 font-medium">Situacao</th>
                     <th class="px-6 py-3 font-medium">SLA</th>
                     <th class="px-6 py-3 font-medium">Atualizado</th>
@@ -111,7 +111,9 @@
                                 </span>
                             </div>
                         </td>
-                        <td class="px-6 py-4 text-slate-600">{{ $ticket->assignee?->name ?? 'Nao atribuido' }}</td>
+                        <td class="ui-person-column-cell">
+                            <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                        </td>
                         <td class="px-6 py-4">
                             @if ($ticket->isClosed())
                                 <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">Finalizado</span>
