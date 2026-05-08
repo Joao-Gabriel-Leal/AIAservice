@@ -717,12 +717,14 @@ class TicketFlowTest extends TestCase
 
         Livewire::actingAs($technician)
             ->test(ShowPage::class, ['ticket' => $ticket])
-            ->assertSee('Conversa')
+            ->assertSee('Conversa com solicitante')
+            ->assertSee('Fluxo de conversa')
+            ->assertSee('Canal visivel para quem abriu o chamado.')
+            ->assertSee('Visivel para o solicitante')
             ->assertSee('Responder')
             ->assertSee('Escreva sua mensagem')
             ->assertSee('Nenhuma mensagem por aqui ainda.')
             ->assertDontSee('Chat interno')
-            ->assertDontSee('Canal')
             ->assertDontSee('Visibilidade')
             ->assertDontSee('Responder ao time');
     }

@@ -9,12 +9,14 @@ use App\Models\User;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
+use App\Modules\Tickets\Models\TicketMessageTemplate;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -38,6 +40,16 @@ class ShowPage extends Component
     public array $internalChatFiles = [];
 
     public array $internalMentionedUserIds = [];
+
+    public array $personalTemplateForm = [
+        'channel' => 'public',
+        'name' => '',
+        'body' => '',
+    ];
+
+    public ?int $editingPersonalTemplateId = null;
+
+    public bool $showPersonalTemplateForm = false;
 
     public ?int $ratingValue = null;
 
@@ -149,6 +161,110 @@ class ShowPage extends Component
         );
 
         $this->reset('internalMessage', 'internalChatFiles', 'internalMentionedUserIds');
+    }
+
+    public function applyMessageTemplate(int $templateId): void
+    {
+        $ticket = $this->ticket();
+        $template = $this->messageTemplateForUse($ticket, $templateId);
+
+        if ($template->channel === TicketMessageTemplate::CHANNEL_INTERNAL) {
+            $this->authorize('commentInternally', $ticket);
+            $this->internalMessage = $this->textWithTemplate($this->internalMessage, $template->body);
+
+            return;
+        }
+
+        $this->authorize('comment', $ticket);
+        $this->message = $this->textWithTemplate($this->message, $template->body);
+    }
+
+    public function openPersonalTemplateForm(string $channel = TicketMessageTemplate::CHANNEL_PUBLIC): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('viewInternalUpdates', $ticket);
+
+        $channel = in_array($channel, TicketMessageTemplate::CHANNELS, true)
+            ? $channel
+            : TicketMessageTemplate::CHANNEL_PUBLIC;
+
+        $this->resetValidation();
+        $this->editingPersonalTemplateId = null;
+        $this->personalTemplateForm = [
+            'channel' => $channel,
+            'name' => '',
+            'body' => $channel === TicketMessageTemplate::CHANNEL_INTERNAL ? $this->internalMessage : $this->message,
+        ];
+        $this->showPersonalTemplateForm = true;
+    }
+
+    public function startEditingPersonalTemplate(int $templateId): void
+    {
+        $template = $this->personalTemplateForCurrentUser($templateId);
+
+        $this->resetValidation();
+        $this->editingPersonalTemplateId = $template->id;
+        $this->personalTemplateForm = [
+            'channel' => $template->channel,
+            'name' => $template->name,
+            'body' => $template->body,
+        ];
+        $this->showPersonalTemplateForm = true;
+    }
+
+    public function cancelPersonalTemplateForm(): void
+    {
+        $this->resetValidation();
+        $this->editingPersonalTemplateId = null;
+        $this->showPersonalTemplateForm = false;
+        $this->personalTemplateForm = $this->emptyPersonalTemplateForm();
+    }
+
+    public function savePersonalTemplate(): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('viewInternalUpdates', $ticket);
+
+        $validated = $this->validate([
+            'personalTemplateForm.channel' => ['required', Rule::in(TicketMessageTemplate::CHANNELS)],
+            'personalTemplateForm.name' => ['required', 'string', 'max:120'],
+            'personalTemplateForm.body' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $template = $this->editingPersonalTemplateId
+            ? $this->personalTemplateForCurrentUser($this->editingPersonalTemplateId)
+            : new TicketMessageTemplate;
+
+        $template->fill([
+            'ticket_board_id' => $ticket->ticket_board_id,
+            'user_id' => auth()->id(),
+            'channel' => $validated['personalTemplateForm']['channel'],
+            'name' => trim($validated['personalTemplateForm']['name']),
+            'body' => trim($validated['personalTemplateForm']['body']),
+            'is_active' => true,
+            'sort_order' => $template->exists
+                ? $template->sort_order
+                : (((int) TicketMessageTemplate::query()
+                    ->where('ticket_board_id', $ticket->ticket_board_id)
+                    ->where('user_id', auth()->id())
+                    ->max('sort_order')) + 1),
+        ]);
+        $template->save();
+
+        $this->cancelPersonalTemplateForm();
+        session()->flash('status', 'Template pessoal salvo com sucesso.');
+    }
+
+    public function deletePersonalTemplate(int $templateId): void
+    {
+        $template = $this->personalTemplateForCurrentUser($templateId);
+        $template->delete();
+
+        if ($this->editingPersonalTemplateId === $templateId) {
+            $this->cancelPersonalTemplateForm();
+        }
+
+        session()->flash('status', 'Template pessoal removido com sucesso.');
     }
 
     public function closeOwnTicket(TicketWorkflowService $workflowService): void
@@ -357,6 +473,20 @@ class ShowPage extends Component
         $internalMentionableUsers = $canViewInternalUpdates
             ? $internalAudienceUsers->reject(fn (User $user) => $user->id === auth()->id())->values()
             : collect();
+        $messageTemplates = $canViewInternalUpdates
+            ? TicketMessageTemplate::query()
+                ->where('ticket_board_id', $ticket->ticket_board_id)
+                ->active()
+                ->where(function ($query): void {
+                    $query
+                        ->whereNull('user_id')
+                        ->orWhere('user_id', auth()->id());
+                })
+                ->orderByRaw('case when user_id is null then 0 else 1 end')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+            : collect();
         $helpfulKnowledgeArticles = $ticket->isClosed() && auth()->user()->hasOperationalAccess($ticket->sector_id)
             ? KnowledgeBaseArticle::query()
                 ->withCount([
@@ -395,6 +525,10 @@ class ShowPage extends Component
             'canComment' => $canComment,
             'canViewInternalUpdates' => $canViewInternalUpdates,
             'canCommentInternally' => $canCommentInternally,
+            'canUseMessageTemplates' => $canViewInternalUpdates,
+            'publicMessageTemplates' => $messageTemplates->where('channel', TicketMessageTemplate::CHANNEL_PUBLIC)->values(),
+            'internalMessageTemplates' => $messageTemplates->where('channel', TicketMessageTemplate::CHANNEL_INTERNAL)->values(),
+            'personalMessageTemplates' => $messageTemplates->where('user_id', auth()->id())->values(),
             'internalAudienceUsers' => $internalAudienceUsers,
             'internalMentionableUsers' => $internalMentionableUsers,
             'canCloseOwn' => $canCloseOwn,
@@ -460,6 +594,55 @@ class ShowPage extends Component
     public function approvalStatusLabel(TicketTimeEntry $timeEntry): string
     {
         return ($timeEntry->approval_status ?? TicketTimeEntryApprovalStatus::APPROVED)->label();
+    }
+
+    private function messageTemplateForUse(Ticket $ticket, int $templateId): TicketMessageTemplate
+    {
+        $this->authorize('viewInternalUpdates', $ticket);
+
+        return TicketMessageTemplate::query()
+            ->whereKey($templateId)
+            ->where('ticket_board_id', $ticket->ticket_board_id)
+            ->active()
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('user_id')
+                    ->orWhere('user_id', auth()->id());
+            })
+            ->firstOrFail();
+    }
+
+    private function personalTemplateForCurrentUser(int $templateId): TicketMessageTemplate
+    {
+        $ticket = $this->ticket();
+        $this->authorize('viewInternalUpdates', $ticket);
+
+        return TicketMessageTemplate::query()
+            ->whereKey($templateId)
+            ->where('ticket_board_id', $ticket->ticket_board_id)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+    }
+
+    private function textWithTemplate(string $currentText, string $templateText): string
+    {
+        $currentText = trim($currentText);
+        $templateText = trim($templateText);
+
+        if ($currentText === '') {
+            return $templateText;
+        }
+
+        return $currentText."\n\n".$templateText;
+    }
+
+    private function emptyPersonalTemplateForm(): array
+    {
+        return [
+            'channel' => TicketMessageTemplate::CHANNEL_PUBLIC,
+            'name' => '',
+            'body' => '',
+        ];
     }
 
     private function ticket(): Ticket

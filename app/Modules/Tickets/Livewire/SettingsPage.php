@@ -13,11 +13,14 @@ use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketAutomationRule;
+use App\Modules\Tickets\Models\TicketAutomationRuleAction;
+use App\Modules\Tickets\Models\TicketAutomationRuleCondition;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Models\TicketGroup;
+use App\Modules\Tickets\Models\TicketMessageTemplate;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketSlaService;
@@ -36,16 +39,27 @@ class SettingsPage extends Component
     use AuthorizesRequests;
 
     public ?int $selectedSectorId = null;
+
     public ?int $selectedBoardId = null;
+
     public ?string $openSection = 'board';
+
     public string $boardName = '';
+
     public string $boardDescription = '';
+
     public string $newBoardName = '';
+
     public string $newBoardDescription = '';
+
     public array $boardOperatorIds = [];
+
     public array $newBoardOperatorIds = [];
+
     public bool $slaIsActive = true;
+
     public array $slaTargets = [];
+
     public array $groupForm = [
         'name' => '',
         'color' => '#2563eb',
@@ -54,6 +68,7 @@ class SettingsPage extends Component
         'is_closed' => false,
         'is_active' => true,
     ];
+
     public array $editGroupForm = [
         'name' => '',
         'color' => '#2563eb',
@@ -62,7 +77,9 @@ class SettingsPage extends Component
         'is_closed' => false,
         'is_active' => true,
     ];
+
     public ?int $editingGroupId = null;
+
     public array $statusForm = [
         'name' => '',
         'color' => '#2563eb',
@@ -70,6 +87,7 @@ class SettingsPage extends Component
         'is_closed' => false,
         'is_active' => true,
     ];
+
     public array $editStatusForm = [
         'name' => '',
         'color' => '#2563eb',
@@ -77,7 +95,9 @@ class SettingsPage extends Component
         'is_closed' => false,
         'is_active' => true,
     ];
+
     public ?int $editingStatusId = null;
+
     public array $fieldForm = [
         'name' => '',
         'type' => 'text',
@@ -88,6 +108,7 @@ class SettingsPage extends Component
         'is_active' => true,
         'options_text' => '',
     ];
+
     public array $formForm = [
         'name' => '',
         'description' => '',
@@ -98,7 +119,9 @@ class SettingsPage extends Component
         'is_default' => false,
         'is_active' => true,
     ];
+
     public ?int $editingFormId = null;
+
     public array $catalogForm = [
         'name' => '',
         'description' => '',
@@ -107,16 +130,32 @@ class SettingsPage extends Component
         'default_priority' => 'medium',
         'is_active' => true,
     ];
+
     public ?int $editingCatalogItemId = null;
+
+    public array $templateForm = [
+        'channel' => 'public',
+        'name' => '',
+        'body' => '',
+        'is_active' => true,
+    ];
+
+    public ?int $editingTemplateId = null;
+
     public ?string $pendingDeletionType = null;
+
     public ?int $pendingDeletionId = null;
+
     public array $deletionContext = [];
+
     public array $replacementSelection = [
         'group_ticket_group_id' => '',
         'group_catalog_group_id' => '',
         'status_replacement_id' => '',
     ];
+
     public ?int $editingAutomationRuleId = null;
+
     public array $automationForm = [
         'name' => '',
         'description' => '',
@@ -126,7 +165,9 @@ class SettingsPage extends Component
         'inactive_for_minutes' => null,
         'is_active' => true,
     ];
+
     public array $automationConditions = [];
+
     public array $automationActions = [];
 
     public function mount(?TicketBoard $board = null): void
@@ -204,6 +245,7 @@ class SettingsPage extends Component
             'sla' => 'SLA',
             'fields' => 'Campos',
             'forms' => 'Formularios',
+            'templates' => 'Templates',
         ];
 
         if ($this->automationsUiEnabled()) {
@@ -387,21 +429,25 @@ class SettingsPage extends Component
 
         if ($group->is_default && ! $requestedDefault) {
             session()->flash('error', 'O quadro precisa manter uma etapa inicial ativa.');
+
             return;
         }
 
         if ($group->is_default && ! $requestedActive) {
             session()->flash('error', 'A etapa inicial nao pode ser inativada sem definir outra etapa inicial.');
+
             return;
         }
 
         if ($group->is_closed && ! $requestedClosed) {
             session()->flash('error', 'O quadro precisa manter uma etapa final ativa.');
+
             return;
         }
 
         if ($group->is_closed && ! $requestedActive) {
             session()->flash('error', 'A etapa final nao pode ser inativada sem definir outra etapa final.');
+
             return;
         }
 
@@ -472,6 +518,7 @@ class SettingsPage extends Component
 
         if (($this->deletionContext['remaining_groups_count'] ?? 0) < 1) {
             session()->flash('error', 'O quadro precisa manter ao menos uma etapa.');
+
             return;
         }
 
@@ -592,11 +639,13 @@ class SettingsPage extends Component
 
         if ($status->is_default && ! $requestedDefault) {
             session()->flash('error', 'O board precisa manter exatamente um status padrao ativo.');
+
             return;
         }
 
         if ($status->is_default && ! $requestedActive) {
             session()->flash('error', 'O status padrao nao pode ser inativado sem definir outro padrao ativo.');
+
             return;
         }
 
@@ -676,12 +725,14 @@ class SettingsPage extends Component
 
         if ($activeStatusesCount <= 1) {
             session()->flash('error', 'Este status e o ultimo ativo do board e nao pode ser excluido.');
+
             return;
         }
 
         $replacementId = $this->replacementSelection['status_replacement_id'] ?? '';
         if ($replacementId === '') {
             session()->flash('error', 'Selecione um status substituto para continuar.');
+
             return;
         }
 
@@ -694,6 +745,7 @@ class SettingsPage extends Component
 
         if (! $replacement) {
             session()->flash('error', 'O status substituto precisa ser ativo e pertencer a este board.');
+
             return;
         }
 
@@ -844,7 +896,7 @@ class SettingsPage extends Component
 
         $fieldIds = array_values(array_unique(array_map('intval', $validated['formForm']['field_ids'] ?? [])));
         $requiredIds = array_values(array_intersect(array_map('intval', $validated['formForm']['required_field_ids'] ?? []), $fieldIds));
-        $form = $this->editingFormId ? $this->formForBoard($this->editingFormId) : new TicketForm();
+        $form = $this->editingFormId ? $this->formForBoard($this->editingFormId) : new TicketForm;
         $visibilityConditions = $this->normalizedVisibilityConditions($fieldIds, $validated['formForm']['visibility_conditions'] ?? []);
 
         if ($validated['formForm']['is_default']) {
@@ -949,7 +1001,7 @@ class SettingsPage extends Component
 
         $catalogItem = $this->editingCatalogItemId
             ? $this->catalogItemForBoard($this->editingCatalogItemId)
-            : new ServiceCatalogItem();
+            : new ServiceCatalogItem;
 
         $catalogItem->fill([
             'ticket_board_id' => $board->id,
@@ -983,6 +1035,82 @@ class SettingsPage extends Component
         $this->loadBoardMeta();
         $this->keepSectionOpen('forms');
         session()->flash('status', 'Item do catalogo removido com sucesso.');
+    }
+
+    public function saveTemplate(): void
+    {
+        $board = $this->board();
+        $this->authorize('update', $board);
+
+        $validated = $this->validate($this->templateRules());
+        $template = $this->editingTemplateId
+            ? $this->messageTemplateForBoard($this->editingTemplateId)
+            : new TicketMessageTemplate;
+
+        $template->fill([
+            'ticket_board_id' => $board->id,
+            'user_id' => null,
+            'channel' => $validated['templateForm']['channel'],
+            'name' => trim($validated['templateForm']['name']),
+            'body' => trim($validated['templateForm']['body']),
+            'is_active' => (bool) $validated['templateForm']['is_active'],
+            'sort_order' => $template->exists
+                ? $template->sort_order
+                : (((int) $board->messageTemplates()->shared()->max('sort_order')) + 1),
+        ]);
+        $template->save();
+
+        $wasEditing = $this->editingTemplateId !== null;
+        $this->resetTemplateForm();
+        $this->loadBoardMeta();
+        $this->keepSectionOpen('templates');
+
+        session()->flash('status', $wasEditing ? 'Template atualizado com sucesso.' : 'Template criado com sucesso.');
+    }
+
+    public function startEditingTemplate(int $templateId): void
+    {
+        $template = $this->messageTemplateForBoard($templateId);
+
+        $this->editingTemplateId = $template->id;
+        $this->templateForm = [
+            'channel' => $template->channel,
+            'name' => $template->name,
+            'body' => $template->body,
+            'is_active' => $template->is_active,
+        ];
+        $this->resetValidation();
+        $this->keepSectionOpen('templates');
+    }
+
+    public function cancelEditingTemplate(): void
+    {
+        $this->resetTemplateForm();
+        $this->keepSectionOpen('templates');
+    }
+
+    public function toggleTemplateActive(int $templateId): void
+    {
+        $template = $this->messageTemplateForBoard($templateId);
+        $template->update(['is_active' => ! $template->is_active]);
+
+        $this->loadBoardMeta();
+        $this->keepSectionOpen('templates');
+        session()->flash('status', 'Template atualizado com sucesso.');
+    }
+
+    public function deleteTemplate(int $templateId): void
+    {
+        $template = $this->messageTemplateForBoard($templateId);
+        $template->delete();
+
+        if ($this->editingTemplateId === $templateId) {
+            $this->resetTemplateForm();
+        }
+
+        $this->loadBoardMeta();
+        $this->keepSectionOpen('templates');
+        session()->flash('status', 'Template removido com sucesso.');
     }
 
     public function addAutomationCondition(): void
@@ -1093,7 +1221,7 @@ class SettingsPage extends Component
 
         $normalizedConditions = $this->validatedAutomationConditions($board);
         $normalizedActions = $this->validatedAutomationActions($board);
-        $rule = $this->editingAutomationRuleId ? TicketAutomationRule::query()->whereKey($this->editingAutomationRuleId)->firstOrFail() : new TicketAutomationRule();
+        $rule = $this->editingAutomationRuleId ? TicketAutomationRule::query()->whereKey($this->editingAutomationRuleId)->firstOrFail() : new TicketAutomationRule;
 
         if ($this->editingAutomationRuleId) {
             $this->authorize('update', $rule->board);
@@ -1152,7 +1280,7 @@ class SettingsPage extends Component
         session()->flash('status', 'Automacao removida com sucesso.');
     }
 
-    public function describeAutomationCondition(array|\App\Modules\Tickets\Models\TicketAutomationRuleCondition $condition): string
+    public function describeAutomationCondition(array|TicketAutomationRuleCondition $condition): string
     {
         $field = TicketAutomationConditionField::from(is_array($condition) ? $condition['field'] : $condition->field->value);
         $operator = TicketAutomationConditionOperator::from(is_array($condition) ? $condition['operator'] : $condition->operator->value);
@@ -1168,7 +1296,7 @@ class SettingsPage extends Component
         return trim("{$field->label()}: {$operator->label()} {$formattedValue}");
     }
 
-    public function describeAutomationAction(array|\App\Modules\Tickets\Models\TicketAutomationRuleAction $action): string
+    public function describeAutomationAction(array|TicketAutomationRuleAction $action): string
     {
         $type = TicketAutomationActionType::from(is_array($action) ? $action['action'] : $action->action->value);
         $payload = is_array($action) ? ($action['payload'] ?? []) : ($action->payload ?? []);
@@ -1611,6 +1739,7 @@ class SettingsPage extends Component
             'automationRules.conditions',
             'automationRules.actions',
             'operators',
+            'messageTemplates.owner',
         ])->find($this->selectedBoardId);
 
         if (! $board) {
@@ -1723,6 +1852,7 @@ class SettingsPage extends Component
         $group = TicketGroup::query()->findOrFail($groupId);
         $this->authorize('update', $group->board);
         abort_unless($group->ticket_board_id === $this->board()?->id, 404);
+
         return $group;
     }
 
@@ -1731,6 +1861,7 @@ class SettingsPage extends Component
         $status = TicketStatus::query()->findOrFail($statusId);
         $this->authorize('update', $status->board);
         abort_unless($status->ticket_board_id === $this->board()?->id, 404);
+
         return $status;
     }
 
@@ -1739,6 +1870,7 @@ class SettingsPage extends Component
         $field = TicketField::query()->findOrFail($fieldId);
         $this->authorize('update', $field->board);
         abort_unless($field->ticket_board_id === $this->board()?->id, 404);
+
         return $field;
     }
 
@@ -1747,6 +1879,7 @@ class SettingsPage extends Component
         $form = TicketForm::query()->with('fields.options')->findOrFail($formId);
         $this->authorize('update', $form->board);
         abort_unless($form->ticket_board_id === $this->board()?->id, 404);
+
         return $form;
     }
 
@@ -1755,7 +1888,17 @@ class SettingsPage extends Component
         $catalogItem = ServiceCatalogItem::query()->findOrFail($catalogItemId);
         $this->authorize('update', $catalogItem->board);
         abort_unless($catalogItem->ticket_board_id === $this->board()?->id, 404);
+
         return $catalogItem;
+    }
+
+    private function messageTemplateForBoard(int $templateId): TicketMessageTemplate
+    {
+        $template = TicketMessageTemplate::query()->findOrFail($templateId);
+        $this->authorize('update', $template->board);
+        abort_unless($template->ticket_board_id === $this->board()?->id && $template->user_id === null, 404);
+
+        return $template;
     }
 
     private function hasAnyActiveSector(): bool
@@ -1816,6 +1959,7 @@ class SettingsPage extends Component
         return collect(preg_split('/\r\n|\r|\n/', (string) $optionsText))->filter()->values()
             ->map(function (string $line) {
                 [$label, $color] = array_pad(array_map('trim', explode('|', $line, 2)), 2, null);
+
                 return ['label' => $label, 'value' => Str::slug($label, '_'), 'color' => $color ?: null];
             })->all();
     }
@@ -1834,10 +1978,24 @@ class SettingsPage extends Component
         $this->editingStatusId = null;
         $this->editingFormId = null;
         $this->editingCatalogItemId = null;
+        $this->editingTemplateId = null;
         $board = $this->board();
         $this->catalogForm = $this->emptyCatalogForm($board);
+        $this->resetTemplateForm();
         $this->resetAutomationForm();
         $this->cancelDeletion();
+    }
+
+    private function resetTemplateForm(): void
+    {
+        $this->editingTemplateId = null;
+        $this->templateForm = $this->emptyTemplateForm();
+        $this->resetValidation([
+            'templateForm.channel',
+            'templateForm.name',
+            'templateForm.body',
+            'templateForm.is_active',
+        ]);
     }
 
     private function resetAutomationForm(): void
@@ -2004,21 +2162,25 @@ class SettingsPage extends Component
 
             if (! in_array($parentFieldId, $fieldIds, true)) {
                 $errors["formForm.visibility_conditions.{$fieldId}.parent_field_id"] = 'O campo base precisa estar incluido no mesmo formulario.';
+
                 continue;
             }
 
             if ($parentFieldId === $fieldId) {
                 $errors["formForm.visibility_conditions.{$fieldId}.parent_field_id"] = 'Um campo nao pode depender dele mesmo.';
+
                 continue;
             }
 
             if ($operator !== 'equals') {
                 $errors["formForm.visibility_conditions.{$fieldId}.operator"] = 'O operador informado nao e suportado.';
+
                 continue;
             }
 
             if ($expectedValue === null || $expectedValue === '') {
                 $errors["formForm.visibility_conditions.{$fieldId}.expected_value"] = 'Informe o valor esperado para ativar o campo inteligente.';
+
                 continue;
             }
 
@@ -2027,6 +2189,7 @@ class SettingsPage extends Component
 
             if (! $parentField) {
                 $errors["formForm.visibility_conditions.{$fieldId}.parent_field_id"] = 'O campo base informado nao existe neste quadro.';
+
                 continue;
             }
 
@@ -2073,6 +2236,26 @@ class SettingsPage extends Component
             'default_ticket_group_id' => $board?->defaultGroup()?->id,
             'default_priority' => TicketPriority::MEDIUM->value,
             'is_active' => true,
+        ];
+    }
+
+    private function emptyTemplateForm(): array
+    {
+        return [
+            'channel' => TicketMessageTemplate::CHANNEL_PUBLIC,
+            'name' => '',
+            'body' => '',
+            'is_active' => true,
+        ];
+    }
+
+    private function templateRules(): array
+    {
+        return [
+            'templateForm.channel' => ['required', Rule::in(TicketMessageTemplate::CHANNELS)],
+            'templateForm.name' => ['required', 'string', 'max:120'],
+            'templateForm.body' => ['required', 'string', 'max:4000'],
+            'templateForm.is_active' => ['boolean'],
         ];
     }
 
