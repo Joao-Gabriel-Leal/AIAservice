@@ -5,7 +5,7 @@
 @php($headerVariant = $headerVariant ?? null)
 @php($headerVariant = $headerVariant ?? ($showHeader ? 'quiet' : 'none'))
 @php($headerVariant = in_array($headerVariant, ['hero', 'quiet', 'none'], true) ? $headerVariant : 'quiet')
-@php($focusedHeaderActionClass = 'ui-action ui-action-secondary rounded-full px-4 py-2 text-sm backdrop-blur-sm')
+@php($focusedHeaderActionClass = 'ui-action portal-focused-header-action')
 
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
