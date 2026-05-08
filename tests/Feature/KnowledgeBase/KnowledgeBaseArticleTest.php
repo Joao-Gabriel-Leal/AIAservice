@@ -473,6 +473,77 @@ class KnowledgeBaseArticleTest extends TestCase
         ]);
     }
 
+    public function test_knowledge_base_pages_render_pluralized_feedback_and_usage_copy(): void
+    {
+        [$sectorA] = $this->seedSectors();
+
+        $requester = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $article = KnowledgeBaseArticle::query()->create([
+            'sector_id' => $sectorA->id,
+            'created_by' => $technician->id,
+            'title' => 'Guia de acessos',
+            'summary' => 'Resumo de acessos',
+            'content' => 'Conteudo de acessos',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'editorial_status' => KnowledgeBaseArticleStatus::PUBLISHED,
+            'is_active' => true,
+        ]);
+
+        KnowledgeBaseArticleFeedback::query()->create([
+            'knowledge_base_article_id' => $article->id,
+            'user_id' => User::factory()->create()->id,
+            'is_helpful' => true,
+        ]);
+
+        foreach (User::factory()->count(2)->create() as $user) {
+            KnowledgeBaseArticleFeedback::query()->create([
+                'knowledge_base_article_id' => $article->id,
+                'user_id' => $user->id,
+                'is_helpful' => false,
+            ]);
+        }
+
+        $ticketA = $this->closedTicketForSector($sectorA, $technician, 'Chamado A');
+        $ticketB = $this->closedTicketForSector($sectorA, $technician, 'Chamado B');
+
+        foreach ([$ticketA, $ticketB] as $ticket) {
+            KnowledgeBaseArticleTicketUsage::query()->create([
+                'knowledge_base_article_id' => $article->id,
+                'ticket_id' => $ticket->id,
+                'used_by_id' => $technician->id,
+            ]);
+        }
+
+        $this->actingAs($requester)
+            ->get(route('knowledge-base.show', $article))
+            ->assertOk()
+            ->assertSeeText('1 voto util')
+            ->assertSeeText('2 votos nao uteis')
+            ->assertSeeText('2 usos em chamados')
+            ->assertDontSeeText('voto(s) util(eis)')
+            ->assertDontSeeText('voto(s) nao util(eis)')
+            ->assertDontSeeText('uso(s) em chamados');
+
+        $this->actingAs($requester)
+            ->get(route('knowledge-base.index'))
+            ->assertOk()
+            ->assertSeeText('1 voto util')
+            ->assertSeeText('2 usos em chamados')
+            ->assertDontSeeText('util(eis)')
+            ->assertDontSeeText('uso(s)');
+    }
+
     public function test_visible_query_ranks_articles_by_feedback_and_ticket_usage(): void
     {
         [$sectorA] = $this->seedSectors();

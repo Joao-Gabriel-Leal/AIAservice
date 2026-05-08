@@ -21,7 +21,9 @@ class CentralPageTest extends TestCase
             ->get(route('tickets.central', ['sector' => $secondSector->id]))
             ->assertOk()
             ->assertSeeText("Formularios de {$secondSector->name}")
-            ->assertSeeText($firstSector->name);
+            ->assertSeeText($firstSector->name)
+            ->assertDontSeeText('Selecione uma area para ver os formularios ativos disponiveis naquele setor.')
+            ->assertDontSeeText('A selecao abaixo atualiza o conteudo da central sem trocar de rota.');
     }
 
     public function test_invalid_sector_query_falls_back_to_the_first_active_sector(): void

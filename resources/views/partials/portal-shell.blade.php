@@ -1,6 +1,7 @@
 @php($portalMode = $portalMode ?? 'default')
 @php($isFocusedForm = $portalMode === 'focused-form')
 @php($showHeader = $showHeader ?? true)
+@php($showSubtitle = $showSubtitle ?? false)
 @php($headerVariant = $headerVariant ?? null)
 @php($headerVariant = $headerVariant ?? ($showHeader ? 'quiet' : 'none'))
 @php($headerVariant = in_array($headerVariant, ['hero', 'quiet', 'none'], true) ? $headerVariant : 'quiet')
@@ -71,7 +72,6 @@
                             <a href="{{ route('tickets.mine') }}" class="portal-nav-link {{ request()->routeIs('tickets.mine') ? 'portal-nav-link-active' : '' }}">Meus chamados</a>
                             <a href="{{ route('knowledge-base.index') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.*') ? 'portal-nav-link-active' : '' }}">Base de conhecimento</a>
                             @if ($user->hasOperationalAccess())
-                                <a href="{{ route('tickets.queue') }}" class="portal-nav-link {{ request()->routeIs('tickets.queue') ? 'portal-nav-link-active' : '' }}">Minha fila</a>
                                 <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.board', 'tickets.board.show', 'tickets.settings', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Quadros</a>
                                 <a href="{{ route('licenses.index') }}" class="portal-nav-link {{ request()->routeIs('licenses.*') ? 'portal-nav-link-active' : '' }}">Licencas</a>
                             @endif
@@ -135,7 +135,7 @@
                                 <div>
                                     <p class="portal-layout-kicker">Portal interno</p>
                                     <h1 class="portal-layout-title">{{ $title ?? config('app.name') }}</h1>
-                                    @if (! empty($subtitle))
+                                    @if ($showSubtitle && ! empty($subtitle))
                                         <p class="portal-layout-subtitle">{{ $subtitle }}</p>
                                     @endif
                                 </div>

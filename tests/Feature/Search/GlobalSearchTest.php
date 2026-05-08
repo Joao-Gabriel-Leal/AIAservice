@@ -31,6 +31,18 @@ class GlobalSearchTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_search_page_keeps_shared_filter_bar_non_collapsible_by_default(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+
+        $this->actingAs($superAdmin)
+            ->get(route('search'))
+            ->assertOk()
+            ->assertSeeText('Busca em tudo')
+            ->assertDontSeeText('Recolher filtros')
+            ->assertDontSeeText('Expandir filtros');
+    }
+
     public function test_global_search_groups_results_from_all_supported_sources(): void
     {
         ['company' => $company, 'sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext(

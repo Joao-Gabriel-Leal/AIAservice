@@ -547,6 +547,8 @@ class IndexPage extends Component
             }
         }
 
+        $activeFilterCount = $this->activeFilterCount();
+
         return view('livewire.tickets.index-page', [
             'tickets' => $tickets,
             'board' => $board,
@@ -572,6 +574,8 @@ class IndexPage extends Component
             'savedViews' => $this->savedViews(),
             'quickViews' => $this->quickViews(),
             'canUpdate' => true,
+            'hasActiveFilters' => $activeFilterCount > 0,
+            'activeFilterCount' => $activeFilterCount,
             'exportParams' => array_filter([
                 'sector' => $this->selectedSectorId,
                 'board' => $this->selectedBoardId,
@@ -674,6 +678,34 @@ class IndexPage extends Component
                 ->filter(fn ($value) => $value !== null && $value !== '')
                 ->all(),
         ];
+    }
+
+    private function activeFilterCount(): int
+    {
+        $filters = $this->currentSavedFilters();
+        $count = 0;
+
+        foreach (['title', 'group_id', 'requester', 'assignee', 'updated_from', 'updated_to'] as $filterKey) {
+            $value = $filters[$filterKey] ?? null;
+
+            if ($value !== null && $value !== '') {
+                $count++;
+            }
+        }
+
+        if (($filters['assignee_state'] ?? 'all') !== 'all') {
+            $count++;
+        }
+
+        if (($filters['priority'] ?? '') !== '') {
+            $count++;
+        }
+
+        if (($filters['sla_state'] ?? 'all') !== 'all') {
+            $count++;
+        }
+
+        return $count + count($filters['field_filters'] ?? []);
     }
 
     private function savedViews(): Collection

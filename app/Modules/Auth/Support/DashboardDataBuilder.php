@@ -26,7 +26,7 @@ use Illuminate\Support\Collection;
 
 class DashboardDataBuilder
 {
-    public function build(User $user, int $period, ?int $sectorId = null): array
+    public function build(User $user, int $period, ?int $sectorId = null, bool $includeAttentionQueue = true): array
     {
         $periodStart = now()->subDays($period - 1)->startOfDay();
         $slaWarningLimit = now()->addMinutes(30);
@@ -77,24 +77,26 @@ class DashboardDataBuilder
             ->limit(8)
             ->get();
 
-        $attentionQueue = (clone $ticketsQuery)
-            ->with(['status', 'group', 'requester', 'assignee', 'sector', 'rating'])
-            ->whereNull('resolved_at')
-            ->where(function (Builder $query) use ($staleCutoff) {
-                $query
-                    ->where(fn (Builder $slaQuery) => $this->applyOverdueSlaFilter($slaQuery))
-                    ->orWhereNull('assignee_id')
-                    ->orWhereIn('priority', [TicketPriority::HIGH->value, TicketPriority::URGENT->value])
-                    ->orWhere(fn (Builder $staleQuery) => $this->applyStaleFilter($staleQuery, $staleCutoff));
-            })
-            ->latest('updated_at')
-            ->limit(10)
-            ->get()
-            ->map(fn (Ticket $ticket) => [
-                'ticket' => $ticket,
-                'reason' => $this->attentionReason($ticket, $staleCutoff),
-                'tone' => $this->attentionTone($ticket, $staleCutoff),
-            ]);
+        $attentionQueue = $includeAttentionQueue
+            ? (clone $ticketsQuery)
+                ->with(['status', 'group', 'requester', 'assignee', 'sector', 'rating'])
+                ->whereNull('resolved_at')
+                ->where(function (Builder $query) use ($staleCutoff) {
+                    $query
+                        ->where(fn (Builder $slaQuery) => $this->applyOverdueSlaFilter($slaQuery))
+                        ->orWhereNull('assignee_id')
+                        ->orWhereIn('priority', [TicketPriority::HIGH->value, TicketPriority::URGENT->value])
+                        ->orWhere(fn (Builder $staleQuery) => $this->applyStaleFilter($staleQuery, $staleCutoff));
+                })
+                ->latest('updated_at')
+                ->limit(10)
+                ->get()
+                ->map(fn (Ticket $ticket) => [
+                    'ticket' => $ticket,
+                    'reason' => $this->attentionReason($ticket, $staleCutoff),
+                    'tone' => $this->attentionTone($ticket, $staleCutoff),
+                ])
+            : collect();
 
         $ratingSummary = null;
 

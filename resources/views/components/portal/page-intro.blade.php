@@ -2,6 +2,7 @@
     'eyebrow' => null,
     'title' => null,
     'description' => null,
+    'showDescription' => true,
     'variant' => 'editorial',
 ])
 
@@ -21,7 +22,7 @@
                 <h1 class="portal-page-intro-title">{{ $title }}</h1>
             @endif
 
-            @if ($description)
+            @if ($showDescription && $description)
                 <p class="portal-page-intro-description">{{ $description }}</p>
             @endif
         </div>

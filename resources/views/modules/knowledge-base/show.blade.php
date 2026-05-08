@@ -35,10 +35,13 @@
 
                     <div class="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Utilidade</p>
+                        @php($helpfulVotes = $article->helpful_feedback_count ?? 0)
+                        @php($notHelpfulVotes = $article->not_helpful_feedback_count ?? 0)
+                        @php($ticketUsages = $article->ticket_usages_count ?? 0)
                         <p class="mt-2 text-sm leading-7 text-slate-700">
-                            {{ $article->helpful_feedback_count ?? 0 }} voto(s) util(eis),
-                            {{ $article->not_helpful_feedback_count ?? 0 }} voto(s) nao util(eis)
-                            e {{ $article->ticket_usages_count ?? 0 }} uso(s) em chamados.
+                            {{ trans_choice('ui.helpful_vote', $helpfulVotes, ['count' => $helpfulVotes]) }},
+                            {{ trans_choice('ui.not_helpful_vote', $notHelpfulVotes, ['count' => $notHelpfulVotes]) }}
+                            e {{ trans_choice('ui.ticket_usage', $ticketUsages, ['count' => $ticketUsages]) }}.
                         </p>
 
                         <form method="POST" action="{{ route('knowledge-base.feedback', $article) }}" class="mt-4 flex flex-wrap gap-3">
@@ -60,7 +63,6 @@
                 @if ($article->attachments->isNotEmpty())
                     <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                         <h2 class="text-lg font-semibold text-slate-900">Anexos</h2>
-                        <p class="mt-1 text-sm text-slate-500">Arquivos complementares vinculados a este artigo.</p>
 
                         <div class="mt-4 space-y-3">
                             @foreach ($article->attachments as $attachment)
@@ -68,10 +70,7 @@
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-medium text-slate-900">{{ $attachment->original_name }}</p>
                                         <p class="mt-1 text-xs text-slate-500">
-                                            {{ $attachment->humanSize() }}
-                                            @if ($attachment->uploader)
-                                                • enviado por {{ $attachment->uploader->name }}
-                                            @endif
+                                            {{ $attachment->humanSize() }}@if ($attachment->uploader) - enviado por {{ $attachment->uploader->name }}@endif
                                         </p>
                                     </div>
 

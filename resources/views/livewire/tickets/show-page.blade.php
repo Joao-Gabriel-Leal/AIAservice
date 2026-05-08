@@ -333,8 +333,8 @@
                                                 <p class="text-sm font-semibold text-slate-900">{{ $helpfulArticle->title }}</p>
                                                 <p class="mt-2 text-sm text-slate-600">{{ $helpfulArticle->summary }}</p>
                                                 <p class="mt-3 text-xs text-slate-500">
-                                                    {{ $helpfulArticle->helpful_feedback_count ?? 0 }} voto(s) util(eis)
-                                                    - {{ $helpfulArticle->ticket_usages_count ?? 0 }} uso(s)
+                                                    {{ trans_choice('ui.helpful_vote', $helpfulArticle->helpful_feedback_count ?? 0, ['count' => $helpfulArticle->helpful_feedback_count ?? 0]) }}
+                                                    - {{ trans_choice('ui.ticket_usage', $helpfulArticle->ticket_usages_count ?? 0, ['count' => $helpfulArticle->ticket_usages_count ?? 0]) }}
                                                 </p>
                                             </div>
                                             <a href="{{ route('knowledge-base.show', $helpfulArticle) }}" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700">Abrir</a>

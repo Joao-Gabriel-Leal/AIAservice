@@ -23,7 +23,7 @@ class DashboardController extends Controller
         /** @var User $user */
         $user = auth()->user();
         $period = $this->resolvePeriod($request->string('period')->toString());
-        $data = $this->dashboardDataBuilder->build($user, $period, $request->integer('sector_id') ?: null);
+        $data = $this->dashboardDataBuilder->build($user, $period, $request->integer('sector_id') ?: null, false);
 
         return view('modules.dashboard.index', $data);
     }

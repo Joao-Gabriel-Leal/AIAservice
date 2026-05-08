@@ -421,6 +421,46 @@ class TicketFlowTest extends TestCase
             ->assertSee('Arraste o card para mover de coluna');
     }
 
+    public function test_board_filters_render_collapsible_summary_without_counting_default_states(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Filtro recolhivel do quadro',
+            'description' => 'Chamado para validar o cabecalho compacto dos filtros.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($operator)
+            ->test(IndexPage::class, ['board' => $board])
+            ->assertSee('Operacao do quadro')
+            ->assertSee('Recolher filtros')
+            ->assertSee('Sem filtros ativos')
+            ->assertSee('Views rapidas')
+            ->assertSee('Views salvas')
+            ->set('titleFilter', 'recolhivel')
+            ->assertSee('1 filtro ativo')
+            ->call('resetTicketFilters')
+            ->assertSee('Sem filtros ativos');
+    }
+
     public function test_collaborator_without_sector_access_can_open_ticket_for_any_active_sector(): void
     {
         ['sector' => $sector, 'catalog' => $catalog] = $this->ticketContext();
@@ -483,9 +523,36 @@ class TicketFlowTest extends TestCase
             ->assertSee('Setor: '.$sector->name)
             ->assertSee('Formulario: '.$catalog->form->name)
             ->assertSee('Explique o chamado')
+            ->assertSee('Pronto para enviar?')
             ->assertDontSee('Escolha o setor e o formulario')
             ->assertDontSee('Selecione um setor')
-            ->assertDontSee('Selecione um formulario');
+            ->assertDontSee('Selecione um formulario')
+            ->assertDontSee('Preencha as informacoes abaixo para abrir o chamado com mais rapidez e menos retrabalho na triagem.')
+            ->assertDontSee('Use um titulo curto e uma descricao clara para facilitar o atendimento.')
+            ->assertDontSee('Revise os dados e envie. Depois voce acompanha tudo em');
+    }
+
+    public function test_create_page_uses_concise_copy_when_opened_without_context(): void
+    {
+        ['sector' => $sector] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $this->actingAs($requester)
+            ->get(route('tickets.create'))
+            ->assertOk()
+            ->assertSee('Abertura de chamado')
+            ->assertSee('Setor, quadro e formulario')
+            ->assertSee('Explique o chamado')
+            ->assertSee('Pronto para enviar?')
+            ->assertDontSee('Preencha as informacoes abaixo para abrir o chamado com mais rapidez e menos retrabalho na triagem.')
+            ->assertDontSee('O formulario define os campos da abertura. Se houver catalogo vinculado, ele complementa a triagem automaticamente.')
+            ->assertDontSee('Use um titulo curto e uma descricao clara para facilitar o atendimento.')
+            ->assertDontSee('Adicione prints, documentos ou qualquer arquivo que ajude no atendimento.')
+            ->assertDontSee('Revise os dados e envie. Depois voce acompanha tudo em');
     }
 
     public function test_requester_can_open_a_ticket_from_an_active_form_without_catalog_item(): void

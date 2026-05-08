@@ -54,7 +54,7 @@ class DashboardTest extends TestCase
         $response->assertSeeText('Volume no periodo');
         $response->assertSeeText('Distribuicao por status');
         $response->assertSeeText('Saude operacional');
-        $response->assertSeeText('Fila de atencao');
+        $response->assertDontSeeText('Fila de atencao');
         $response->assertSeeText('Base de conhecimento');
         $response->assertSeeText('Ativos pendentes');
         $response->assertSeeText('Proximas renovacoes');

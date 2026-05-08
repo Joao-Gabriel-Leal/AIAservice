@@ -68,7 +68,9 @@ class TicketMineAndChatFilesTest extends TestCase
             $this->actingAs($user)
                 ->get(route('tickets.mine'))
                 ->assertOk()
-                ->assertSee('Meus chamados');
+                ->assertSee('Meus chamados')
+                ->assertDontSee('Veja somente os chamados que foram abertos por voce, com status, responsavel e SLA no mesmo painel.')
+                ->assertDontSee('A lista ignora chamados de outros solicitantes, mesmo quando voce tem acesso operacional ao setor.');
         }
 
         Livewire::actingAs($operator)

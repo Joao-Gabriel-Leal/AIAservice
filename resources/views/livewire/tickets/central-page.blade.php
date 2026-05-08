@@ -129,19 +129,15 @@
                             </div>
 
                             <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Fluxo recomendado</p>
-                                <p class="mt-3 text-sm text-slate-600">
-                                    Todo chamado deve nascer com o formulario do setor para entrar na fila correta e reduzir retrabalho na triagem.
-                                </p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Abertura pelo formulario</p>
+                                <p class="mt-3 text-sm text-slate-600">Use um dos formularios abaixo para cair na fila certa.</p>
                             </div>
                         </div>
                     </section>
 
                     <section class="ui-panel rounded-3xl border border-slate-200 bg-[#15233e] p-6 text-white shadow-sm">
                         <h4 class="text-lg font-semibold">Nao encontrou o formulario certo?</h4>
-                        <p class="mt-2 text-sm text-slate-300">
-                            Todo formulario ativo do setor aparece aqui. Se faltar uma opcao, revise se o formulario esta realmente ativo na configuracao do quadro.
-                        </p>
+                        <p class="mt-2 text-sm text-slate-300">Revise se ele esta ativo neste setor.</p>
                     </section>
                 </aside>
             </section>

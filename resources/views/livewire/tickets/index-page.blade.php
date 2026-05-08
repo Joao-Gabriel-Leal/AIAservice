@@ -87,34 +87,59 @@
         </x-slot:meta>
     </x-portal.page-intro>
 
-    <x-portal.filter-bar title="Operacao do quadro" description="Use atalhos, views salvas e filtros sem perder o foco no quadro aberto.">
+    <x-portal.filter-bar
+        title="Operacao do quadro"
+        description="Use atalhos, views salvas e filtros sem perder o foco no quadro aberto."
+        :collapsible="true"
+        persist-key="tickets-board-filter-bar"
+        :default-collapsed="false"
+    >
+        <x-slot:actions>
+            <div class="portal-filter-summary">
+                <span class="portal-filter-summary-chip {{ $hasActiveFilters ? 'portal-filter-summary-chip-active' : '' }}">
+                    {{ $hasActiveFilters ? $activeFilterCount.' '.($activeFilterCount === 1 ? 'filtro ativo' : 'filtros ativos') : 'Sem filtros ativos' }}
+                </span>
+
+                @if ($hasActiveFilters)
+                    <button type="button" wire:click="resetTicketFilters" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs">
+                        Limpar filtros
+                    </button>
+                @endif
+            </div>
+        </x-slot:actions>
         @if ($board)
-            <div class="grid gap-4 xl:grid-cols-[1fr_1fr]">
-                <div class="rounded-3xl border border-slate-200 bg-white/70 p-4">
-                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                <section class="portal-filter-block portal-filter-block--accent">
+                    <div class="portal-filter-block-header">
                         <div>
-                            <p class="text-sm font-semibold text-slate-900">Views rapidas</p>
-                            <p class="mt-1 text-xs text-slate-500">Atalhos para o recorte operacional do dia.</p>
+                            <p class="portal-filter-block-title">Views rapidas</p>
+                            <p class="portal-filter-block-copy">Atalhos para o recorte operacional do dia.</p>
                         </div>
-                        <button type="button" wire:click="resetTicketFilters" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs">Limpar filtros</button>
+
+                        <span class="portal-filter-summary-chip">Aplicacao imediata</span>
                     </div>
 
-                    <div class="flex flex-wrap gap-2">
+                    <div class="mt-4 flex flex-wrap gap-2">
                         @foreach ($quickViews as $quickViewKey => $quickViewLabel)
                             <button type="button" wire:click="applyQuickView('{{ $quickViewKey }}')" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs">
                                 {{ $quickViewLabel }}
                             </button>
                         @endforeach
                     </div>
-                </div>
+                </section>
 
-                <div class="rounded-3xl border border-slate-200 bg-white/70 p-4">
-                    <div class="mb-3">
-                        <p class="text-sm font-semibold text-slate-900">Views salvas</p>
-                        <p class="mt-1 text-xs text-slate-500">Salve combinacoes de filtros como “SLA critico” ou “Minha triagem”.</p>
+                <section class="portal-filter-block">
+                    <div class="portal-filter-block-header">
+                        <div>
+                            <p class="portal-filter-block-title">Views salvas</p>
+                            <p class="portal-filter-block-copy">Salve combinacoes de filtros como "SLA critico" ou "Minha triagem".</p>
                     </div>
 
-                    <div class="flex flex-wrap gap-2">
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <span class="portal-filter-summary-chip">{{ $savedViews->count() }} {{ $savedViews->count() === 1 ? 'view salva' : 'views salvas' }}</span>
+
                         @forelse ($savedViews as $savedView)
                             <div class="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-600">
                                 <button type="button" wire:click="applySavedView({{ $savedView->id }})" class="px-3 py-2 hover:bg-slate-50">
@@ -129,7 +154,7 @@
                         @endforelse
                     </div>
 
-                    <form wire:submit.prevent="saveCurrentView" class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <form wire:submit.prevent="saveCurrentView" class="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
                         <label class="text-xs text-slate-600">
                             <span class="mb-1 block font-medium">Nome da view</span>
                             <input wire:model="savedViewName" type="text" class="ui-input w-full" placeholder="Ex.: Sem responsavel urgente">
@@ -143,11 +168,12 @@
                             <button type="submit" class="ui-action ui-action-primary rounded-xl px-3 py-2 text-xs">Salvar</button>
                         </div>
                     </form>
-                </div>
+                </section>
             </div>
         @endif
 
-        <div class="{{ $board ? 'mt-4' : '' }} grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div class="{{ $board ? 'portal-filter-section' : '' }}">
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label class="text-sm text-slate-600">
                 <span class="mb-1 block font-medium">Titulo</span>
                 <input wire:model.live.debounce.400ms="titleFilter" type="text" class="ui-input w-full" placeholder="Buscar por titulo">
@@ -216,10 +242,10 @@
                     <input wire:model.live="updatedTo" type="date" class="ui-input w-full">
                 </label>
             </div>
-        </div>
+            </div>
 
-        @if ($fieldOptions->isNotEmpty())
-            <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            @if ($fieldOptions->isNotEmpty())
+                <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 @foreach ($fieldOptions as $field)
                     <label class="text-sm text-slate-600">
                         <span class="mb-1 block font-medium">{{ $field->name }}</span>
@@ -246,8 +272,9 @@
                         @endif
                     </label>
                 @endforeach
-            </div>
-        @endif
+                </div>
+            @endif
+        </div>
     </x-portal.filter-bar>
 
     @if ($lastManualTicketId)
