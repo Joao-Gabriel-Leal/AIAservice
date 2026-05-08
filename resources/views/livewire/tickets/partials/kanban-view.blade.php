@@ -23,9 +23,6 @@
                 style="--ui-lane-color: {{ $laneColor }}"
                 wire:key="kanban-column-{{ $column['key'] }}"
                 data-kanban-column="true"
-                data-board-drop-zone="true"
-                data-kanban-group-id="{{ $targetGroupId === null ? '__null__' : $targetGroupId }}"
-                data-board-group-id="{{ $targetGroupId === null ? '__null__' : $targetGroupId }}"
                 x-bind:class="{ 'ui-kanban-column-dragover': isDragTarget({{ $targetGroupId ?? 'null' }}) }"
             >
                 <div class="ui-kanban-column-header">
@@ -56,15 +53,28 @@
                     </div>
                 </div>
 
-                <div class="ui-kanban-card-list">
+                <div
+                    class="ui-kanban-card-list"
+                    data-board-drop-zone="true"
+                    data-board-group-id="{{ $targetGroupId === null ? '__null__' : $targetGroupId }}"
+                >
                     @forelse ($columnTickets as $ticket)
                         @php
                             $slaMeta = $this->slaMeta($ticket);
                         @endphp
 
+                        <div
+                            x-cloak
+                            x-show="isDropIndicator({{ $targetGroupId ?? 'null' }}, {{ $ticket->id }})"
+                            class="ui-board-drop-indicator ui-board-drop-indicator-card"
+                            data-board-drop-placement="before"
+                            data-board-drop-before-ticket-id="{{ $ticket->id }}"
+                        ></div>
+
                         <article
                             class="ui-panel ui-kanban-card rounded-[1.6rem] border border-slate-200 bg-white p-4 shadow-sm"
                             wire:key="ticket-card-kanban-{{ $ticket->id }}"
+                            data-board-ticket-id="{{ $ticket->id }}"
                             x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, {{ $ticket->ticket_group_id ?? 'null' }})"
                             x-bind:class="{
                                 'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
@@ -181,10 +191,24 @@
                             </p>
                         </article>
                     @empty
+                        <div
+                            x-cloak
+                            x-show="isDropAtEmpty({{ $targetGroupId ?? 'null' }})"
+                            class="ui-board-drop-indicator ui-board-drop-indicator-card ui-board-drop-indicator-empty"
+                            data-board-drop-placement="top"
+                        ></div>
+
                         <div class="rounded-[1.45rem] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                             Nenhum chamado nesta coluna.
                         </div>
                     @endforelse
+
+                    <div
+                        x-cloak
+                        x-show="isDropAtEnd({{ $targetGroupId ?? 'null' }})"
+                        class="ui-board-drop-indicator ui-board-drop-indicator-card"
+                        data-board-drop-placement="end"
+                    ></div>
 
                     @if ($column['hasMore'] ?? false)
                         <button

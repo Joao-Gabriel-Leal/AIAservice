@@ -792,6 +792,307 @@ class TicketFlowTest extends TestCase
         );
     }
 
+    public function test_board_drag_reorders_tickets_within_the_same_group_and_reflects_in_kanban_and_stages(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $firstTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Primeiro da fila',
+            'description' => 'Primeiro chamado',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $secondTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Segundo da fila',
+            'description' => 'Segundo chamado',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $thirdTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Terceiro da fila',
+            'description' => 'Terceiro chamado',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(IndexPage::class, ['board' => $board])
+            ->call('setViewMode', 'kanban')
+            ->assertSeeInOrder(['Primeiro da fila', 'Segundo da fila', 'Terceiro da fila'])
+            ->call('moveTicketByDrag', $thirdTicket->id, $group->id, $firstTicket->id, 'top')
+            ->assertSeeInOrder(['Terceiro da fila', 'Primeiro da fila', 'Segundo da fila'])
+            ->call('setViewMode', 'stages')
+            ->assertSeeInOrder(['Terceiro da fila', 'Primeiro da fila', 'Segundo da fila']);
+
+        $this->assertSame(
+            ['Terceiro da fila', 'Primeiro da fila', 'Segundo da fila'],
+            Ticket::query()
+                ->where('ticket_board_id', $board->id)
+                ->where('ticket_group_id', $group->id)
+                ->orderedForBoardDisplay()
+                ->pluck('title')
+                ->all()
+        );
+
+        $this->assertSame(1, $thirdTicket->fresh()->board_sort_order);
+        $this->assertSame(2, $firstTicket->fresh()->board_sort_order);
+        $this->assertSame(3, $secondTicket->fresh()->board_sort_order);
+    }
+
+    public function test_board_drag_to_top_keeps_ticket_metadata_untouched_when_reordering_in_the_same_group(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $firstTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Fila original',
+            'description' => 'Primeiro chamado',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => Carbon::parse('2026-05-08 10:00:00'),
+        ]);
+
+        $reorderedTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Vai para o topo',
+            'description' => 'Segundo chamado',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => Carbon::parse('2026-05-08 11:30:00'),
+        ]);
+
+        $originalStatusId = $reorderedTicket->ticket_status_id;
+        $originalActivityAt = $reorderedTicket->last_activity_at?->toIso8601String();
+
+        Livewire::actingAs($technician)
+            ->test(IndexPage::class, ['board' => $board])
+            ->call('setViewMode', 'kanban')
+            ->call('moveTicketByDrag', $reorderedTicket->id, $group->id, null, 'top')
+            ->assertSeeInOrder(['Vai para o topo', 'Fila original']);
+
+        $reorderedTicket->refresh();
+        $firstTicket->refresh();
+
+        $this->assertSame($group->id, $reorderedTicket->ticket_group_id);
+        $this->assertSame($originalStatusId, $reorderedTicket->ticket_status_id);
+        $this->assertNull($reorderedTicket->resolved_at);
+        $this->assertSame($originalActivityAt, $reorderedTicket->last_activity_at?->toIso8601String());
+        $this->assertSame(1, $reorderedTicket->board_sort_order);
+        $this->assertSame(2, $firstTicket->board_sort_order);
+    }
+
+    public function test_board_drag_can_insert_ticket_before_another_ticket_in_a_different_group(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $targetGroup = $board->groups()
+            ->where('is_closed', false)
+            ->whereKeyNot($group->id)
+            ->orderBy('sort_order')
+            ->firstOrFail();
+        $targetStatus = $board->statuses()->where('sort_order', $targetGroup->sort_order)->firstOrFail();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $sourceTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Mover entre etapas',
+            'description' => 'Chamado de origem',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $targetFirst = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $targetGroup->id,
+            'ticket_status_id' => $targetStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Ja na etapa 1',
+            'description' => 'Primeiro da etapa de destino',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        $targetSecond = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $targetGroup->id,
+            'ticket_status_id' => $targetStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Ja na etapa 2',
+            'description' => 'Segundo da etapa de destino',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(IndexPage::class, ['board' => $board])
+            ->call('setViewMode', 'kanban')
+            ->call('moveTicketByDrag', $sourceTicket->id, $targetGroup->id, $targetSecond->id, 'top')
+            ->call('setViewMode', 'stages')
+            ->assertSeeInOrder(['Ja na etapa 1', 'Mover entre etapas', 'Ja na etapa 2']);
+
+        $sourceTicket->refresh();
+
+        $this->assertSame($targetGroup->id, $sourceTicket->ticket_group_id);
+        $this->assertSame($targetStatus->id, $sourceTicket->ticket_status_id);
+        $this->assertNull($sourceTicket->resolved_at);
+        $this->assertSame(
+            ['Ja na etapa 1', 'Mover entre etapas', 'Ja na etapa 2'],
+            Ticket::query()
+                ->where('ticket_board_id', $board->id)
+                ->where('ticket_group_id', $targetGroup->id)
+                ->orderedForBoardDisplay()
+                ->pluck('title')
+                ->all()
+        );
+    }
+
+    public function test_board_select_move_places_ticket_at_the_end_of_the_destination_group(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+
+        $targetGroup = $board->groups()
+            ->where('is_closed', false)
+            ->whereKeyNot($group->id)
+            ->orderBy('sort_order')
+            ->firstOrFail();
+        $targetStatus = $board->statuses()->where('sort_order', $targetGroup->sort_order)->firstOrFail();
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $sourceTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Vai para o fim',
+            'description' => 'Chamado movido pelo select',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $targetGroup->id,
+            'ticket_status_id' => $targetStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Primeiro destino',
+            'description' => 'Primeiro na etapa destino',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $targetGroup->id,
+            'ticket_status_id' => $targetStatus->id,
+            'room_id' => $room->id,
+            'title' => 'Segundo destino',
+            'description' => 'Segundo na etapa destino',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Livewire::actingAs($technician)
+            ->test(IndexPage::class, ['board' => $board])
+            ->call('setViewMode', 'stages')
+            ->call('moveTicketToGroup', $sourceTicket->id, $targetGroup->id)
+            ->assertSeeInOrder(['Primeiro destino', 'Segundo destino', 'Vai para o fim']);
+
+        $sourceTicket->refresh();
+
+        $this->assertSame($targetGroup->id, $sourceTicket->ticket_group_id);
+        $this->assertSame($targetStatus->id, $sourceTicket->ticket_status_id);
+        $this->assertSame(
+            ['Primeiro destino', 'Segundo destino', 'Vai para o fim'],
+            Ticket::query()
+                ->where('ticket_board_id', $board->id)
+                ->where('ticket_group_id', $targetGroup->id)
+                ->orderedForBoardDisplay()
+                ->pluck('title')
+                ->all()
+        );
+    }
+
     public function test_board_can_move_ticket_to_another_group_and_close_it(): void
     {
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status, 'closedGroup' => $closedGroup, 'closedStatus' => $closedStatus] = $this->ticketContext();

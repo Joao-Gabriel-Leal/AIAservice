@@ -43,6 +43,7 @@ class TicketWorkflowService
         private readonly ActivityLogService $activityLogService,
         private readonly TicketSlaService $ticketSlaService,
         private readonly TicketAutomationEngine $ticketAutomationEngine,
+        private readonly TicketBoardOrderService $ticketBoardOrderService,
     ) {}
 
     public function createTicket(User $actor, array $attributes, array $dynamicValues = [], array $attachments = [], array $context = []): Ticket
@@ -109,6 +110,16 @@ class TicketWorkflowService
 
         $ticket->last_activity_at = now();
         $ticket->save();
+
+        if ($this->sameGroupId($original['ticket_group_id'] ?? null, $ticket->ticket_group_id) === false) {
+            $this->ticketBoardOrderService->moveTicket(
+                $ticket,
+                $original['ticket_group_id'] ?? null,
+                $ticket->ticket_group_id,
+                null,
+                'end',
+            );
+        }
 
         if (array_key_exists('priority', $attributes) && ! $ticket->first_responded_at && ! $ticket->resolved_at) {
             $ticket = $this->ticketSlaService->applyPolicy($ticket);
@@ -442,6 +453,7 @@ class TicketWorkflowService
     public function closeByRequester(User $actor, Ticket $ticket): Ticket
     {
         Gate::forUser($actor)->authorize('closeOwn', $ticket);
+        $sourceGroupId = $ticket->ticket_group_id;
 
         $closedGroup = $this->targetGroup($ticket, true);
         $closedStatus = $closedGroup
@@ -475,6 +487,16 @@ class TicketWorkflowService
             return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
         });
 
+        if ($this->sameGroupId($sourceGroupId, $ticket->ticket_group_id) === false) {
+            $this->ticketBoardOrderService->moveTicket(
+                $ticket,
+                $sourceGroupId,
+                $ticket->ticket_group_id,
+                null,
+                'end',
+            );
+        }
+
         $this->ticketSlaService->evaluateTicket($ticket);
         $this->notifyUsers(
             $ticket,
@@ -499,6 +521,7 @@ class TicketWorkflowService
     public function reopenByRequester(User $actor, Ticket $ticket): Ticket
     {
         Gate::forUser($actor)->authorize('reopenOwn', $ticket);
+        $sourceGroupId = $ticket->ticket_group_id;
 
         $openGroup = $this->targetGroup($ticket, false);
         $openStatus = $openGroup
@@ -529,6 +552,16 @@ class TicketWorkflowService
 
             return $ticket->fresh(['group', 'status', 'requester', 'assignee']);
         });
+
+        if ($this->sameGroupId($sourceGroupId, $ticket->ticket_group_id) === false) {
+            $this->ticketBoardOrderService->moveTicket(
+                $ticket,
+                $sourceGroupId,
+                $ticket->ticket_group_id,
+                null,
+                'end',
+            );
+        }
 
         $this->ticketSlaService->evaluateTicket($ticket);
         $this->notifyUsers(
@@ -936,6 +969,11 @@ class TicketWorkflowService
                 fn (Builder $query) => $query->orderBy('sort_order')->orderBy('id'),
             )
             ->first();
+    }
+
+    private function sameGroupId(?int $left, ?int $right): bool
+    {
+        return $left === $right;
     }
 
     private function createSystemMessage(Ticket $ticket, string $message): TicketMessage

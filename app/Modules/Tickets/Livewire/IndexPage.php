@@ -13,6 +13,7 @@ use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Services\SectorProvisioningService;
+use App\Modules\Tickets\Services\TicketBoardOrderService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketIndexQuery;
 use Illuminate\Database\Eloquent\Builder;
@@ -326,9 +327,84 @@ class IndexPage extends Component
             abort_unless($board->groups->pluck('id')->contains($normalizedGroupId), 404);
         }
 
+        if ($this->sameGroupId($ticket->ticket_group_id, $normalizedGroupId)) {
+            return;
+        }
+
         $workflowService->updateTicket(auth()->user(), $ticket, [
             'ticket_group_id' => $normalizedGroupId,
+        ], [
+            'source' => 'board_select',
         ]);
+    }
+
+    public function moveTicketByDrag(
+        TicketWorkflowService $workflowService,
+        TicketBoardOrderService $ticketBoardOrderService,
+        int $ticketId,
+        mixed $groupId,
+        mixed $beforeTicketId = null,
+        string $fallbackPlacement = 'top',
+    ): void {
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $this->authorize('update', $ticket);
+
+        $board = $this->board();
+        $normalizedGroupId = $this->normalizeGroupId($groupId);
+
+        abort_unless($board && $ticket->ticket_board_id === $board->id, 404);
+
+        if ($normalizedGroupId !== null) {
+            abort_unless($board->groups->pluck('id')->contains($normalizedGroupId), 404);
+        }
+
+        $normalizedBeforeTicketId = $this->normalizeNullableId($beforeTicketId);
+        $fallbackPlacement = $this->normalizeDragFallbackPlacement($fallbackPlacement);
+
+        if ($normalizedBeforeTicketId !== null) {
+            $beforeTicket = Ticket::query()
+                ->whereKey($normalizedBeforeTicketId)
+                ->where('ticket_board_id', $board->id)
+                ->first();
+
+            if (
+                ! $beforeTicket
+                || $beforeTicket->id === $ticket->id
+                || ! $this->sameGroupId($beforeTicket->ticket_group_id, $normalizedGroupId)
+            ) {
+                $normalizedBeforeTicketId = null;
+            }
+        }
+
+        $sourceGroupId = $ticket->ticket_group_id;
+
+        if ($this->sameGroupId($sourceGroupId, $normalizedGroupId)) {
+            $ticketBoardOrderService->moveTicket(
+                $ticket,
+                $sourceGroupId,
+                $normalizedGroupId,
+                $normalizedBeforeTicketId,
+                $fallbackPlacement,
+            );
+
+            return;
+        }
+
+        $ticket = $workflowService->updateTicket(auth()->user(), $ticket, [
+            'ticket_group_id' => $normalizedGroupId,
+        ], [
+            'source' => 'board_drag',
+        ]);
+
+        if ($normalizedBeforeTicketId !== null || $fallbackPlacement !== 'end') {
+            $ticketBoardOrderService->moveTicket(
+                $ticket,
+                $sourceGroupId,
+                $normalizedGroupId,
+                $normalizedBeforeTicketId,
+                $fallbackPlacement,
+            );
+        }
     }
 
     public function updateDynamicField(TicketWorkflowService $workflowService, int $ticketId, int $fieldId, mixed $value): void
@@ -981,8 +1057,7 @@ class IndexPage extends Component
                 'fieldValues.field.options',
             ])
             ->reorder()
-            ->orderBy('created_at')
-            ->orderBy('id');
+            ->orderedForBoardDisplay();
     }
 
     private function columnLimitKey(?int $groupId): string
@@ -1145,6 +1220,18 @@ class IndexPage extends Component
         }
 
         return null;
+    }
+
+    private function normalizeDragFallbackPlacement(string $fallbackPlacement): string
+    {
+        return in_array($fallbackPlacement, ['top', 'end'], true)
+            ? $fallbackPlacement
+            : 'top';
+    }
+
+    private function sameGroupId(?int $left, ?int $right): bool
+    {
+        return $left === $right;
     }
 
     private function manualFields(TicketBoard $board): Collection

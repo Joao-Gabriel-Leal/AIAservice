@@ -180,12 +180,31 @@ class OperationalImprovementsTest extends TestCase
             $this->ticketFor($board, $group, $status, $requester, 'Carga '.str_pad((string) $number, 2, '0', STR_PAD_LEFT));
         }
 
+        $firstVisibleTicket = Ticket::query()
+            ->where('ticket_board_id', $board->id)
+            ->where('title', 'Carga 01')
+            ->firstOrFail();
+        $lastTicket = Ticket::query()
+            ->where('ticket_board_id', $board->id)
+            ->where('title', 'Carga 30')
+            ->firstOrFail();
+
+        Livewire::actingAs($operator)
+            ->test(IndexPage::class, ['board' => $board])
+            ->call('setViewMode', 'kanban')
+            ->call('moveTicketByDrag', $lastTicket->id, $group->id, $firstVisibleTicket->id, 'top')
+            ->assertSeeInOrder(['Carga 30', 'Carga 01', 'Carga 24'])
+            ->assertDontSee('Carga 25')
+            ->call('loadMoreColumn', (string) $group->id)
+            ->assertSeeInOrder(['Carga 30', 'Carga 01', 'Carga 24', 'Carga 25', 'Carga 29']);
+
         $this->actingAs($operator)
             ->get(route('tickets.board.show', ['board' => $board, 'view' => 'kanban']))
             ->assertOk()
             ->assertSeeText('25 de 30 chamado(s)')
+            ->assertSee('Carga 30')
             ->assertSee('Carga 01')
-            ->assertDontSee('Carga 30')
+            ->assertDontSee('Carga 25')
             ->assertSeeText('Carregar mais');
     }
 

@@ -4,8 +4,6 @@
             class="ui-panel ui-board-lane"
             style="--ui-lane-color: {{ $group->color ?: '#2563eb' }}"
             wire:key="group-stages-{{ $group->id }}"
-            data-board-drop-zone="true"
-            data-board-group-id="{{ $group->id }}"
             x-bind:class="{ 'ui-kanban-column-dragover': isDragTarget({{ $group->id }}) }"
         >
             <button
@@ -69,15 +67,28 @@
                                 <th>Abrir</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
+                        <tbody class="divide-y divide-slate-100" data-board-drop-zone="true" data-board-group-id="{{ $group->id }}">
                             @forelse ($ticketsByGroup->get($group->id, collect()) as $ticket)
                                 @php
                                     $slaMeta = $this->slaMeta($ticket);
                                 @endphp
 
                                 <tr
+                                    x-cloak
+                                    x-show="isDropIndicator({{ $group->id }}, {{ $ticket->id }})"
+                                    class="ui-board-drop-row"
+                                    data-board-drop-placement="before"
+                                    data-board-drop-before-ticket-id="{{ $ticket->id }}"
+                                >
+                                    <td colspan="{{ 7 + $fields->count() }}">
+                                        <div class="ui-board-drop-indicator ui-board-drop-indicator-line"></div>
+                                    </td>
+                                </tr>
+
+                                <tr
                                     class="ui-row-interactive align-top hover:bg-slate-50"
                                     wire:key="ticket-row-stages-{{ $ticket->id }}"
+                                    data-board-ticket-id="{{ $ticket->id }}"
                                     x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, {{ $ticket->ticket_group_id ?? 'null' }})"
                                     x-bind:class="{
                                         'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
@@ -193,10 +204,32 @@
                                     </td>
                                 </tr>
                             @empty
+                                <tr
+                                    x-cloak
+                                    x-show="isDropAtEmpty({{ $group->id }})"
+                                    class="ui-board-drop-row"
+                                    data-board-drop-placement="top"
+                                >
+                                    <td colspan="{{ 7 + $fields->count() }}">
+                                        <div class="ui-board-drop-indicator ui-board-drop-indicator-line"></div>
+                                    </td>
+                                </tr>
+
                                 <tr>
                                     <td colspan="{{ 7 + $fields->count() }}" class="px-4 py-8 text-center text-slate-500">Nenhum chamado neste grupo com os filtros atuais.</td>
                                 </tr>
                             @endforelse
+
+                            <tr
+                                x-cloak
+                                x-show="isDropAtEnd({{ $group->id }})"
+                                class="ui-board-drop-row"
+                                data-board-drop-placement="end"
+                            >
+                                <td colspan="{{ 7 + $fields->count() }}">
+                                    <div class="ui-board-drop-indicator ui-board-drop-indicator-line"></div>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -215,8 +248,6 @@
         <section
             class="ui-panel rounded-3xl border border-slate-200 bg-white shadow-sm"
             wire:key="ungrouped-stages"
-            data-board-drop-zone="true"
-            data-board-group-id="__null__"
             x-bind:class="{ 'ui-kanban-column-dragover': isDragTarget(null) }"
         >
             <div class="border-b border-slate-200 px-6 py-4">
@@ -224,15 +255,24 @@
                 <p class="text-sm text-slate-500">{{ $ungroupedTickets->count() }} de {{ $ungroupedTicketsTotal }} chamados sem etapa definida no quadro.</p>
             </div>
 
-            <div class="divide-y divide-slate-100">
+            <div class="divide-y divide-slate-100" data-board-drop-zone="true" data-board-group-id="__null__">
                 @foreach ($ungroupedTickets as $ticket)
                     @php
                         $slaMeta = $this->slaMeta($ticket);
                     @endphp
 
                     <div
+                        x-cloak
+                        x-show="isDropIndicator(null, {{ $ticket->id }})"
+                        class="ui-board-drop-indicator ui-board-drop-indicator-line"
+                        data-board-drop-placement="before"
+                        data-board-drop-before-ticket-id="{{ $ticket->id }}"
+                    ></div>
+
+                    <div
                         class="ui-row-interactive flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50"
                         wire:key="ticket-ungrouped-stages-{{ $ticket->id }}"
+                        data-board-ticket-id="{{ $ticket->id }}"
                         x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, null)"
                         x-bind:class="{
                             'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
@@ -254,6 +294,13 @@
                         </div>
                     </div>
                 @endforeach
+
+                <div
+                    x-cloak
+                    x-show="isDropAtEnd(null)"
+                    class="ui-board-drop-indicator ui-board-drop-indicator-line"
+                    data-board-drop-placement="end"
+                ></div>
             </div>
             @if ($ungroupedTickets->count() < $ungroupedTicketsTotal)
                 <div class="border-t border-slate-100 px-6 py-4 text-center">

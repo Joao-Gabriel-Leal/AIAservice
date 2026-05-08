@@ -36,6 +36,7 @@ class Ticket extends Model
         'requester_id',
         'assignee_id',
         'priority',
+        'board_sort_order',
         'first_response_sla_minutes',
         'first_response_due_at',
         'first_responded_at',
@@ -53,6 +54,7 @@ class Ticket extends Model
     {
         return [
             'priority' => TicketPriority::class,
+            'board_sort_order' => 'integer',
             'first_response_sla_minutes' => 'integer',
             'first_response_due_at' => 'datetime',
             'first_responded_at' => 'datetime',
@@ -65,6 +67,33 @@ class Ticket extends Model
             'resolved_at' => 'datetime',
             'last_activity_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Ticket $ticket): void {
+            if ($ticket->board_sort_order !== null || ! $ticket->ticket_board_id) {
+                return;
+            }
+
+            $maxOrderQuery = static::query()->where('ticket_board_id', $ticket->ticket_board_id);
+
+            if ($ticket->ticket_group_id === null) {
+                $maxOrderQuery->whereNull('ticket_group_id');
+            } else {
+                $maxOrderQuery->where('ticket_group_id', $ticket->ticket_group_id);
+            }
+
+            $ticket->board_sort_order = ((int) $maxOrderQuery->max('board_sort_order')) + 1;
+        });
+    }
+
+    public function scopeOrderedForBoardDisplay(Builder $query): Builder
+    {
+        return $query
+            ->orderBy('board_sort_order')
+            ->orderBy('created_at')
+            ->orderBy('id');
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder

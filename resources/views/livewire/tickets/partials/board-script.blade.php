@@ -13,6 +13,8 @@
                         ticketId: null,
                         sourceGroupId: null,
                         targetGroupId: null,
+                        targetBeforeTicketId: null,
+                        targetPlacement: 'top',
                         pointerId: null,
                         startX: 0,
                         startY: 0,
@@ -119,6 +121,8 @@
                             ticketId: null,
                             sourceGroupId: null,
                             targetGroupId: null,
+                            targetBeforeTicketId: null,
+                            targetPlacement: 'top',
                             pointerId: null,
                             startX: 0,
                             startY: 0,
@@ -250,22 +254,81 @@
                         this.drag.previewEl.style.transform = `translate3d(${this.drag.currentX - this.drag.offsetX}px, ${this.drag.currentY - this.drag.offsetY}px, 0) rotate(1.5deg) scale(1.01)`;
                     },
 
-                    resolveDropGroupFromPoint(x, y) {
-                        if (! Number.isFinite(x) || ! Number.isFinite(y)) {
-                            return undefined;
-                        }
-
-                        const columnEl = document.elementFromPoint(x, y)?.closest('[data-board-drop-zone], [data-kanban-column]');
-
-                        if (! columnEl) {
-                            return undefined;
-                        }
-
-                        const rawGroupId = columnEl.dataset.boardGroupId ?? columnEl.dataset.kanbanGroupId;
+                    resolveDropGroup(dropZone) {
+                        const rawGroupId = dropZone?.dataset.boardGroupId;
 
                         return rawGroupId === '__null__'
                             ? null
                             : this.normalizeGroupValue(rawGroupId);
+                    },
+
+                    resolveDropTarget(x, y) {
+                        if (! Number.isFinite(x) || ! Number.isFinite(y)) {
+                            return undefined;
+                        }
+
+                        const element = document.elementFromPoint(x, y);
+                        const dropZone = element?.closest('[data-board-drop-zone]');
+
+                        if (! dropZone) {
+                            return undefined;
+                        }
+
+                        const groupId = this.resolveDropGroup(dropZone);
+                        const placeholder = element?.closest('[data-board-drop-placement]');
+
+                        if (placeholder && dropZone.contains(placeholder)) {
+                            return {
+                                groupId,
+                                beforeTicketId: this.normalizeGroupValue(placeholder.dataset.boardDropBeforeTicketId),
+                                placement: placeholder.dataset.boardDropPlacement ?? 'top',
+                            };
+                        }
+
+                        const ticketElements = Array.from(dropZone.querySelectorAll('[data-board-ticket-id]'))
+                            .filter((ticketEl) => this.normalizeGroupValue(ticketEl.dataset.boardTicketId) !== this.drag.ticketId);
+
+                        const hoveredTicket = element?.closest('[data-board-ticket-id]');
+                        const hoveredTicketId = this.normalizeGroupValue(hoveredTicket?.dataset.boardTicketId);
+
+                        if (hoveredTicket && dropZone.contains(hoveredTicket) && hoveredTicketId !== this.drag.ticketId) {
+                            const hoveredIndex = ticketElements.findIndex((ticketEl) => {
+                                return this.normalizeGroupValue(ticketEl.dataset.boardTicketId) === hoveredTicketId;
+                            });
+
+                            if (hoveredIndex !== -1) {
+                                const hoveredRect = hoveredTicket.getBoundingClientRect();
+                                const isUpperHalf = y <= hoveredRect.top + (hoveredRect.height / 2);
+
+                                if (isUpperHalf) {
+                                    return {
+                                        groupId,
+                                        beforeTicketId: hoveredTicketId,
+                                        placement: 'before',
+                                    };
+                                }
+
+                                const nextTicketEl = ticketElements[hoveredIndex + 1] ?? null;
+
+                                return {
+                                    groupId,
+                                    beforeTicketId: nextTicketEl
+                                        ? this.normalizeGroupValue(nextTicketEl.dataset.boardTicketId)
+                                        : null,
+                                    placement: nextTicketEl ? 'before' : 'end',
+                                };
+                            }
+                        }
+
+                        const firstTicketEl = ticketElements[0] ?? null;
+
+                        return {
+                            groupId,
+                            beforeTicketId: firstTicketEl
+                                ? this.normalizeGroupValue(firstTicketEl.dataset.boardTicketId)
+                                : null,
+                            placement: firstTicketEl ? 'top' : 'top',
+                        };
                     },
 
                     refreshDragTarget() {
@@ -273,7 +336,19 @@
                             return;
                         }
 
-                        this.drag.targetGroupId = this.resolveDropGroupFromPoint(this.drag.currentX, this.drag.currentY);
+                        const target = this.resolveDropTarget(this.drag.currentX, this.drag.currentY);
+
+                        if (typeof target === 'undefined') {
+                            this.drag.targetGroupId = undefined;
+                            this.drag.targetBeforeTicketId = null;
+                            this.drag.targetPlacement = 'top';
+
+                            return;
+                        }
+
+                        this.drag.targetGroupId = target.groupId;
+                        this.drag.targetBeforeTicketId = target.beforeTicketId ?? null;
+                        this.drag.targetPlacement = target.placement ?? 'top';
                     },
 
                     isDragTarget(groupId) {
@@ -282,6 +357,30 @@
                         }
 
                         return this.areSameGroupId(this.normalizeGroupValue(groupId), this.drag.targetGroupId);
+                    },
+
+                    isDropIndicator(groupId, beforeTicketId) {
+                        if (! this.isDragTarget(groupId)) {
+                            return false;
+                        }
+
+                        return this.drag.targetBeforeTicketId === beforeTicketId;
+                    },
+
+                    isDropAtEnd(groupId) {
+                        if (! this.isDragTarget(groupId)) {
+                            return false;
+                        }
+
+                        return this.drag.targetBeforeTicketId === null && this.drag.targetPlacement === 'end';
+                    },
+
+                    isDropAtEmpty(groupId) {
+                        if (! this.isDragTarget(groupId)) {
+                            return false;
+                        }
+
+                        return this.drag.targetBeforeTicketId === null && this.drag.targetPlacement === 'top';
                     },
 
                     isDraggingTicket(ticketId) {
@@ -324,16 +423,20 @@
                         }
 
                         const ticketId = this.drag.ticketId;
-                        const targetGroupId = this.resolveDropGroupFromPoint(this.drag.currentX, this.drag.currentY);
-                        const sourceGroupId = this.drag.sourceGroupId;
+                        const target = this.resolveDropTarget(this.drag.currentX, this.drag.currentY);
 
                         this.cancelPointerDrag();
 
-                        if (ticketId === null || typeof targetGroupId === 'undefined' || this.areSameGroupId(targetGroupId, sourceGroupId)) {
+                        if (ticketId === null || typeof target === 'undefined') {
                             return;
                         }
 
-                        this.$wire.moveTicketToGroup(ticketId, targetGroupId);
+                        this.$wire.moveTicketByDrag(
+                            ticketId,
+                            target.groupId,
+                            target.beforeTicketId,
+                            target.placement === 'end' ? 'end' : 'top',
+                        );
                     },
 
                     cancelPointerDrag() {
