@@ -55,7 +55,20 @@
     <section class="ticket-cockpit-hero">
         <div class="ticket-cockpit-hero-main">
             <div class="ticket-cockpit-reference-row">
-                <span class="ticket-cockpit-reference">{{ $ticket->publicReference() }}</span>
+                <button
+                    type="button"
+                    class="ticket-cockpit-reference"
+                    data-copy-url="{{ route('tickets.show', $ticket) }}"
+                    aria-label="Copiar link do chamado {{ $ticket->publicReference() }}"
+                    title="Copiar link do chamado"
+                    x-data="{ copied: false, timeoutId: null, async copy() { if (! navigator.clipboard) { return; } await navigator.clipboard.writeText(this.$el.dataset.copyUrl); this.copied = true; window.clearTimeout(this.timeoutId); this.timeoutId = window.setTimeout(() => this.copied = false, 1600); } }"
+                    @click="copy()"
+                >
+                    <span>{{ $ticket->publicReference() }}</span>
+                    <flux:icon.document-duplicate x-show="!copied" variant="outline" class="ticket-cockpit-reference-icon" />
+                    <flux:icon.check x-cloak x-show="copied" variant="solid" class="ticket-cockpit-reference-icon ticket-cockpit-reference-icon-success" />
+                    <small x-cloak x-show="copied">Link copiado</small>
+                </button>
                 <span class="ticket-cockpit-status" style="--ticket-status-color: {{ $statusColor }}">
                     <span></span>
                     {{ $statusLabel }}
@@ -90,15 +103,6 @@
         </div>
 
         <aside class="ticket-cockpit-hero-side">
-            <div
-                x-data="{ copied: false, timeoutId: null, copy() { if (! navigator.clipboard) { return; } navigator.clipboard.writeText(@js($ticket->publicReference())); this.copied = true; window.clearTimeout(this.timeoutId); this.timeoutId = window.setTimeout(() => this.copied = false, 1600); } }"
-                class="ticket-cockpit-copy-card"
-            >
-                <span>ID interno {{ $ticket->technicalReference() }}</span>
-                <button type="button" @click="copy()">Copiar codigo</button>
-                <small x-cloak x-show="copied">Copiado</small>
-            </div>
-
             <div class="ticket-cockpit-score-grid">
                 <div>
                     <strong>{{ $messageCount }}</strong>

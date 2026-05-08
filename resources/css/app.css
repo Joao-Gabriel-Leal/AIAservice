@@ -1869,8 +1869,43 @@
     }
 
     .ticket-cockpit-reference {
+        border: 0;
         color: #1d4ed8;
         background: #dbeafe;
+        cursor: pointer;
+        transition:
+            background-color 0.18s ease,
+            color 0.18s ease,
+            box-shadow 0.18s ease,
+            transform 0.18s ease;
+    }
+
+    .ticket-cockpit-reference:hover {
+        color: #1e40af;
+        background: #bfdbfe;
+        transform: translateY(-1px);
+    }
+
+    .ticket-cockpit-reference:focus-visible {
+        outline: 3px solid rgba(59, 130, 246, 0.34);
+        outline-offset: 2px;
+    }
+
+    .ticket-cockpit-reference-icon {
+        width: 0.82rem;
+        height: 0.82rem;
+        flex: 0 0 auto;
+    }
+
+    .ticket-cockpit-reference-icon-success {
+        color: #059669;
+    }
+
+    .ticket-cockpit-reference small {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: none;
     }
 
     .ticket-cockpit-status {
@@ -1923,7 +1958,6 @@
     }
 
     .ticket-cockpit-meta-grid div,
-    .ticket-cockpit-copy-card,
     .ticket-cockpit-sla-card {
         border: 1px solid rgba(148, 163, 184, 0.24);
         border-radius: 1.2rem;
@@ -1937,7 +1971,6 @@
     }
 
     .ticket-cockpit-meta-grid span,
-    .ticket-cockpit-copy-card span,
     .ticket-cockpit-sla-card span {
         display: block;
         font-size: 0.68rem;
@@ -1965,22 +1998,10 @@
         min-width: 0;
     }
 
-    .ticket-cockpit-copy-card,
     .ticket-cockpit-sla-card {
         padding: 0.95rem;
     }
 
-    .ticket-cockpit-copy-card button {
-        margin-top: 0.7rem;
-        border-radius: 0.9rem;
-        padding: 0.55rem 0.8rem;
-        background: #172746;
-        font-size: 0.78rem;
-        font-weight: 800;
-        color: white;
-    }
-
-    .ticket-cockpit-copy-card small,
     .ticket-cockpit-sla-card small {
         display: block;
         margin-top: 0.45rem;

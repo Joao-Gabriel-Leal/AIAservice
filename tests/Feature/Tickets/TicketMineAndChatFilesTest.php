@@ -158,6 +158,32 @@ class TicketMineAndChatFilesTest extends TestCase
             ->assertDontSee($warning->title);
     }
 
+    public function test_ticket_header_uses_public_reference_as_copy_link_target(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext('TI');
+
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $ticket = $this->ticketFor($requester, [
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'title' => 'Identificador copiavel',
+        ]);
+
+        Livewire::actingAs($requester)
+            ->test(ShowPage::class, ['ticket' => $ticket])
+            ->assertSee($ticket->publicReference())
+            ->assertSee(route('tickets.show', $ticket), false)
+            ->assertSee('Copiar link do chamado', false)
+            ->assertDontSee('ID interno')
+            ->assertDontSee('Copiar codigo')
+            ->assertDontSee($ticket->technicalReference());
+    }
+
     public function test_requester_can_close_and_reopen_own_ticket(): void
     {
         Notification::fake();
