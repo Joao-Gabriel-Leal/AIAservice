@@ -34,7 +34,7 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('settings/appearance', fn (): RedirectResponse => redirect()->to(route('profile.edit').'#preferencias'))
+    Route::get('settings/appearance', fn (): RedirectResponse => redirect()->route('profile.edit'))
         ->name('appearance.edit');
 
     Route::get('settings/security', function (): RedirectResponse {

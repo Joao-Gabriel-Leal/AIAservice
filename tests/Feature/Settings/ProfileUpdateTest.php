@@ -22,21 +22,23 @@ class ProfileUpdateTest extends TestCase
         $this->get(route('profile.edit'))
             ->assertOk()
             ->assertSee('Foto de perfil')
-            ->assertSee('Informacoes pessoais')
             ->assertSee('Status do trabalho')
-            ->assertSee('Preferencias')
+            ->assertSee('Aparencia e notificacoes')
             ->assertSee('Seguranca da conta')
             ->assertSee('Historico da sessao')
             ->assertSee('Patrimonios vinculados')
+            ->assertDontSee('Informacoes pessoais')
+            ->assertDontSee('wire:submit="savePersonalInformation"', false)
+            ->assertDontSee('Preferencias')
             ->assertDontSee('Laravel Starter Kit');
     }
 
-    public function test_appearance_page_redirects_to_profile_preferences(): void
+    public function test_appearance_page_redirects_to_profile(): void
     {
         $this->actingAs(User::factory()->create());
 
         $this->get(route('appearance.edit'))
-            ->assertRedirect(route('profile.edit').'#preferencias');
+            ->assertRedirect(route('profile.edit'));
     }
 
     public function test_user_can_update_theme_preference_from_profile_page(): void
@@ -56,7 +58,7 @@ class ProfileUpdateTest extends TestCase
         $this->assertSame('dark', $user->refresh()->theme_preference);
     }
 
-    public function test_user_can_update_safe_personal_information(): void
+    public function test_user_can_update_safe_personal_information_inline(): void
     {
         $user = User::factory()->create([
             'name' => 'Nome Antigo',
@@ -67,13 +69,19 @@ class ProfileUpdateTest extends TestCase
 
         $response = Livewire::test('pages::settings.profile')
             ->set('name', 'Nome Atualizado')
+            ->call('saveInlineProfileField', 'name')
             ->set('job_title', 'Analista de suporte')
+            ->call('saveInlineProfileField', 'job_title')
             ->set('phone', '11 3000-0000')
+            ->call('saveInlineProfileField', 'phone')
             ->set('mobile_phone', '11 99999-0000')
+            ->call('saveInlineProfileField', 'mobile_phone')
             ->set('location', 'Sao Paulo')
+            ->call('saveInlineProfileField', 'location')
             ->set('birth_date', '1995-05-10')
+            ->call('saveInlineProfileField', 'birth_date')
             ->set('work_anniversary', '2024-01-15')
-            ->call('savePersonalInformation');
+            ->call('saveInlineProfileField', 'work_anniversary');
 
         $response->assertHasNoErrors();
 

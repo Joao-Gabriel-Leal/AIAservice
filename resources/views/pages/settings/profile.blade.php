@@ -37,6 +37,7 @@ new #[Title('Meu perfil')] class extends Component {
     public bool $canManageTwoFactor = false;
     public bool $twoFactorEnabled = false;
     public bool $requiresTwoFactorConfirmation = false;
+    public ?string $inlineSavedField = null;
     public $photo = null;
 
     public function mount(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
@@ -73,6 +74,47 @@ new #[Title('Meu perfil')] class extends Component {
 
         $this->twoFactorEnabled = $user->hasEnabledTwoFactorAuthentication();
         $this->requiresTwoFactorConfirmation = Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm');
+    }
+
+    public function saveInlineProfileField(string $field): void
+    {
+        $rules = $this->inlineProfileRules();
+
+        abort_unless(array_key_exists($field, $rules), 404);
+
+        if (in_array($field, ['name', 'job_title', 'phone', 'mobile_phone', 'location'], true)) {
+            $this->{$field} = trim((string) $this->{$field});
+        }
+
+        $validated = $this->validate(
+            [$field => $rules[$field]],
+            [],
+            $this->inlineProfileAttributes(),
+        );
+
+        $value = $validated[$field] ?? null;
+        $payloadValue = match ($field) {
+            'job_title', 'phone', 'mobile_phone', 'location' => $this->nullableString($value),
+            'birth_date', 'work_anniversary' => filled($value) ? $value : null,
+            default => $value,
+        };
+
+        $user = Auth::user();
+        $user->forceFill([$field => $payloadValue])->save();
+        $user = $user->fresh();
+
+        Auth::setUser($user);
+
+        $this->{$field} = $this->profileFieldValueFromUser($user, $field);
+        $this->inlineSavedField = $field;
+    }
+
+    public function resetInlineProfileField(string $field): void
+    {
+        abort_unless(array_key_exists($field, $this->inlineProfileRules()), 404);
+
+        $this->{$field} = $this->profileFieldValueFromUser(Auth::user()->fresh(), $field);
+        $this->resetErrorBag($field);
     }
 
     public function savePersonalInformation(): void
@@ -250,6 +292,40 @@ new #[Title('Meu perfil')] class extends Component {
         return $value === '' ? null : $value;
     }
 
+    private function inlineProfileRules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:120'],
+            'job_title' => ['nullable', 'string', 'max:120'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'mobile_phone' => ['nullable', 'string', 'max:40'],
+            'location' => ['nullable', 'string', 'max:120'],
+            'birth_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'work_anniversary' => ['nullable', 'date', 'before_or_equal:today'],
+        ];
+    }
+
+    private function inlineProfileAttributes(): array
+    {
+        return [
+            'name' => 'nome',
+            'job_title' => 'cargo',
+            'phone' => 'telefone',
+            'mobile_phone' => 'telefone celular',
+            'location' => 'local',
+            'birth_date' => 'data de nascimento',
+            'work_anniversary' => 'aniversario de trabalho',
+        ];
+    }
+
+    private function profileFieldValueFromUser($user, string $field): string
+    {
+        return match ($field) {
+            'birth_date', 'work_anniversary' => $user->{$field}?->format('Y-m-d') ?? '',
+            default => (string) ($user->{$field} ?? ''),
+        };
+    }
+
     private function summarizeUserAgent(?string $userAgent): string
     {
         if (! filled($userAgent)) {
@@ -277,21 +353,13 @@ new #[Title('Meu perfil')] class extends Component {
     }
 }; ?>
 
-<div x-data x-on:theme-preference-changed.window="$flux.appearance = $event.detail.theme" class="mx-auto max-w-7xl">
+<div x-data x-on:theme-preference-changed.window="$flux.appearance = $event.detail.theme" class="mx-auto max-w-6xl">
     @php
         $user = auth()->user();
         $assignedAssets = $this->assignedAssets;
         $recentSessions = $this->recentSessions;
         $workStatusOptions = $this->workStatusOptions();
         $currentWorkStatus = $workStatusOptions[$work_status] ?? $workStatusOptions['office'];
-        $profileNavigation = [
-            ['label' => 'Informacoes pessoais', 'href' => '#informacoes-pessoais'],
-            ['label' => 'Status do trabalho', 'href' => '#status-do-trabalho'],
-            ['label' => 'Preferencias', 'href' => '#preferencias'],
-            ['label' => 'Seguranca', 'href' => '#seguranca'],
-            ['label' => 'Sessoes', 'href' => '#sessoes'],
-            ['label' => 'Patrimonios', 'href' => '#patrimonios'],
-        ];
     @endphp
 
     @if (session('status'))
@@ -307,25 +375,11 @@ new #[Title('Meu perfil')] class extends Component {
         </div>
     @endif
 
-    <div class="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
-        <aside class="xl:sticky xl:top-6 xl:self-start">
-            <nav class="ui-panel rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/80" aria-label="Navegacao do perfil">
-                <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Perfil</p>
-                <div class="space-y-1">
-                    @foreach ($profileNavigation as $item)
-                        <a href="{{ $item['href'] }}" class="flex items-center rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white">
-                            {{ $item['label'] }}
-                        </a>
-                    @endforeach
-                </div>
-            </nav>
-        </aside>
-
-        <div class="space-y-6">
-            <section class="ui-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="border-b border-slate-200 bg-slate-950 px-6 py-7 text-white dark:border-slate-800">
-                    <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                        <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+    <div class="space-y-6">
+        <section class="ui-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                <div class="bg-slate-950 px-6 py-7 text-white">
+                    <div class="grid gap-7 lg:grid-cols-[156px_minmax(0,1fr)_360px]">
+                        <div class="flex justify-center lg:block">
                             <div class="shrink-0">
                                 @if ($photo)
                                     <img src="{{ $photo->temporaryUrl() }}" alt="Preview da nova foto de perfil" class="size-32 rounded-full object-cover ring-4 ring-white/10">
@@ -333,34 +387,128 @@ new #[Title('Meu perfil')] class extends Component {
                                     <x-user-avatar :user="$user" size="xl" class="size-32 rounded-full text-4xl ring-4 ring-white/10" />
                                 @endif
                             </div>
+                        </div>
 
-                            <div class="min-w-0">
-                                <h2 class="max-w-2xl truncate text-3xl font-semibold">{{ $user->name }}</h2>
-                                <p class="mt-2 text-sm text-slate-300">{{ $user->job_title ?: 'Adicione um cargo' }}</p>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <span class="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white">{{ $user->global_role?->label() ?? 'Colaborador' }}</span>
-                                    <span class="rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">{{ $currentWorkStatus['label'] }}</span>
-                                </div>
+                        <div class="min-w-0">
+                            <div x-data="{ editing: false, skipSave: false }" class="group max-w-2xl">
+                                <button
+                                    type="button"
+                                    x-show="! editing"
+                                    x-on:click="editing = true; $nextTick(() => $refs.input.focus())"
+                                    class="block max-w-full truncate rounded-lg px-1 text-left text-3xl font-semibold text-white outline-none transition hover:bg-white/10 focus:bg-white/10"
+                                >
+                                    {{ $name ?: 'Adicione um nome' }}
+                                </button>
+                                <input
+                                    x-cloak
+                                    x-show="editing"
+                                    x-ref="input"
+                                    type="text"
+                                    wire:model="name"
+                                    x-on:keydown.enter.prevent="$refs.input.blur()"
+                                    x-on:keydown.escape.prevent="skipSave = true; $wire.resetInlineProfileField('name'); editing = false"
+                                    x-on:blur="if (skipSave) { skipSave = false; return; } $wire.saveInlineProfileField('name'); editing = false"
+                                    class="w-full rounded-lg border border-blue-400 bg-slate-950 px-2 py-1 text-3xl font-semibold text-white outline-none ring-2 ring-blue-500/30"
+                                    maxlength="120"
+                                >
+                                @error('name') <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div x-data="{ editing: false, skipSave: false }" class="mt-2 max-w-md">
+                                <button
+                                    type="button"
+                                    x-show="! editing"
+                                    x-on:click="editing = true; $nextTick(() => $refs.input.focus())"
+                                    class="rounded-md px-1 text-left text-sm text-slate-300 outline-none transition hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white"
+                                >
+                                    {{ $job_title ?: 'Adicione um cargo' }}
+                                </button>
+                                <input
+                                    x-cloak
+                                    x-show="editing"
+                                    x-ref="input"
+                                    type="text"
+                                    wire:model="job_title"
+                                    x-on:keydown.enter.prevent="$refs.input.blur()"
+                                    x-on:keydown.escape.prevent="skipSave = true; $wire.resetInlineProfileField('job_title'); editing = false"
+                                    x-on:blur="if (skipSave) { skipSave = false; return; } $wire.saveInlineProfileField('job_title'); editing = false"
+                                    class="w-full rounded-md border border-blue-400 bg-slate-950 px-2 py-1 text-sm text-white outline-none"
+                                    maxlength="120"
+                                    placeholder="Adicione um cargo"
+                                >
+                                @error('job_title') <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                <span class="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white">{{ $user->global_role?->label() ?? 'Colaborador' }}</span>
+                                <span class="rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">{{ $currentWorkStatus['label'] }}</span>
+                                @if ($inlineSavedField)
+                                    <span class="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-100">Salvo</span>
+                                @endif
+                            </div>
+
+                            <div class="mt-6">
+                                <p class="text-sm font-semibold text-slate-100">Status do trabalho</p>
+                                <form class="mt-3 flex flex-wrap gap-2">
+                                    @foreach ($workStatusOptions as $value => $option)
+                                        <label class="cursor-pointer">
+                                            <input type="radio" wire:model="work_status" wire:change="saveWorkStatus" value="{{ $value }}" class="peer sr-only">
+                                            <span class="inline-flex rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition peer-checked:border-blue-400 peer-checked:bg-blue-500 peer-checked:text-white hover:border-white/30">
+                                                {{ $option['label'] }}
+                                            </span>
+                                        </label>
+                                    @endforeach
+                                </form>
+                                @error('work_status') <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
                             </div>
                         </div>
 
-                        <div class="grid gap-3 text-sm sm:grid-cols-2 lg:w-[430px]">
+                        <div class="grid content-start gap-4 text-sm sm:grid-cols-2 lg:grid-cols-1">
                             <div>
                                 <p class="font-semibold text-slate-100">E-mail</p>
                                 <p class="mt-1 break-all text-slate-300">{{ $user->email }}</p>
                             </div>
-                            <div>
-                                <p class="font-semibold text-slate-100">Telefone</p>
-                                <p class="mt-1 text-slate-300">{{ $user->phone ?: 'Adicione um telefone' }}</p>
-                            </div>
-                            <div>
-                                <p class="font-semibold text-slate-100">Telefone celular</p>
-                                <p class="mt-1 text-slate-300">{{ $user->mobile_phone ?: 'Adicione um telefone celular' }}</p>
-                            </div>
-                            <div>
-                                <p class="font-semibold text-slate-100">Local</p>
-                                <p class="mt-1 text-slate-300">{{ $user->location ?: 'Adicione um local' }}</p>
-                            </div>
+                            @foreach ([
+                                ['field' => 'phone', 'label' => 'Telefone', 'placeholder' => 'Adicione um telefone', 'maxlength' => 40, 'type' => 'text'],
+                                ['field' => 'mobile_phone', 'label' => 'Telefone celular', 'placeholder' => 'Adicione um telefone celular', 'maxlength' => 40, 'type' => 'text'],
+                                ['field' => 'location', 'label' => 'Local', 'placeholder' => 'Adicione um local', 'maxlength' => 120, 'type' => 'text'],
+                                ['field' => 'birth_date', 'label' => 'Data de nascimento', 'placeholder' => 'Adicione uma data de nascimento', 'maxlength' => null, 'type' => 'date'],
+                                ['field' => 'work_anniversary', 'label' => 'Aniversario de trabalho', 'placeholder' => 'Adicione um aniversario de trabalho', 'maxlength' => null, 'type' => 'date'],
+                            ] as $inlineField)
+                                @php
+                                    $fieldName = $inlineField['field'];
+                                    $fieldDisplay = match ($fieldName) {
+                                        'birth_date' => $user->birth_date?->format('d/m/Y'),
+                                        'work_anniversary' => $user->work_anniversary?->format('d/m/Y'),
+                                        default => $$fieldName ?: null,
+                                    };
+                                @endphp
+                                <div x-data="{ editing: false, skipSave: false }">
+                                    <p class="font-semibold text-slate-100">{{ $inlineField['label'] }}</p>
+                                    <button
+                                        type="button"
+                                        x-show="! editing"
+                                        x-on:click="editing = true; $nextTick(() => $refs.input.focus())"
+                                        class="mt-1 block max-w-full truncate rounded-md px-1 text-left text-slate-300 outline-none transition hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white"
+                                    >
+                                        {{ $fieldDisplay ?: $inlineField['placeholder'] }}
+                                    </button>
+                                    <input
+                                        x-cloak
+                                        x-show="editing"
+                                        x-ref="input"
+                                        type="{{ $inlineField['type'] }}"
+                                        wire:model="{{ $fieldName }}"
+                                        x-on:keydown.enter.prevent="$refs.input.blur()"
+                                        x-on:keydown.escape.prevent="skipSave = true; $wire.resetInlineProfileField('{{ $fieldName }}'); editing = false"
+                                        x-on:blur="if (skipSave) { skipSave = false; return; } $wire.saveInlineProfileField('{{ $fieldName }}'); editing = false"
+                                        class="mt-1 w-full rounded-md border border-blue-400 bg-slate-950 px-2 py-1 text-slate-100 outline-none"
+                                        @if ($inlineField['maxlength']) maxlength="{{ $inlineField['maxlength'] }}" @endif
+                                        placeholder="{{ $inlineField['placeholder'] }}"
+                                    >
+                                    @error($fieldName) <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
+                                </div>
+                            @endforeach
                         </div>
                     </div>
                 </div>
@@ -392,110 +540,10 @@ new #[Title('Meu perfil')] class extends Component {
                 </form>
             </section>
 
-            <section id="informacoes-pessoais" class="ui-panel rounded-2xl border border-slate-200 bg-white p-6 shadow-sm scroll-mt-6 dark:border-slate-800 dark:bg-slate-900/80">
+            <section id="aparencia" class="ui-panel rounded-2xl border border-slate-200 bg-white p-6 shadow-sm scroll-mt-6 dark:border-slate-800 dark:bg-slate-900/80">
                 <div class="flex flex-col gap-2 border-b border-slate-200 pb-5 dark:border-slate-800">
-                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Informacoes pessoais</h2>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Nome, contatos e datas pessoais ficam sob seu controle. E-mail e acessos continuam administrados pela equipe.</p>
-                </div>
-
-                <form wire:submit="savePersonalInformation" class="space-y-5 pt-5">
-                    <div class="grid gap-4 lg:grid-cols-2">
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Nome de exibicao</span>
-                            <input type="text" wire:model="name" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white" maxlength="120" required>
-                            @error('name') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Cargo</span>
-                            <input type="text" wire:model="job_title" placeholder="Adicione um cargo" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white" maxlength="120">
-                            @error('job_title') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">E-mail</span>
-                            <input type="email" value="{{ $user->email }}" class="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400" readonly>
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Local</span>
-                            <input type="text" wire:model="location" placeholder="Adicione um local" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white" maxlength="120">
-                            @error('location') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Telefone</span>
-                            <input type="text" wire:model="phone" placeholder="Adicione um telefone" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white" maxlength="40">
-                            @error('phone') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Telefone celular</span>
-                            <input type="text" wire:model="mobile_phone" placeholder="Adicione um telefone celular" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white" maxlength="40">
-                            @error('mobile_phone') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Data de nascimento</span>
-                            <input type="date" wire:model="birth_date" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
-                            @error('birth_date') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-
-                        <label class="block text-sm text-slate-600 dark:text-slate-300">
-                            <span class="mb-2 block font-medium">Aniversario de trabalho</span>
-                            <input type="date" wire:model="work_anniversary" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-sky-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-white">
-                            @error('work_anniversary') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                        </label>
-                    </div>
-
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-                        <p class="text-sm text-slate-500">Dados administrados: e-mail, perfil, acessos, setor e status da conta.</p>
-                        <button type="submit" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="savePersonalInformation" class="ui-action ui-action-primary rounded-xl px-5 py-3 text-sm">
-                            Salvar informacoes
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            <section id="status-do-trabalho" class="ui-panel rounded-2xl border border-slate-200 bg-white p-6 shadow-sm scroll-mt-6 dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="flex flex-col gap-2 border-b border-slate-200 pb-5 dark:border-slate-800">
-                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Status do trabalho</h2>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Deixe todos saberem sua disponibilidade atual.</p>
-                </div>
-
-                <form wire:submit="saveWorkStatus" class="space-y-5 pt-5">
-                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        @foreach ($workStatusOptions as $value => $option)
-                            <label class="block cursor-pointer">
-                                <input type="radio" wire:model="work_status" value="{{ $value }}" class="peer sr-only">
-                                <span class="flex h-full rounded-xl border border-slate-200 bg-white px-4 py-3 transition peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:ring-2 peer-checked:ring-blue-100 dark:border-slate-800 dark:bg-slate-950 dark:peer-checked:border-blue-400 dark:peer-checked:bg-blue-950/40">
-                                    <span class="mt-1 size-4 rounded-full border border-slate-300 peer-checked:border-blue-500"></span>
-                                    <span class="ml-3">
-                                        <span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ $option['label'] }}</span>
-                                        <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">{{ $option['detail'] }}</span>
-                                    </span>
-                                </span>
-                            </label>
-                        @endforeach
-                    </div>
-
-                    @error('work_status') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
-
-                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-                        <span class="inline-flex rounded-xl border px-3 py-2 text-sm font-semibold {{ $currentWorkStatus['classes'] }}">
-                            Atual: {{ $currentWorkStatus['label'] }}
-                        </span>
-                        <button type="submit" wire:loading.attr="disabled" wire:loading.class="ui-loading" wire:target="saveWorkStatus" class="ui-action ui-action-primary rounded-xl px-5 py-3 text-sm">
-                            Salvar status
-                        </button>
-                    </div>
-                </form>
-            </section>
-
-            <section id="preferencias" class="ui-panel rounded-2xl border border-slate-200 bg-white p-6 shadow-sm scroll-mt-6 dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="flex flex-col gap-2 border-b border-slate-200 pb-5 dark:border-slate-800">
-                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Preferencias</h2>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Aparencia e atalhos pessoais ficam concentrados aqui.</p>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Aparencia e notificacoes</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Tema e resumo de notificacoes continuam dentro do seu perfil.</p>
                 </div>
 
                 <div class="grid gap-6 pt-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -746,6 +794,5 @@ new #[Title('Meu perfil')] class extends Component {
                     @endforelse
                 </div>
             </section>
-        </div>
     </div>
 </div>
