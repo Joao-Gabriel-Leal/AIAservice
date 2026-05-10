@@ -980,13 +980,16 @@
 
     .portal-sidebar-toggle {
         display: inline-flex;
-        width: 100%;
-        min-height: 2.2rem;
+        width: 1.85rem;
+        height: 1.85rem;
+        min-height: 1.85rem;
         align-items: center;
-        justify-content: flex-end;
+        justify-content: center;
+        align-self: flex-end;
         border: 1px solid rgba(139, 162, 214, 0.16);
         border-radius: 0.5rem;
-        padding: 0.5rem 0.6rem;
+        margin-bottom: 0.45rem;
+        padding: 0;
         background: rgba(255, 255, 255, 0.04);
         color: #c7d7f5;
         cursor: pointer;
@@ -1337,6 +1340,7 @@
     }
 
     html.portal-sidebar-collapsed .portal-sidebar-toggle {
+        align-self: center;
         justify-content: center;
     }
 
