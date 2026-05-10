@@ -12,32 +12,39 @@
             </x-slot:actions>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Busca e recorte" description="Filtre por sala, setor e status para localizar os ambientes ativos com rapidez.">
-            <form method="GET" action="{{ route('rooms.index') }}" class="grid gap-2 md:grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_180px_auto_auto]">
-                <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por sala ou descricao" class="ui-input w-full">
-                <select name="sector_id" class="ui-native-select w-full text-sm text-slate-700">
-                    <option value="">Setor</option>
-                    @foreach ($sectors as $sector)
-                        <option value="{{ $sector->id }}" @selected((string) ($filters['sector_id'] ?? '') === (string) $sector->id)>{{ $sector->name }}</option>
-                    @endforeach
-                </select>
-                <select name="status" class="ui-native-select w-full text-sm text-slate-700">
-                    <option value="">Status</option>
-                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativa</option>
-                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativa</option>
-                </select>
-                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                <a href="{{ route('rooms.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-            </form>
-        </x-portal.filter-bar>
+        @php($hasActiveFilters = collect([
+            $filters['search'] ?? '',
+            $filters['sector_id'] ?? '',
+            $filters['status'] ?? '',
+        ])->contains(fn ($value) => filled($value)))
+
+        <x-portal.table-search-bar
+            form-id="rooms-filter-form"
+            :action="route('rooms.index')"
+            :search-value="$filters['search'] ?? ''"
+            placeholder="Buscar por sala ou descricao"
+            :clear-href="route('rooms.index')"
+            :has-active-filters="$hasActiveFilters"
+        />
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="portal-table-head text-left text-slate-500">
                     <tr>
                         <th class="px-6 py-3 font-medium">Sala</th>
-                        <th class="px-6 py-3 font-medium">Setor</th>
-                        <th class="px-6 py-3 font-medium">Status</th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Setor" form-id="rooms-filter-form" name="sector_id" min-width="min-w-52">
+                                @foreach ($sectors as $sector)
+                                    <option value="{{ $sector->id }}" @selected((string) ($filters['sector_id'] ?? '') === (string) $sector->id)>{{ $sector->name }}</option>
+                                @endforeach
+                            </x-portal.table-column-filter>
+                        </th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Status" form-id="rooms-filter-form" name="status" min-width="min-w-36">
+                                <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativa</option>
+                                <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativa</option>
+                            </x-portal.table-column-filter>
+                        </th>
                         <th class="px-6 py-3 font-medium"></th>
                     </tr>
                 </thead>

@@ -12,27 +12,19 @@
             </x-slot:actions>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Busca rapida" description="Busque por fornecedor, produto, tipo, email ou referencia.">
-            <form method="GET" action="{{ route('licenses.index') }}" class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.8fr)_minmax(180px,0.9fr)_auto_auto]">
-                <label class="block">
-                    <span class="sr-only">Busca</span>
-                    <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por fornecedor, produto, email ou referencia" class="ui-input h-11 w-full px-3">
-                </label>
+        @php($hasActiveFilters = collect([
+            $filters['search'] ?? '',
+            $filters['sector_id'] ?? '',
+        ])->contains(fn ($value) => filled($value)))
 
-                <label class="block">
-                    <span class="sr-only">Setor</span>
-                    <select name="sector_id" class="ui-native-select h-11 w-full text-sm text-slate-700">
-                        <option value="">Todos os setores</option>
-                        @foreach ($sectors as $sectorOption)
-                            <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
-                        @endforeach
-                    </select>
-                </label>
-
-                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-            </form>
-        </x-portal.filter-bar>
+        <x-portal.table-search-bar
+            form-id="licenses-filter-form"
+            :action="route('licenses.index')"
+            :search-value="$filters['search']"
+            placeholder="Buscar por fornecedor, produto, email ou referencia"
+            :clear-href="route('licenses.index')"
+            :has-active-filters="$hasActiveFilters"
+        />
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -40,7 +32,13 @@
                     <tr>
                         <th class="px-6 py-3 font-medium">Licenca</th>
                         <th class="px-6 py-3 font-medium">Tipo</th>
-                        <th class="px-6 py-3 font-medium">Setor</th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Setor" form-id="licenses-filter-form" name="sector_id" all-label="Todos os setores" min-width="min-w-52">
+                                @foreach ($sectors as $sectorOption)
+                                    <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
+                                @endforeach
+                            </x-portal.table-column-filter>
+                        </th>
                         <th class="px-6 py-3 font-medium">Em uso</th>
                         <th class="px-6 py-3 font-medium">Disponiveis</th>
                         <th class="px-6 py-3 font-medium"></th>

@@ -12,18 +12,19 @@
             </x-slot:actions>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Busca e status" description="Refine por nome, documento, contato ou situacao operacional.">
-            <form method="GET" action="{{ route('companies.index') }}" class="grid gap-2 md:grid-cols-[minmax(260px,1.5fr)_180px_auto_auto]">
-                <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por nome, documento ou email" class="ui-input w-full">
-                <select name="status" class="ui-native-select w-full text-sm text-slate-700">
-                    <option value="">Status</option>
-                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativa</option>
-                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativa</option>
-                </select>
-                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                <a href="{{ route('companies.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-            </form>
-        </x-portal.filter-bar>
+        @php($hasActiveFilters = collect([
+            $filters['search'] ?? '',
+            $filters['status'] ?? '',
+        ])->contains(fn ($value) => filled($value)))
+
+        <x-portal.table-search-bar
+            form-id="companies-filter-form"
+            :action="route('companies.index')"
+            :search-value="$filters['search'] ?? ''"
+            placeholder="Buscar por nome, documento ou email"
+            :clear-href="route('companies.index')"
+            :has-active-filters="$hasActiveFilters"
+        />
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -32,7 +33,12 @@
                         <th class="px-6 py-3 font-medium">Nome</th>
                         <th class="px-6 py-3 font-medium">Documento</th>
                         <th class="px-6 py-3 font-medium">Contato</th>
-                        <th class="px-6 py-3 font-medium">Status</th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Status" form-id="companies-filter-form" name="status" min-width="min-w-36">
+                                <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativa</option>
+                                <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativa</option>
+                            </x-portal.table-column-filter>
+                        </th>
                         <th class="px-6 py-3 font-medium"></th>
                     </tr>
                 </thead>

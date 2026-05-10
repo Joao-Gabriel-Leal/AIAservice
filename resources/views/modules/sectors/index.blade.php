@@ -16,32 +16,39 @@
             </x-slot:actions>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Busca e estrutura" description="Filtre por nome, empresa e status antes de abrir o setor para edicao.">
-            <form method="GET" action="{{ route('sectors.index') }}" class="grid gap-2 md:grid-cols-[minmax(240px,1.4fr)_minmax(200px,1fr)_180px_auto_auto]">
-                <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Buscar por nome ou descricao" class="ui-input w-full">
-                <select name="company_id" class="ui-native-select w-full text-sm text-slate-700">
-                    <option value="">Empresa</option>
-                    @foreach ($companies as $company)
-                        <option value="{{ $company->id }}" @selected((string) ($filters['company_id'] ?? '') === (string) $company->id)>{{ $company->name }}</option>
-                    @endforeach
-                </select>
-                <select name="status" class="ui-native-select w-full text-sm text-slate-700">
-                    <option value="">Status</option>
-                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativo</option>
-                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativo</option>
-                </select>
-                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                <a href="{{ route('sectors.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-            </form>
-        </x-portal.filter-bar>
+        @php($hasActiveFilters = collect([
+            $filters['search'] ?? '',
+            $filters['company_id'] ?? '',
+            $filters['status'] ?? '',
+        ])->contains(fn ($value) => filled($value)))
+
+        <x-portal.table-search-bar
+            form-id="sectors-filter-form"
+            :action="route('sectors.index')"
+            :search-value="$filters['search'] ?? ''"
+            placeholder="Buscar por nome ou descricao"
+            :clear-href="route('sectors.index')"
+            :has-active-filters="$hasActiveFilters"
+        />
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="portal-table-head text-left text-slate-500">
                     <tr>
                         <th class="px-6 py-3 font-medium">Setor</th>
-                        <th class="px-6 py-3 font-medium">Empresa</th>
-                        <th class="px-6 py-3 font-medium">Status</th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Empresa" form-id="sectors-filter-form" name="company_id" min-width="min-w-52">
+                                @foreach ($companies as $company)
+                                    <option value="{{ $company->id }}" @selected((string) ($filters['company_id'] ?? '') === (string) $company->id)>{{ $company->name }}</option>
+                                @endforeach
+                            </x-portal.table-column-filter>
+                        </th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Status" form-id="sectors-filter-form" name="status" min-width="min-w-36">
+                                <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativo</option>
+                                <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativo</option>
+                            </x-portal.table-column-filter>
+                        </th>
                         <th class="px-6 py-3 font-medium"></th>
                     </tr>
                 </thead>

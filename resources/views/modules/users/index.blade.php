@@ -91,25 +91,15 @@
             $filters['sector_id'] ?? null,
         ])->contains(fn ($value) => filled($value)))
 
-        <div class="sticky top-0 z-20 -mx-1 bg-slate-50/95 px-1 py-2 backdrop-blur">
-            <form id="users-filter-form" method="GET" action="{{ route('users.index') }}" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <label for="users-search" class="sr-only">Buscar usuarios</label>
-                <input
-                    id="users-search"
-                    type="text"
-                    name="search"
-                    value="{{ $filters['search'] ?? '' }}"
-                    placeholder="Buscar por nome ou email"
-                    class="ui-input min-h-11 w-full sm:max-w-xl"
-                >
-                <div class="flex shrink-0 gap-2">
-                    <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Buscar</button>
-                    @if ($hasActiveFilters)
-                        <a href="{{ route('users.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-                    @endif
-                </div>
-            </form>
-        </div>
+        <x-portal.table-search-bar
+            form-id="users-filter-form"
+            input-id="users-search"
+            :action="route('users.index')"
+            :search-value="$filters['search'] ?? ''"
+            placeholder="Buscar por nome ou email"
+            :clear-href="route('users.index')"
+            :has-active-filters="$hasActiveFilters"
+        />
 
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -117,51 +107,24 @@
                     <tr>
                         <th class="px-6 py-3 font-medium">Usuario</th>
                         <th class="px-6 py-3 font-medium">
-                            <div class="flex min-w-40 flex-col gap-2">
-                                <span>Perfil global</span>
-                                <select
-                                    form="users-filter-form"
-                                    name="global_role"
-                                    class="ui-native-select min-h-10 w-full text-xs text-slate-700"
-                                    onchange="this.form?.requestSubmit ? this.form.requestSubmit() : this.form.submit()"
-                                >
-                                    <option value="">Todos</option>
-                                    @foreach ($globalRoles as $roleValue => $roleLabel)
-                                        <option value="{{ $roleValue }}" @selected(($filters['global_role'] ?? '') === $roleValue)>{{ $roleLabel }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
+                            <x-portal.table-column-filter label="Perfil global" form-id="users-filter-form" name="global_role">
+                                @foreach ($globalRoles as $roleValue => $roleLabel)
+                                    <option value="{{ $roleValue }}" @selected(($filters['global_role'] ?? '') === $roleValue)>{{ $roleLabel }}</option>
+                                @endforeach
+                            </x-portal.table-column-filter>
                         </th>
                         <th class="px-6 py-3 font-medium">
-                            <div class="flex min-w-56 flex-col gap-2">
-                                <span>Acessos por setor</span>
-                                <select
-                                    form="users-filter-form"
-                                    name="sector_id"
-                                    class="ui-native-select min-h-10 w-full text-xs text-slate-700"
-                                    onchange="this.form?.requestSubmit ? this.form.requestSubmit() : this.form.submit()"
-                                >
-                                    <option value="">Todos</option>
-                                    @foreach ($sectors as $sector)
-                                        <option value="{{ $sector->id }}" @selected((string) ($filters['sector_id'] ?? '') === (string) $sector->id)>{{ $sector->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
+                            <x-portal.table-column-filter label="Acessos por setor" form-id="users-filter-form" name="sector_id" min-width="min-w-56">
+                                @foreach ($sectors as $sector)
+                                    <option value="{{ $sector->id }}" @selected((string) ($filters['sector_id'] ?? '') === (string) $sector->id)>{{ $sector->name }}</option>
+                                @endforeach
+                            </x-portal.table-column-filter>
                         </th>
                         <th class="px-6 py-3 font-medium">
-                            <div class="flex min-w-36 flex-col gap-2">
-                                <span>Status</span>
-                                <select
-                                    form="users-filter-form"
-                                    name="status"
-                                    class="ui-native-select min-h-10 w-full text-xs text-slate-700"
-                                    onchange="this.form?.requestSubmit ? this.form.requestSubmit() : this.form.submit()"
-                                >
-                                    <option value="">Todos</option>
-                                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativo</option>
-                                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativo</option>
-                                </select>
-                            </div>
+                            <x-portal.table-column-filter label="Status" form-id="users-filter-form" name="status" min-width="min-w-36">
+                                <option value="active" @selected(($filters['status'] ?? '') === 'active')>Ativo</option>
+                                <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inativo</option>
+                            </x-portal.table-column-filter>
                         </th>
                         <th class="px-6 py-3 font-medium"></th>
                     </tr>

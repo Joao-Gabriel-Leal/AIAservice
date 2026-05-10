@@ -12,67 +12,14 @@
             </x-slot:actions>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Filtros operacionais" description="Refine por codigo, status, saneamento, local ou responsavel sem perder a visao do parque.">
-            <form method="GET" action="{{ route('assets.index') }}" class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.8fr)_repeat(5,minmax(110px,0.56fr))_auto_auto]" data-asset-filter-form>
-                <label class="block">
-                    <span class="sr-only">Busca</span>
-                    <input type="text" name="search" value="{{ $filters['search'] }}" placeholder="Buscar por codigo, nome ou serial" class="ui-input h-11 w-full px-3">
-                </label>
-
-                <label class="block">
-                    <span class="sr-only">Status</span>
-                    <select name="status" class="ui-native-select h-11 w-full text-sm text-slate-700">
-                        <option value="">Status</option>
-                        @foreach ($statuses as $statusOption)
-                            <option value="{{ $statusOption->value }}" @selected($filters['status'] === $statusOption->value)>{{ $statusOption->label() }}</option>
-                        @endforeach
-                    </select>
-                </label>
-
-                <label class="block">
-                    <span class="sr-only">Saneamento</span>
-                    <select name="allocation_status" class="ui-native-select h-11 w-full text-sm text-slate-700">
-                        <option value="">Saneamento</option>
-                        @foreach ($allocationStatuses as $allocationStatus)
-                            <option value="{{ $allocationStatus->value }}" @selected($filters['allocation_status'] === $allocationStatus->value)>{{ $allocationStatus->label() }}</option>
-                        @endforeach
-                    </select>
-                </label>
-
-                <label class="block">
-                    <span class="sr-only">Setor</span>
-                    <select name="sector_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-sector>
-                        <option value="">Setor</option>
-                        @foreach ($sectors as $sectorOption)
-                            <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
-                        @endforeach
-                    </select>
-                </label>
-
-                <label class="block">
-                    <span class="sr-only">Sala</span>
-                    <select name="room_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-room>
-                        <option value="">Sala</option>
-                        @foreach ($rooms as $roomOption)
-                            <option value="{{ $roomOption->id }}" @selected((string) $filters['room_id'] === (string) $roomOption->id) data-sector-id="{{ $roomOption->sector_id }}">{{ $roomOption->name }}</option>
-                        @endforeach
-                    </select>
-                </label>
-
-                <label class="block">
-                    <span class="sr-only">Colaborador</span>
-                    <select name="user_id" class="ui-native-select h-11 w-full text-sm text-slate-700" data-filter-user>
-                        <option value="">Colaborador</option>
-                        @foreach ($collaborators as $collaboratorOption)
-                            <option value="{{ $collaboratorOption->id }}" @selected((string) $filters['user_id'] === (string) $collaboratorOption->id) data-sector-ids="{{ $collaboratorOption->sectorAccesses->pluck('sector_id')->implode(',') }}">{{ $collaboratorOption->name }}</option>
-                        @endforeach
-                    </select>
-                </label>
-
-                <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Filtrar</button>
-                <a href="{{ route('assets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Limpar</a>
-            </form>
-        </x-portal.filter-bar>
+        @php($hasActiveFilters = collect([
+            $filters['search'] ?? '',
+            $filters['status'] ?? '',
+            $filters['allocation_status'] ?? '',
+            $filters['sector_id'] ?? '',
+            $filters['room_id'] ?? '',
+            $filters['user_id'] ?? '',
+        ])->contains(fn ($value) => filled($value)))
 
         @if ($latestImportBatch)
             <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
@@ -142,14 +89,58 @@
             </section>
         @endif
 
+        <x-portal.table-search-bar
+            form-id="assets-filter-form"
+            :action="route('assets.index')"
+            :search-value="$filters['search']"
+            placeholder="Buscar por codigo, nome ou serial"
+            :clear-href="route('assets.index')"
+            :has-active-filters="$hasActiveFilters"
+            data-asset-filter-form
+        />
+
         <div class="portal-table-surface">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="portal-table-head text-left text-slate-500">
                     <tr>
                         <th class="px-6 py-3 font-medium">Patrimonio</th>
-                        <th class="px-6 py-3 font-medium">Status</th>
-                        <th class="px-6 py-3 font-medium">Local atual</th>
-                        <th class="ui-person-column-head">Colaborador</th>
+                        <th class="px-6 py-3 font-medium">
+                            <div class="grid gap-3">
+                                <x-portal.table-column-filter label="Status" form-id="assets-filter-form" name="status" min-width="min-w-44">
+                                    @foreach ($statuses as $statusOption)
+                                        <option value="{{ $statusOption->value }}" @selected($filters['status'] === $statusOption->value)>{{ $statusOption->label() }}</option>
+                                    @endforeach
+                                </x-portal.table-column-filter>
+
+                                <x-portal.table-column-filter label="Saneamento" form-id="assets-filter-form" name="allocation_status" min-width="min-w-44">
+                                    @foreach ($allocationStatuses as $allocationStatus)
+                                        <option value="{{ $allocationStatus->value }}" @selected($filters['allocation_status'] === $allocationStatus->value)>{{ $allocationStatus->label() }}</option>
+                                    @endforeach
+                                </x-portal.table-column-filter>
+                            </div>
+                        </th>
+                        <th class="px-6 py-3 font-medium">
+                            <div class="grid gap-3">
+                                <x-portal.table-column-filter label="Setor" form-id="assets-filter-form" name="sector_id" min-width="min-w-52" :auto-submit="false" data-filter-sector>
+                                    @foreach ($sectors as $sectorOption)
+                                        <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
+                                    @endforeach
+                                </x-portal.table-column-filter>
+
+                                <x-portal.table-column-filter label="Sala" form-id="assets-filter-form" name="room_id" min-width="min-w-52" data-filter-room>
+                                    @foreach ($rooms as $roomOption)
+                                        <option value="{{ $roomOption->id }}" @selected((string) $filters['room_id'] === (string) $roomOption->id) data-sector-id="{{ $roomOption->sector_id }}">{{ $roomOption->name }}</option>
+                                    @endforeach
+                                </x-portal.table-column-filter>
+                            </div>
+                        </th>
+                        <th class="px-6 py-3 font-medium">
+                            <x-portal.table-column-filter label="Colaborador" form-id="assets-filter-form" name="user_id" min-width="min-w-52" data-filter-user>
+                                @foreach ($collaborators as $collaboratorOption)
+                                    <option value="{{ $collaboratorOption->id }}" @selected((string) $filters['user_id'] === (string) $collaboratorOption->id) data-sector-ids="{{ $collaboratorOption->sectorAccesses->pluck('sector_id')->implode(',') }}">{{ $collaboratorOption->name }}</option>
+                                @endforeach
+                            </x-portal.table-column-filter>
+                        </th>
                         <th class="px-6 py-3 font-medium">QR</th>
                         <th class="px-6 py-3 font-medium"></th>
                     </tr>
@@ -219,9 +210,10 @@
 @push('scripts')
     <script>
         document.querySelectorAll('[data-asset-filter-form]').forEach(function (form) {
-            const sectorSelect = form.querySelector('[data-filter-sector]');
-            const roomSelect = form.querySelector('[data-filter-room]');
-            const userSelect = form.querySelector('[data-filter-user]');
+            const formSelector = `[form="${form.id}"]`;
+            const sectorSelect = document.querySelector(`[data-filter-sector]${formSelector}`);
+            const roomSelect = document.querySelector(`[data-filter-room]${formSelector}`);
+            const userSelect = document.querySelector(`[data-filter-user]${formSelector}`);
 
             if (!sectorSelect || !roomSelect || !userSelect) {
                 return;
@@ -255,7 +247,16 @@
                 }
             }
 
-            sectorSelect.addEventListener('change', syncFilterOptions);
+            sectorSelect.addEventListener('change', function () {
+                syncFilterOptions();
+
+                if (form.requestSubmit) {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
+            });
+
             syncFilterOptions();
         });
     </script>
