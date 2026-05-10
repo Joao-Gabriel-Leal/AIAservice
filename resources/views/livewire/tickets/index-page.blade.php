@@ -72,6 +72,9 @@
             <a href="{{ route('tickets.export', $exportParams) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                 Exportar Excel
             </a>
+            <a href="{{ route('tickets.trash') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                Lixeira
+            </a>
             @if ($configBoard && auth()->user()->can('update', $configBoard))
                 <a href="{{ route('tickets.settings', $configBoard) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                     Configurar
@@ -355,7 +358,7 @@
                                 data-confirm
                                 data-confirm-variant="danger"
                                 data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
-                                data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                                data-confirm-message="Tem certeza? O item vai para a lixeira por 30 dias e podera ser restaurado nesse prazo."
                                 data-confirm-label="Sim, remover"
                                 wire:loading.attr="disabled"
                                 wire:loading.class="ui-loading"
@@ -585,7 +588,7 @@
                                         data-confirm
                                         data-confirm-variant="danger"
                                         data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
-                                        data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                                        data-confirm-message="Tem certeza? O item vai para a lixeira por 30 dias e podera ser restaurado nesse prazo."
                                         data-confirm-label="Sim, remover"
                                         wire:loading.attr="disabled"
                                         wire:loading.class="ui-loading"

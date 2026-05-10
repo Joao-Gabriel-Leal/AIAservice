@@ -269,7 +269,7 @@
                                                 data-confirm
                                                 data-confirm-variant="danger"
                                                 data-confirm-title="Remover chamado?"
-                                                data-confirm-message="Subelementos vinculados também serão removidos. Esta ação não pode ser desfeita."
+                                                data-confirm-message="Tem certeza? O chamado e seus subelementos vao para a lixeira por 30 dias e podem ser restaurados nesse prazo."
                                                 data-confirm-label="Sim, remover"
                                                 wire:loading.attr="disabled"
                                                 wire:loading.class="ui-loading"
@@ -400,7 +400,7 @@
                                                                                 data-confirm
                                                                                 data-confirm-variant="danger"
                                                                                 data-confirm-title="Remover subelemento?"
-                                                                                data-confirm-message="Tem certeza que deseja remover este subelemento? Esta ação não pode ser desfeita."
+                                                                                data-confirm-message="Tem certeza? O subelemento vai para a lixeira por 30 dias e podera ser restaurado nesse prazo."
                                                                                 data-confirm-label="Sim, remover"
                                                                                 wire:loading.attr="disabled"
                                                                                 wire:loading.class="ui-loading"
@@ -517,7 +517,7 @@
                                         data-confirm
                                         data-confirm-variant="danger"
                                         data-confirm-title="Remover chamado?"
-                                        data-confirm-message="Subelementos vinculados também serão removidos. Esta ação não pode ser desfeita."
+                                        data-confirm-message="Tem certeza? O chamado e seus subelementos vao para a lixeira por 30 dias e podem ser restaurados nesse prazo."
                                         data-confirm-label="Sim, remover"
                                         wire:loading.attr="disabled"
                                         wire:loading.class="ui-loading"
@@ -735,7 +735,7 @@
                                 data-confirm
                                 data-confirm-variant="danger"
                                 data-confirm-title="Remover chamado?"
-                                data-confirm-message="Subelementos vinculados também serão removidos. Esta ação não pode ser desfeita."
+                                data-confirm-message="Tem certeza? O chamado e seus subelementos vao para a lixeira por 30 dias e podem ser restaurados nesse prazo."
                                 data-confirm-label="Sim, remover"
                                 wire:loading.attr="disabled"
                                 wire:loading.class="ui-loading"

@@ -11,6 +11,7 @@ use App\Modules\Search\Services\GlobalSearchService;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Livewire\IndexPage;
 use App\Modules\Tickets\Livewire\ShowPage;
+use App\Modules\Tickets\Livewire\TrashPage;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketGroup;
@@ -166,6 +167,14 @@ class TicketSubelementTest extends TestCase
         $this->assertSoftDeleted('tickets', ['id' => $subelement->id]);
         $this->assertNotSoftDeleted('tickets', ['id' => $parent->id]);
 
+        Livewire::actingAs($operator)
+            ->test(TrashPage::class)
+            ->assertSee('Parte removivel')
+            ->call('restoreTicket', $subelement->id)
+            ->assertHasNoErrors();
+
+        $this->assertNotSoftDeleted('tickets', ['id' => $subelement->id]);
+
         $secondSubelement = $workflow->createSubelement($manager, $parent->fresh(), 'Parte removida com pai');
 
         Livewire::actingAs($manager)
@@ -175,7 +184,19 @@ class TicketSubelementTest extends TestCase
             ->assertRedirect();
 
         $this->assertSoftDeleted('tickets', ['id' => $parent->id]);
+        $this->assertSoftDeleted('tickets', ['id' => $subelement->id]);
         $this->assertSoftDeleted('tickets', ['id' => $secondSubelement->id]);
+
+        Livewire::actingAs($manager)
+            ->test(TrashPage::class)
+            ->set('search', 'Demanda removivel')
+            ->assertSee('Demanda removivel')
+            ->call('restoreTicket', $parent->id)
+            ->assertHasNoErrors();
+
+        $this->assertNotSoftDeleted('tickets', ['id' => $parent->id]);
+        $this->assertNotSoftDeleted('tickets', ['id' => $subelement->id]);
+        $this->assertNotSoftDeleted('tickets', ['id' => $secondSubelement->id]);
     }
 
     private function ticketContext(): array

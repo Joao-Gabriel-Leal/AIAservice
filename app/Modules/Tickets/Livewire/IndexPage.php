@@ -475,7 +475,7 @@ class IndexPage extends Component
         $this->resetBoardColumnLimits();
         $this->resetPage();
 
-        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' excluido com sucesso.');
+        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' movido para a lixeira por 30 dias.');
     }
 
     public function toggleGroup(int $groupId): void

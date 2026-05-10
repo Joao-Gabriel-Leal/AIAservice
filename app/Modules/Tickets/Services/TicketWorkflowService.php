@@ -41,6 +41,8 @@ use Throwable;
 
 class TicketWorkflowService
 {
+    public const TRASH_RETENTION_DAYS = 30;
+
     public function __construct(
         private readonly ActivityLogService $activityLogService,
         private readonly TicketSlaService $ticketSlaService,
@@ -461,7 +463,7 @@ class TicketWorkflowService
 
                 $ticket->subTickets->each(function (Ticket $subelement) use ($actor, $ticket): void {
                     $this->detachMajorIncidentLinks($subelement);
-                    $this->deleteSingleTicket($actor, $subelement, 'ticket.subelement.deleted_with_parent', 'Subelemento removido junto com o chamado pai.', [
+                    $this->deleteSingleTicket($actor, $subelement, 'ticket.subelement.deleted_with_parent', 'Subelemento movido para a lixeira junto com o chamado pai.', [
                         'parent_ticket_id' => $ticket->id,
                     ]);
                 });
@@ -472,10 +474,66 @@ class TicketWorkflowService
             }
 
             $this->detachMajorIncidentLinks($ticket);
-            $this->deleteSingleTicket($actor, $ticket, 'ticket.deleted', $ticket->isSubelement() ? 'Subelemento removido.' : 'Chamado removido.', [
+            $this->deleteSingleTicket($actor, $ticket, 'ticket.deleted', $ticket->isSubelement() ? 'Subelemento movido para a lixeira.' : 'Chamado movido para a lixeira.', [
                 'parent_ticket_id' => $ticket->parent_ticket_id,
                 'subelement_ids' => $subelementIds->all(),
+                'retention_days' => self::TRASH_RETENTION_DAYS,
             ]);
+        });
+    }
+
+    public function restoreTicket(User $actor, Ticket $ticket): Ticket
+    {
+        Gate::forUser($actor)->authorize('restore', $ticket);
+
+        if (! $ticket->trashed()) {
+            return $ticket;
+        }
+
+        $this->ensureWithinTrashRetention($ticket);
+
+        return DB::transaction(function () use ($actor, $ticket): Ticket {
+            $ticket = $ticket->fresh(['parentTicketWithTrashed', 'board']) ?? $ticket;
+            $restoredSubelementIds = [];
+
+            if ($ticket->isSubelement()) {
+                $parent = $ticket->parentTicketWithTrashed;
+
+                if ($parent?->trashed()) {
+                    Gate::forUser($actor)->authorize('restore', $parent);
+                    $this->ensureWithinTrashRetention($parent);
+                    $this->restoreSingleTicket($actor, $parent, 'ticket.restored_with_subelement', 'Chamado pai restaurado junto com o subelemento.', [
+                        'subelement_id' => $ticket->id,
+                    ]);
+                }
+            }
+
+            $this->restoreSingleTicket($actor, $ticket, 'ticket.restored', $ticket->isSubelement() ? 'Subelemento restaurado da lixeira.' : 'Chamado restaurado da lixeira.', [
+                'parent_ticket_id' => $ticket->parent_ticket_id,
+            ]);
+
+            if (! $ticket->isSubelement()) {
+                $ticket->subTicketsWithTrashed()
+                    ->onlyTrashed()
+                    ->where('deleted_at', '>=', now()->subDays(self::TRASH_RETENTION_DAYS))
+                    ->get()
+                    ->each(function (Ticket $subelement) use ($actor, &$restoredSubelementIds): void {
+                        $this->restoreSingleTicket($actor, $subelement, 'ticket.subelement.restored_with_parent', 'Subelemento restaurado junto com o chamado pai.', [
+                            'parent_ticket_id' => $subelement->parent_ticket_id,
+                        ]);
+
+                        $restoredSubelementIds[] = $subelement->id;
+                    });
+
+                if ($restoredSubelementIds !== []) {
+                    $this->activityLogService->log($actor, $ticket, 'ticket.subelements.restored_with_parent', 'Subelementos restaurados junto com o chamado pai.', [
+                        'sector_id' => $ticket->sector_id,
+                        'subelement_ids' => $restoredSubelementIds,
+                    ]);
+                }
+            }
+
+            return $ticket->fresh(['parentTicket', 'subTickets', 'group', 'status', 'requester', 'assignee']) ?? $ticket;
         });
     }
 
@@ -850,6 +908,27 @@ class TicketWorkflowService
         ]);
 
         $ticket->delete();
+    }
+
+    private function restoreSingleTicket(User $actor, Ticket $ticket, string $event, string $description, array $context = []): void
+    {
+        $ticket->restore();
+        $ticket->updateQuietly(['last_activity_at' => now()]);
+
+        $this->activityLogService->log($actor, $ticket, $event, $description, [
+            ...$context,
+            'sector_id' => $ticket->sector_id,
+            'ticket_board_id' => $ticket->ticket_board_id,
+        ]);
+    }
+
+    private function ensureWithinTrashRetention(Ticket $ticket): void
+    {
+        if (! $ticket->deleted_at || $ticket->deleted_at->lt(now()->subDays(self::TRASH_RETENTION_DAYS))) {
+            throw ValidationException::withMessages([
+                'trash' => 'Este chamado ultrapassou o prazo de 30 dias da lixeira e nao pode mais ser restaurado.',
+            ]);
+        }
     }
 
     private function detachMajorIncidentLinks(Ticket $ticket): void

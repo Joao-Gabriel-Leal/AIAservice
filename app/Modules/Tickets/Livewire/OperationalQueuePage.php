@@ -69,7 +69,7 @@ class OperationalQueuePage extends Component
         $workflowService->deleteTicket(auth()->user(), $ticket);
         $this->resetPage();
 
-        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' excluido com sucesso.');
+        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' movido para a lixeira por 30 dias.');
     }
 
     public function render(TicketIndexQuery $ticketIndexQuery): View

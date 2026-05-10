@@ -8,6 +8,11 @@
             <span class="portal-chip">{{ $stats[$bucket] ?? 0 }} item(ns) no recorte</span>
             <span class="portal-chip">Fila viva do seu escopo</span>
         </x-slot:meta>
+        <x-slot:actions>
+            <a href="{{ route('tickets.trash') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
+                Lixeira
+            </a>
+        </x-slot:actions>
     </x-portal.page-intro>
 
     <x-portal.filter-bar title="Fila do dia" description="Use os cards e filtros abaixo para alternar rapido entre atribuicoes, gargalos e tempos abertos.">
@@ -100,7 +105,7 @@
                                     data-confirm
                                     data-confirm-variant="danger"
                                     data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
-                                    data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                                    data-confirm-message="Tem certeza? O item vai para a lixeira por 30 dias e podera ser restaurado nesse prazo."
                                     data-confirm-label="Sim, remover"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="ui-loading"

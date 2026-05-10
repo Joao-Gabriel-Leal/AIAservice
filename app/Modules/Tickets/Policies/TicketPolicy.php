@@ -41,6 +41,11 @@ class TicketPolicy
         return $user->canOperateBoard($ticket->board);
     }
 
+    public function restore(User $user, Ticket $ticket): bool
+    {
+        return $user->canOperateBoard($ticket->board);
+    }
+
     public function closeOwn(User $user, Ticket $ticket): bool
     {
         return ! $ticket->isSubelement()

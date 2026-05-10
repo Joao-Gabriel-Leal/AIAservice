@@ -228,9 +228,21 @@ class Ticket extends Model
         return $this->belongsTo(self::class, 'parent_ticket_id');
     }
 
+    public function parentTicketWithTrashed(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_ticket_id')->withTrashed();
+    }
+
     public function subTickets(): HasMany
     {
         return $this->hasMany(self::class, 'parent_ticket_id')
+            ->orderedSubelements();
+    }
+
+    public function subTicketsWithTrashed(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_ticket_id')
+            ->withTrashed()
             ->orderedSubelements();
     }
 

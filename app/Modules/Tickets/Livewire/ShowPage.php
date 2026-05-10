@@ -491,7 +491,7 @@ class ShowPage extends Component
 
         $workflowService->deleteTicket(auth()->user(), $ticket);
 
-        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' excluido com sucesso.');
+        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' movido para a lixeira por 30 dias.');
 
         if ($parent && auth()->user()->can('view', $parent)) {
             $this->redirectRoute('tickets.show', ['ticket' => $parent]);
@@ -520,7 +520,7 @@ class ShowPage extends Component
 
         $workflowService->deleteTicket(auth()->user(), $subelement);
 
-        session()->flash('status', 'Subelemento '.$reference.' excluido com sucesso.');
+        session()->flash('status', 'Subelemento '.$reference.' movido para a lixeira por 30 dias.');
     }
 
     public function submitRating(TicketWorkflowService $workflowService): void
