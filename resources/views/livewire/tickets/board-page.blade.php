@@ -160,8 +160,32 @@
                                             <td>
                                                 <div class="space-y-1">
                                                     @if ($canUpdate)
-                                                        <div wire:key="ticket-title-list-{{ $ticket->id }}">
-                                                            <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
+                                                        <div
+                                                            wire:key="ticket-title-list-{{ $ticket->id }}"
+                                                            x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                                            class="ui-inline-title-editor"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                x-show="! editing"
+                                                                x-on:click.stop="startEditing()"
+                                                                x-bind:title="value"
+                                                                class="ui-inline-title-display ui-inline-title-display-list"
+                                                            >
+                                                                <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                                            </button>
+
+                                                            <input
+                                                                x-cloak
+                                                                x-show="editing"
+                                                                x-ref="input"
+                                                                type="text"
+                                                                x-model="value"
+                                                                x-on:keydown.enter.prevent="saveTitle($wire)"
+                                                                x-on:keydown.escape.prevent="cancelEditing()"
+                                                                x-on:blur="saveTitle($wire)"
+                                                                class="ui-input ui-inline-title-input w-72"
+                                                            />
                                                         </div>
                                                     @else
                                                         <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
@@ -396,8 +420,32 @@
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="min-w-0 flex-1">
                                             @if ($canUpdate)
-                                                <div wire:key="ticket-title-kanban-{{ $ticket->id }}">
-                                                    <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-full text-sm font-medium" />
+                                                <div
+                                                    wire:key="ticket-title-kanban-{{ $ticket->id }}"
+                                                    x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                                    class="ui-inline-title-editor"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        x-show="! editing"
+                                                        x-on:click.stop="startEditing()"
+                                                        x-bind:title="value"
+                                                        class="ui-inline-title-display ui-inline-title-display-kanban"
+                                                    >
+                                                        <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                                    </button>
+
+                                                    <input
+                                                        x-cloak
+                                                        x-show="editing"
+                                                        x-ref="input"
+                                                        type="text"
+                                                        x-model="value"
+                                                        x-on:keydown.enter.prevent="saveTitle($wire)"
+                                                        x-on:keydown.escape.prevent="cancelEditing()"
+                                                        x-on:blur="saveTitle($wire)"
+                                                        class="ui-input ui-inline-title-input w-full text-sm font-medium"
+                                                    />
                                                 </div>
                                             @else
                                                 <h4 class="text-sm font-semibold text-slate-900">{{ $ticket->title }}</h4>
@@ -531,6 +579,56 @@
 
 @push('scripts')
     <script>
+        if (! window.ticketInlineTitle) {
+            window.ticketInlineTitle = function (config) {
+                return {
+                    ticketId: config.ticketId,
+                    editing: false,
+                    value: config.title ?? '',
+                    original: config.title ?? '',
+
+                    startEditing() {
+                        this.original = this.value;
+                        this.editing = true;
+
+                        this.$nextTick(() => {
+                            this.$refs.input?.focus();
+                            this.$refs.input?.select();
+                        });
+                    },
+
+                    saveTitle(wire) {
+                        if (! this.editing) {
+                            return;
+                        }
+
+                        const previous = String(this.original ?? '');
+                        const next = String(this.value ?? '').trim();
+
+                        if (next === '') {
+                            this.value = previous;
+                            this.editing = false;
+
+                            return;
+                        }
+
+                        this.value = next;
+                        this.original = next;
+                        this.editing = false;
+
+                        if (next !== previous) {
+                            wire.updateFixedField(this.ticketId, 'title', next);
+                        }
+                    },
+
+                    cancelEditing() {
+                        this.value = this.original;
+                        this.editing = false;
+                    },
+                };
+            };
+        }
+
         if (! window.ticketBoard) {
             window.ticketBoard = function (config) {
                 return {

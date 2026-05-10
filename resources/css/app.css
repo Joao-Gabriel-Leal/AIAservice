@@ -255,6 +255,43 @@
         box-shadow: 0 18px 35px -28px rgba(15, 23, 42, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.84);
     }
 
+    .ui-inline-title-editor {
+        @apply min-w-0;
+    }
+
+    .ui-inline-title-display {
+        @apply block max-w-full rounded-xl border border-transparent bg-transparent px-2 py-1 text-left outline-hidden transition;
+        color: #0f172a;
+        letter-spacing: 0;
+        line-height: 1.35;
+    }
+
+    .ui-inline-title-display:hover {
+        background-color: rgba(15, 23, 42, 0.04);
+        color: #0e1b33;
+    }
+
+    .ui-inline-title-display:focus-visible {
+        border-color: rgba(49, 76, 140, 0.32);
+        box-shadow: 0 0 0 4px rgba(49, 76, 140, 0.1);
+    }
+
+    .ui-inline-title-display-list {
+        @apply w-72 font-medium;
+    }
+
+    .ui-inline-title-display-kanban {
+        @apply w-full text-sm font-semibold;
+    }
+
+    .ui-inline-title-text {
+        @apply block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
+    }
+
+    .ui-inline-title-input {
+        letter-spacing: 0;
+    }
+
     .ui-native-select {
         appearance: none;
         background-image:
@@ -4012,6 +4049,20 @@
     html.dark .portal-shell .ui-native-select:focus {
         border-color: rgba(98, 197, 255, 0.62);
         box-shadow: 0 18px 35px -28px rgba(34, 170, 255, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    html.dark .portal-shell .ui-inline-title-display {
+        color: #e7efff;
+    }
+
+    html.dark .portal-shell .ui-inline-title-display:hover {
+        background-color: rgba(98, 197, 255, 0.1);
+        color: #f7fbff;
+    }
+
+    html.dark .portal-shell .ui-inline-title-display:focus-visible {
+        border-color: rgba(98, 197, 255, 0.5);
+        box-shadow: 0 0 0 4px rgba(98, 197, 255, 0.12);
     }
 
     html.dark .portal-shell input:not([type='checkbox']):not([type='radio']),
