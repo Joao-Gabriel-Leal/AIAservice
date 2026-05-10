@@ -6,6 +6,7 @@ use App\Enums\KnowledgeBaseArticleStatus;
 use App\Enums\KnowledgeBaseVisibility;
 use App\Models\User;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -18,6 +19,7 @@ class KnowledgeBaseArticleSearchService
     public function adminQuery(User $user, ?string $search = null): Builder
     {
         $query = $this->baseQuery($search)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->search($search)
             ->latest();
 
@@ -31,6 +33,7 @@ class KnowledgeBaseArticleSearchService
     public function visibleQuery(User $user, ?string $search = null): Builder
     {
         return $this->baseQuery($search)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->where('is_active', true)
             ->where('editorial_status', KnowledgeBaseArticleStatus::PUBLISHED->value)
             ->where(function (Builder $query) use ($user) {
@@ -54,6 +57,11 @@ class KnowledgeBaseArticleSearchService
             )
             ->orderByDesc('ticket_usages_count')
             ->latest('updated_at');
+    }
+
+    private function currentCompanyId(User $user): int
+    {
+        return (int) (app(CurrentCompanyContext::class)->currentCompanyId($user) ?: 0);
     }
 
     public function paginateAdmin(User $user, ?string $search = null, int $perPage = 12): LengthAwarePaginator

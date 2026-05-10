@@ -7,6 +7,7 @@ use App\Modules\Companies\Exports\CompaniesExport;
 use App\Modules\Companies\Http\Requests\CompanyRequest;
 use App\Modules\Companies\Models\Company;
 use App\Modules\Companies\Support\CompanyIndexQuery;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -62,6 +63,8 @@ class CompanyController extends Controller
     public function show(Company $company): View
     {
         $this->authorize('view', $company);
+
+        app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), $company->id);
 
         $company->load([
             'sectors' => fn ($query) => $query

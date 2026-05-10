@@ -12,6 +12,7 @@ use App\Modules\Licenses\Http\Requests\LicenseRequest;
 use App\Modules\Licenses\Models\License;
 use App\Modules\Licenses\Support\LicenseIndexQuery;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -68,6 +69,7 @@ class LicenseController extends Controller
     public function store(LicenseRequest $request): RedirectResponse
     {
         $this->authorize('create', License::class);
+        abort_unless(in_array((int) $request->validated('sector_id'), AccessScope::currentCompanySectorIds($request->user()), true), 403);
 
         $license = License::query()->create([
             ...$request->validated(),
@@ -123,6 +125,7 @@ class LicenseController extends Controller
     public function update(LicenseRequest $request, License $license): RedirectResponse
     {
         $this->authorize('update', $license);
+        abort_unless(in_array((int) $request->validated('sector_id'), AccessScope::currentCompanySectorIds($request->user()), true), 403);
 
         $license->update($request->validated());
 
@@ -148,6 +151,8 @@ class LicenseController extends Controller
             $query->whereRaw('1 = 0');
         }
 
+        $query->whereIn('id', AccessScope::currentCompanySectorIds($user));
+
         return $query->get();
     }
 
@@ -155,6 +160,7 @@ class LicenseController extends Controller
     {
         return User::query()
             ->where('is_active', true)
+            ->withAnySectorAccess(AccessScope::currentCompanySectorIds(auth()->user()))
             ->orderBy('name')
             ->orderBy('email')
             ->get();

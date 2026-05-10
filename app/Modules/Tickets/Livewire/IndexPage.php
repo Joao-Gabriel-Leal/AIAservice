@@ -5,6 +5,7 @@ namespace App\Modules\Tickets\Livewire;
 use App\Enums\TicketPriority;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketBoardSavedView;
@@ -108,6 +109,7 @@ class IndexPage extends Component
         if ($board?->exists) {
             abort_if(! $board->is_active, 404);
             abort_unless(auth()->user()->canOperateBoard($board), 403);
+            abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $board->sector?->company_id), 403);
 
             $this->selectedSectorId = $board->sector_id;
             $this->selectedBoardId = $board->id;
@@ -1006,6 +1008,7 @@ class IndexPage extends Component
     private function availableBoardSectors(): Collection
     {
         $query = Sector::query()->with('company')->orderBy('name');
+        $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0);
 
         if (! auth()->user()->isSuperAdmin()) {
             $sectorIds = collect(auth()->user()->adminSectorIds())
@@ -1221,6 +1224,7 @@ class IndexPage extends Component
         $query = TicketBoard::query()
             ->with('sector.company')
             ->where('is_active', true);
+        $query->whereHas('sector', fn (Builder $sectorQuery) => $sectorQuery->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0));
 
         if (! auth()->user()->isSuperAdmin()) {
             $query->whereIn('id', auth()->user()->operationalBoardIds());

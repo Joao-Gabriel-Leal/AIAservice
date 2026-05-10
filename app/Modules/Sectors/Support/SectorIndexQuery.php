@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sectors\Support;
 
+use App\Modules\Shared\Support\AccessScope;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,8 +21,12 @@ class SectorIndexQuery
 
     public function build(User $user, array $filters): Builder
     {
-        return Sector::query()
-            ->with('company')
+        $query = Sector::query()
+            ->with('company');
+
+        AccessScope::applyCurrentCompanyScope($query, $user, '');
+
+        return $query
             ->when($user->isSectorAdmin() && ! $user->isGlobalAdmin(), fn (Builder $query) => $query->whereIn('id', $user->adminSectorIds()))
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $query->where(function (Builder $searchQuery) use ($filters) {

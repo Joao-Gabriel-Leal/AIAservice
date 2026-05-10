@@ -6,6 +6,7 @@ use App\Enums\GlobalUserRole;
 use App\Enums\SectorAccessLevel;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -74,6 +75,12 @@ class UserRequest extends FormRequest
                 if ($unauthorizedSectorIds->isNotEmpty()) {
                     $validator->errors()->add('sector_accesses', 'Voce so pode gerenciar acessos dos setores que administra.');
                 }
+            }
+
+            $outsideCurrentCompany = $requestedSectorIds->diff(AccessScope::currentCompanySectorIds($actor));
+
+            if ($outsideCurrentCompany->isNotEmpty()) {
+                $validator->errors()->add('sector_accesses', 'Os acessos precisam pertencer a setores da empresa atual.');
             }
         });
     }

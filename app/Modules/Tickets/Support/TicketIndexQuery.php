@@ -4,6 +4,7 @@ namespace App\Modules\Tickets\Support;
 
 use App\Enums\TicketPriority;
 use App\Models\User;
+use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
 use Illuminate\Database\Eloquent\Builder;
@@ -107,6 +108,8 @@ class TicketIndexQuery
             ->when(($filters['updated_from'] ?? '') !== '', fn (Builder $query) => $query->whereDate('updated_at', '>=', $filters['updated_from']))
             ->when(($filters['updated_to'] ?? '') !== '', fn (Builder $query) => $query->whereDate('updated_at', '<=', $filters['updated_to']))
             ->latest('updated_at');
+
+        AccessScope::applyCurrentCompanyScope($query, $user);
 
         $this->applySlaStateFilter($query, $filters['sla_state'] ?? 'all');
 

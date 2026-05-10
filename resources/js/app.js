@@ -3,6 +3,35 @@ import Chart from 'chart.js/auto';
 import './echo';
 
 const activeCharts = new Map();
+const sidebarStorageKey = 'portal.sidebar.collapsed';
+
+function applyPortalSidebarState(collapsed) {
+    document.documentElement.classList.toggle('portal-sidebar-collapsed', collapsed);
+
+    document.querySelectorAll('[data-portal-sidebar-toggle]').forEach((button) => {
+        button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        button.setAttribute('aria-label', collapsed ? 'Expandir menu' : 'Recolher menu');
+        button.setAttribute('title', collapsed ? 'Expandir menu' : 'Recolher menu');
+    });
+}
+
+function initializePortalSidebar() {
+    const collapsed = window.localStorage.getItem(sidebarStorageKey) === 'true';
+    applyPortalSidebarState(collapsed);
+
+    document.querySelectorAll('[data-portal-sidebar-toggle]').forEach((button) => {
+        if (button.dataset.sidebarToggleBound === 'true') {
+            return;
+        }
+
+        button.dataset.sidebarToggleBound = 'true';
+        button.addEventListener('click', () => {
+            const nextCollapsed = ! document.documentElement.classList.contains('portal-sidebar-collapsed');
+            window.localStorage.setItem(sidebarStorageKey, String(nextCollapsed));
+            applyPortalSidebarState(nextCollapsed);
+        });
+    });
+}
 
 if (! window.ticketInlineTitle) {
     window.ticketInlineTitle = function (config) {
@@ -439,8 +468,10 @@ window.appConfirm = showConfirmation;
 
 document.addEventListener('DOMContentLoaded', initializeCharts);
 document.addEventListener('DOMContentLoaded', applyInputMasks);
+document.addEventListener('DOMContentLoaded', initializePortalSidebar);
 document.addEventListener('livewire:navigated', () => {
     requestAnimationFrame(initializeCharts);
     requestAnimationFrame(applyInputMasks);
+    requestAnimationFrame(initializePortalSidebar);
 });
 window.addEventListener('theme-preference-changed', () => requestAnimationFrame(initializeCharts));

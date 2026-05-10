@@ -5,6 +5,7 @@ namespace App\Modules\Search\Livewire;
 use App\Models\User;
 use App\Modules\Search\Services\GlobalSearchService;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
@@ -120,6 +121,7 @@ class SearchPage extends Component
 
         return Sector::query()
             ->when(is_array($sectorIds), fn ($query) => $query->whereIn('id', $sectorIds === [] ? [0] : $sectorIds))
+            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId($user) ?: 0)
             ->orderBy('name')
             ->get(['id', 'name']);
     }

@@ -6,6 +6,7 @@ use App\Enums\GlobalUserRole;
 use App\Enums\SectorAccessLevel;
 use App\Enums\UserRole;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Licenses\Models\License;
 use App\Modules\Licenses\Models\LicenseAssignment;
@@ -58,6 +59,7 @@ class User extends Authenticatable
         'global_role',
         'sector_id',
         'room_id',
+        'current_company_id',
         'must_change_password',
         'is_active',
     ];
@@ -81,6 +83,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'profile_photo_size' => 'integer',
             'theme_preference' => 'string',
+            'current_company_id' => 'integer',
             'birth_date' => 'date',
             'work_anniversary' => 'date',
             'work_status' => 'string',
@@ -95,6 +98,11 @@ class User extends Authenticatable
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function currentCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'current_company_id');
     }
 
     public function requestedTickets(): HasMany

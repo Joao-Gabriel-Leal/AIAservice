@@ -22,6 +22,10 @@
 
 <script>
     window.localStorage.setItem('flux.appearance', @js($preferredAppearance));
+
+    if (window.localStorage.getItem('portal.sidebar.collapsed') === 'true') {
+        document.documentElement.classList.add('portal-sidebar-collapsed');
+    }
 </script>
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])

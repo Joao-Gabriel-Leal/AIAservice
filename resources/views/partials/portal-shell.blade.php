@@ -9,6 +9,9 @@
     $focusedHeaderActionClass = 'ui-action portal-focused-header-action';
     $user = auth()->user();
     $unreadNotificationsCount = $user?->unreadNotifications()->count() ?? 0;
+    $companyContext = app(\App\Modules\Shared\Support\CurrentCompanyContext::class);
+    $availableCompanies = $user ? $companyContext->availableCompanies($user) : collect();
+    $currentCompany = $user ? $companyContext->current($user) : null;
 
     $portalNavIcon = static function (string $icon): string {
         $attrs = 'aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" style="width:1rem;height:1rem;min-width:1rem;max-width:1rem;min-height:1rem;max-height:1rem;flex:0 0 1rem;display:block" class="portal-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
@@ -29,6 +32,7 @@
             'appearance' => '<svg '.$attrs.'><path d="M12 3.5a8.5 8.5 0 0 0 0 17h1.2a1.9 1.9 0 0 0 1.3-3.3 1.55 1.55 0 0 1 1.1-2.7H17a4 4 0 0 0 4-4c0-3.8-3.8-7-9-7Z" /><circle cx="8.5" cy="10" r=".7" /><circle cx="11" cy="7.7" r=".7" /><circle cx="14.2" cy="8.2" r=".7" /><circle cx="16" cy="11" r=".7" /></svg>',
             'profile' => '<svg '.$attrs.'><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>',
             'logout' => '<svg '.$attrs.'><path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H9" /><path d="M14 8l4 4-4 4" /><path d="M18 12H9" /></svg>',
+            'collapse' => '<svg '.$attrs.'><path d="M15 6l-6 6 6 6" /><path d="M20 4v16" /></svg>',
             default => '<svg '.$attrs.'><circle cx="12" cy="12" r="8" /></svg>',
         };
     };
@@ -41,7 +45,7 @@
         $generalNavItems[] = ['label' => 'Busca global', 'href' => route('search'), 'active' => request()->routeIs('search'), 'icon' => 'search'];
     }
 
-    $generalNavItems[] = ['label' => 'Central de formulários', 'href' => route('tickets.central'), 'active' => request()->routeIs('tickets.central', 'tickets.create'), 'icon' => 'forms'];
+    $generalNavItems[] = ['label' => 'Central de formularios', 'href' => route('tickets.central'), 'active' => request()->routeIs('tickets.central', 'tickets.create'), 'icon' => 'forms'];
     $generalNavItems[] = ['label' => 'Meus chamados', 'href' => route('tickets.mine'), 'active' => request()->routeIs('tickets.mine'), 'icon' => 'tickets'];
     $generalNavItems[] = ['label' => 'Base de conhecimento', 'href' => route('knowledge-base.index'), 'active' => request()->routeIs('knowledge-base.*'), 'icon' => 'knowledge'];
 
@@ -72,9 +76,20 @@
         @include('partials.head', ['title' => $title ?? null])
     </head>
     <body class="portal-shell {{ $isFocusedForm ? 'portal-shell-focused' : '' }} min-h-screen bg-[#e7edf7] text-slate-900 dark:bg-[#07101f] dark:text-slate-100">
-        <div class="min-h-screen {{ $isFocusedForm ? 'block' : 'lg:grid lg:grid-cols-[264px_1fr]' }}">
+        <div class="portal-shell-grid min-h-screen {{ $isFocusedForm ? 'block' : 'lg:grid lg:grid-cols-[264px_1fr]' }}">
             @unless ($isFocusedForm)
             <aside class="portal-sidebar hidden lg:flex lg:flex-col">
+                <button
+                    type="button"
+                    class="portal-sidebar-toggle"
+                    data-portal-sidebar-toggle
+                    aria-label="Recolher menu"
+                    aria-expanded="true"
+                    title="Recolher menu"
+                >
+                    {!! $portalNavIcon('collapse') !!}
+                </button>
+
                 <div class="portal-user-panel">
                     <div class="portal-user-avatar-wrap">
                         <x-user-avatar :user="$user" size="md" class="portal-user-avatar" />
@@ -104,6 +119,24 @@
                     </a>
                 </div>
 
+                @if ($currentCompany)
+                    <div class="portal-company-switcher">
+                        <p class="portal-company-switcher-label">Empresa atual</p>
+                        @if ($availableCompanies->count() > 1)
+                            <form method="POST" action="{{ route('context.company.store') }}">
+                                @csrf
+                                <select name="company_id" class="portal-company-select" onchange="this.form.submit()" aria-label="Trocar empresa atual">
+                                    @foreach ($availableCompanies as $companyOption)
+                                        <option value="{{ $companyOption->id }}" @selected($currentCompany->id === $companyOption->id)>{{ $companyOption->name }}</option>
+                                    @endforeach
+                                </select>
+                            </form>
+                        @else
+                            <p class="portal-company-current">{{ $currentCompany->name }}</p>
+                        @endif
+                    </div>
+                @endif
+
                 <nav class="portal-nav" aria-label="Navegação principal">
                     <section class="portal-nav-section">
                         <p class="portal-nav-heading">Geral</p>
@@ -112,6 +145,7 @@
                                 <a
                                     href="{{ $item['href'] }}"
                                     class="portal-nav-link {{ $item['active'] ? 'portal-nav-link-active' : '' }}"
+                                    title="{{ $item['label'] }}"
                                     @if ($item['active']) aria-current="page" @endif
                                 >
                                     {!! $portalNavIcon($item['icon']) !!}
@@ -129,6 +163,7 @@
                                     <a
                                         href="{{ $item['href'] }}"
                                         class="portal-nav-link {{ $item['active'] ? 'portal-nav-link-active' : '' }}"
+                                        title="{{ $item['label'] }}"
                                         @if ($item['active']) aria-current="page" @endif
                                     >
                                         {!! $portalNavIcon($item['icon']) !!}
@@ -147,7 +182,7 @@
                             <span>Preferências</span>
                         </a>
 
-                        <a href="{{ route('profile.edit') }}" class="portal-sidebar-action {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}">
+                        <a href="{{ route('profile.edit') }}" class="portal-sidebar-action {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}" title="Perfil">
                             {!! $portalNavIcon('profile') !!}
                             <span>Perfil</span>
                         </a>
@@ -155,7 +190,7 @@
 
                     <form method="POST" action="{{ route('logout') }}" class="portal-sidebar-logout-form">
                         @csrf
-                        <button type="submit" class="portal-sidebar-action portal-sidebar-action-wide portal-sidebar-action-danger">
+                        <button type="submit" class="portal-sidebar-action portal-sidebar-action-wide portal-sidebar-action-danger" title="Sair">
                             {!! $portalNavIcon('logout') !!}
                             <span>Sair</span>
                         </button>
@@ -192,6 +227,9 @@
                             <span class="portal-mobile-brand-copy">
                                 <span>AIA Service</span>
                                 <small>{{ $user?->global_role?->label() ?? 'Portal interno' }}</small>
+                                @if ($currentCompany)
+                                    <small>{{ $currentCompany->name }}</small>
+                                @endif
                             </span>
                         </a>
 
@@ -287,6 +325,21 @@
                                 </div>
 
                                 <div class="portal-mobile-menu-links">
+                                    @if ($currentCompany)
+                                        <form method="POST" action="{{ route('context.company.store') }}" class="portal-mobile-company-form">
+                                            @csrf
+                                            <label for="mobile-company-id">Empresa atual</label>
+                                            @if ($availableCompanies->count() > 1)
+                                                <select id="mobile-company-id" name="company_id" onchange="this.form.submit()">
+                                                    @foreach ($availableCompanies as $companyOption)
+                                                        <option value="{{ $companyOption->id }}" @selected($currentCompany->id === $companyOption->id)>{{ $companyOption->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            @else
+                                                <p>{{ $currentCompany->name }}</p>
+                                            @endif
+                                        </form>
+                                    @endif
                                     <a href="{{ route('dashboard') }}">Dashboard</a>
                                     @if ($user?->isGlobalAdmin())
                                         <a href="{{ route('search') }}">Busca global</a>

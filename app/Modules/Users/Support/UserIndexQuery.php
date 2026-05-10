@@ -3,6 +3,7 @@
 namespace App\Modules\Users\Support;
 
 use App\Models\User;
+use App\Modules\Shared\Support\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -20,8 +21,15 @@ class UserIndexQuery
 
     public function build(User $user, array $filters): Builder
     {
+        $currentCompanySectorIds = AccessScope::currentCompanySectorIds($user);
+
         $query = User::query()
             ->with(['sectorAccesses.sector'])
+            ->where(function (Builder $companyQuery) use ($currentCompanySectorIds): void {
+                $companyQuery
+                    ->globalAdmins()
+                    ->orWhere(fn (Builder $accessQuery) => $accessQuery->withAnySectorAccess($currentCompanySectorIds));
+            })
             ->when($filters['search'] !== '', function (Builder $builder) use ($filters) {
                 $builder->where(function (Builder $searchQuery) use ($filters) {
                     $searchQuery

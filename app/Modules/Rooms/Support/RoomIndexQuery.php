@@ -25,6 +25,8 @@ class RoomIndexQuery
             ? Room::query()->with('sector.company')
             : AccessScope::applySectorScope(Room::query()->with('sector.company'), $user);
 
+        AccessScope::applyCurrentCompanyScope($query, $user);
+
         return $query
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $query->where(function (Builder $searchQuery) use ($filters) {

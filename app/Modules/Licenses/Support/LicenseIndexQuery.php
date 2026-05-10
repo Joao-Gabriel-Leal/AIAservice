@@ -5,6 +5,7 @@ namespace App\Modules\Licenses\Support;
 use App\Enums\LicenseAssignmentStatus;
 use App\Models\User;
 use App\Modules\Licenses\Models\License;
+use App\Modules\Shared\Support\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -35,6 +36,8 @@ class LicenseIndexQuery
         if (! $user->isGlobalAdmin()) {
             $query->whereRaw('1 = 0');
         }
+
+        AccessScope::applyCurrentCompanyScope($query, $user);
 
         return $query
             ->when($filters['search'] !== '', function (Builder $licenseQuery) use ($filters) {

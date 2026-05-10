@@ -12,6 +12,8 @@ use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\SectorTemplates\Models\SectorTemplate;
 use App\Modules\Shared\Models\ActivityLog;
+use App\Modules\Shared\Support\AccessScope;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
@@ -155,6 +157,7 @@ class GlobalSearchService
 
         return Ticket::query()
             ->visibleTo($user)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->with(['sector.company', 'requester', 'assignee', 'group', 'parentTicket'])
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->where(function (Builder $query) use ($like, $isNumeric, $term, $hasReferenceTerm, $referencePrefix) {
@@ -380,6 +383,11 @@ class GlobalSearchService
 
         return User::query()
             ->with(['sector', 'room'])
+            ->where(function (Builder $companyQuery) use ($user): void {
+                $companyQuery
+                    ->globalAdmins()
+                    ->orWhere(fn (Builder $accessQuery) => $accessQuery->withAnySectorAccess(AccessScope::currentCompanySectorIds($user)));
+            })
             ->where(function (Builder $query) use ($like) {
                 $query
                     ->whereRaw('LOWER(name) LIKE ?', [$like])
@@ -428,6 +436,7 @@ class GlobalSearchService
 
         return Asset::query()
             ->with(['currentSector', 'currentRoom', 'currentUser'])
+            ->whereHas('currentSector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->where('current_user_id', $user->id))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('current_sector_id', $sectorId))
             ->where(function (Builder $query) use ($like) {
@@ -484,6 +493,7 @@ class GlobalSearchService
 
         return KnowledgeBaseArticle::query()
             ->with(['sector.company', 'author'])
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->where(function (Builder $query) use ($like) {
                 $query
@@ -544,6 +554,7 @@ class GlobalSearchService
         $prefix = $termLower.'%';
 
         return Company::query()
+            ->whereKey($this->currentCompanyId($user))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->whereHas('sectors', fn (Builder $sectorQuery) => $sectorQuery->whereKey($sectorId)))
             ->where(function (Builder $query) use ($like) {
                 $query
@@ -601,6 +612,7 @@ class GlobalSearchService
 
         return Sector::query()
             ->with('company')
+            ->where('company_id', $this->currentCompanyId($user))
             ->when(is_array($sectorIds), fn (Builder $query) => $query->whereIn('id', $sectorIds === [] ? [0] : $sectorIds))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->whereKey($sectorId))
             ->where(function (Builder $query) use ($like) {
@@ -660,6 +672,7 @@ class GlobalSearchService
 
         return Room::query()
             ->with('sector.company')
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->where(function (Builder $query) use ($like) {
                 $query
@@ -712,6 +725,7 @@ class GlobalSearchService
 
         return TicketBoard::query()
             ->with('sector.company')
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->whereIn('id', $user->operationalBoardIds() ?: [0]))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->where(function (Builder $query) use ($like) {
@@ -772,6 +786,7 @@ class GlobalSearchService
         return TicketForm::query()
             ->accessibleTo($user, $filters['sector_id'] ?? null)
             ->with(['board.sector.company'])
+            ->whereHas('board.sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->where(function (Builder $query) use ($like) {
                 $query
                     ->whereRaw('LOWER(name) LIKE ?', [$like])
@@ -823,6 +838,7 @@ class GlobalSearchService
 
         return ServiceCatalogItem::query()
             ->with(['board.sector.company', 'form'])
+            ->whereHas('board.sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->whereHas('form', fn (Builder $formQuery) => $formQuery->accessibleTo($user)))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->whereHas('board', fn (Builder $boardQuery) => $boardQuery->where('sector_id', $sectorId)))
             ->where(function (Builder $query) use ($like) {
@@ -898,6 +914,7 @@ class GlobalSearchService
 
         return TicketSlaPolicy::query()
             ->with(['board.sector.company', 'targets'])
+            ->whereHas('board.sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->whereHas('board', function (Builder $boardQuery) use ($user, $filters) {
                 $boardQuery
                     ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->whereIn('id', $user->operationalBoardIds() ?: [0]))
@@ -970,6 +987,7 @@ class GlobalSearchService
 
         return License::query()
             ->with(['sector.company', 'activeAssignments.user'])
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->whereIn('sector_id', $user->operationalSectorIds() ?: [0]))
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->where(function (Builder $query) use ($like) {
@@ -1099,6 +1117,7 @@ class GlobalSearchService
     {
         return Ticket::query()
             ->visibleTo($user)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('sector_id', $selectedSectorId));
     }
 
@@ -1114,6 +1133,7 @@ class GlobalSearchService
 
         return TicketGroup::query()
             ->with('board.sector.company')
+            ->whereHas('board.sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->whereHas('board', function (Builder $boardQuery) use ($user, $filters) {
                 $boardQuery
                     ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->whereIn('id', $user->operationalBoardIds() ?: [0]))
@@ -1166,6 +1186,7 @@ class GlobalSearchService
 
         return TicketStatus::query()
             ->with('board.sector.company')
+            ->whereHas('board.sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->whereHas('board', function (Builder $boardQuery) use ($user, $filters) {
                 $boardQuery
                     ->when(! $user->isSuperAdmin(), fn (Builder $query) => $query->whereIn('id', $user->operationalBoardIds() ?: [0]))
@@ -1233,10 +1254,16 @@ class GlobalSearchService
     {
         return Ticket::query()
             ->visibleTo($user)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $this->currentCompanyId($user)))
             ->with(['sector.company', 'requester', 'assignee'])
             ->whereIn('id', $ticketIds)
             ->get()
             ->keyBy('id');
+    }
+
+    private function currentCompanyId(User $user): int
+    {
+        return (int) (app(CurrentCompanyContext::class)->currentCompanyId($user) ?: 0);
     }
 
     private function excerpt(?string $text, string $term, int $radius = 72): string

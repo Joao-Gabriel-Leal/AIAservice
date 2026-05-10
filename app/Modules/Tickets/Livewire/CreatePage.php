@@ -5,6 +5,7 @@ namespace App\Modules\Tickets\Livewire;
 use App\Enums\TicketPriority;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketField;
@@ -59,6 +60,7 @@ class CreatePage extends Component
         if ($catalogItem) {
             abort_unless($catalogItem->is_active && $catalogItem->form?->is_active, 404);
             abort_unless($catalogItem->form?->canBeOpenedBy(auth()->user()), 403);
+            abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $catalogItem->board?->sector?->company_id), 403);
 
             $this->selectedSectorId = $catalogItem->board?->sector_id;
             $this->selectedBoardId = $catalogItem->ticket_board_id;
@@ -72,6 +74,10 @@ class CreatePage extends Component
             $requestedBoard = $requestedBoardId
                 ? TicketBoard::query()->where('is_active', true)->find($requestedBoardId)
                 : null;
+
+            if ($requestedBoard && $requestedBoard->sector?->company_id) {
+                app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $requestedBoard->sector->company_id);
+            }
 
             if ($requestedBoard && $this->availableSectors()->pluck('id')->contains($requestedBoard->sector_id)) {
                 $this->selectedSectorId = $requestedBoard->sector_id;
@@ -333,7 +339,10 @@ class CreatePage extends Component
     {
         $query = Sector::query()->with('company')->orderBy('name');
 
-        return $query->where('is_active', true)->get();
+        return $query
+            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0)
+            ->where('is_active', true)
+            ->get();
     }
 
     private function formOptions(): Collection

@@ -15,6 +15,7 @@ use App\Modules\Assets\Services\AssetMovementService;
 use App\Modules\Assets\Support\AssetIndexQuery;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -37,7 +38,7 @@ class AssetController extends Controller
         $filters = $this->assetIndexQuery->filters($request);
 
         $assets = $this->assetIndexQuery
-            ->build($filters)
+            ->build($filters, $request->user())
             ->paginate(12)
             ->withQueryString();
 
@@ -48,11 +49,12 @@ class AssetController extends Controller
             'filters' => $filters,
             'statuses' => AssetStatus::cases(),
             'allocationStatuses' => AssetAllocationStatus::cases(),
-            'sectors' => Sector::query()->orderBy('name')->get(),
-            'rooms' => Room::query()->with('sector')->orderBy('name')->get(),
+            'sectors' => $this->availableSectors($request->user()),
+            'rooms' => $this->availableRooms($request->user()),
             'collaborators' => User::query()
                 ->with('sectorAccesses')
                 ->where('global_role', 'collaborator')
+                ->withAnySectorAccess(AccessScope::currentCompanySectorIds($request->user()))
                 ->orderBy('name')
                 ->get(),
             'latestImportBatch' => $latestImportBatch,
@@ -65,7 +67,7 @@ class AssetController extends Controller
         $this->authorize('viewAny', Asset::class);
 
         $filters = $this->assetIndexQuery->filters($request);
-        $export = new AssetsExport($this->assetIndexQuery->build($filters)->get());
+        $export = new AssetsExport($this->assetIndexQuery->build($filters, $request->user())->get());
 
         return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
@@ -83,6 +85,7 @@ class AssetController extends Controller
     public function store(AssetRequest $request): RedirectResponse
     {
         $this->authorize('create', Asset::class);
+        $this->authorizeCurrentSector((int) $request->validated('current_sector_id'));
 
         $asset = $this->assetMovementService->register($request->validated(), $request->user());
 
@@ -146,6 +149,7 @@ class AssetController extends Controller
     public function update(AssetRequest $request, Asset $asset): RedirectResponse
     {
         $this->authorize('update', $asset);
+        $this->authorizeCurrentSector((int) $request->validated('current_sector_id'));
 
         $asset->update($request->validated());
 
@@ -165,6 +169,7 @@ class AssetController extends Controller
     public function storeMovement(AssetMovementRequest $request, Asset $asset): RedirectResponse
     {
         $this->authorize('move', $asset);
+        $this->authorizeCurrentSector((int) $request->validated('current_sector_id'));
 
         $this->assetMovementService->move($asset, $request->validated(), $request->user());
 
@@ -175,14 +180,38 @@ class AssetController extends Controller
     {
         return [
             'statuses' => AssetStatus::cases(),
-            'sectors' => Sector::query()->with('company')->orderBy('name')->get(),
-            'rooms' => Room::query()->with('sector')->orderBy('name')->get(),
+            'sectors' => $this->availableSectors(auth()->user()),
+            'rooms' => $this->availableRooms(auth()->user()),
             'collaborators' => User::query()
                 ->with('sectorAccesses.sector')
                 ->where('global_role', 'collaborator')
+                ->withAnySectorAccess(AccessScope::currentCompanySectorIds(auth()->user()))
                 ->orderBy('name')
                 ->get(),
         ];
+    }
+
+    private function availableSectors(User $user)
+    {
+        return Sector::query()
+            ->with('company')
+            ->whereIn('id', AccessScope::currentCompanySectorIds($user))
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function authorizeCurrentSector(int $sectorId): void
+    {
+        abort_unless(in_array($sectorId, AccessScope::currentCompanySectorIds(auth()->user()), true), 403);
+    }
+
+    private function availableRooms(User $user)
+    {
+        $query = Room::query()->with('sector')->orderBy('name');
+
+        AccessScope::applyCurrentCompanyScope($query, $user);
+
+        return $query->get();
     }
 
     private function legacyImportSummary(): array

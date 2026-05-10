@@ -13,6 +13,7 @@ use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleFeedback;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleTicketUsage;
 use App\Modules\KnowledgeBase\Services\KnowledgeBaseArticleSearchService;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\Ticket;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
@@ -20,6 +21,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -111,6 +113,7 @@ class KnowledgeBaseArticleController extends Controller
     public function createFromTicket(Ticket $ticket): View|RedirectResponse
     {
         $this->authorize('createFromTicket', [KnowledgeBaseArticle::class, $ticket]);
+        abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $ticket->sector?->company_id), 403);
 
         $ticket->loadMissing(['sector.company', 'requester', 'assignee', 'messages.user', 'group']);
 
@@ -149,8 +152,15 @@ class KnowledgeBaseArticleController extends Controller
 
         $payload = $request->safe()->except([
             'attachments',
+            'cover_image',
             'remove_attachments',
+            'remove_cover_image',
         ]);
+        abort_unless($this->availableSectors()->pluck('id')->contains((int) $payload['sector_id']), 403);
+
+        if ($coverImagePath = $this->storeCoverImage($request->file('cover_image'))) {
+            $payload['cover_image_path'] = $coverImagePath;
+        }
 
         $article = KnowledgeBaseArticle::query()->create([
             ...$this->normalizedPayload($payload),
@@ -165,6 +175,7 @@ class KnowledgeBaseArticleController extends Controller
     public function storeFromTicket(KnowledgeBaseArticleRequest $request, Ticket $ticket): RedirectResponse
     {
         $this->authorize('createFromTicket', [KnowledgeBaseArticle::class, $ticket]);
+        abort_unless(app(CurrentCompanyContext::class)->ensureForCompany($request->user(), (int) $ticket->sector?->company_id), 403);
 
         if ($ticket->generatedKnowledgeBaseArticle()->exists()) {
             return redirect()
@@ -174,10 +185,17 @@ class KnowledgeBaseArticleController extends Controller
 
         $payload = $request->safe()->except([
             'attachments',
+            'cover_image',
             'remove_attachments',
+            'remove_cover_image',
         ]);
+        abort_unless($this->availableSectors($ticket)->pluck('id')->contains((int) ($payload['sector_id'] ?? $ticket->sector_id)), 403);
 
         $canPublish = $request->user()->can('create', KnowledgeBaseArticle::class);
+
+        if ($coverImagePath = $this->storeCoverImage($request->file('cover_image'))) {
+            $payload['cover_image_path'] = $coverImagePath;
+        }
 
         $article = KnowledgeBaseArticle::query()->create([
             ...$this->normalizedPayload($payload, $ticket, $canPublish),
@@ -214,12 +232,27 @@ class KnowledgeBaseArticleController extends Controller
 
         $payload = $request->safe()->except([
             'attachments',
+            'cover_image',
             'remove_attachments',
+            'remove_cover_image',
         ]);
+        abort_unless($this->availableSectors()->pluck('id')->contains((int) $payload['sector_id']), 403);
+
+        $coverImagePathToDelete = null;
+
+        if ($coverImagePath = $this->storeCoverImage($request->file('cover_image'))) {
+            $coverImagePathToDelete = $article->cover_image_path;
+            $payload['cover_image_path'] = $coverImagePath;
+        } elseif ($request->boolean('remove_cover_image')) {
+            $coverImagePathToDelete = $article->cover_image_path;
+            $payload['cover_image_path'] = null;
+        }
 
         $article->update([
             ...$this->normalizedPayload($payload, null, true, false),
         ]);
+
+        $this->deleteCoverImagePath($coverImagePathToDelete);
 
         $this->removeAttachments($article, $request->input('remove_attachments', []));
         $this->storeAttachments($article, $request->file('attachments', []), $request->user()->id);
@@ -272,6 +305,7 @@ class KnowledgeBaseArticleController extends Controller
     private function availableSectors(?Ticket $ticket = null): Collection
     {
         $query = Sector::query()->with('company')->orderBy('name');
+        $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0);
 
         if ($ticket && ! auth()->user()->can('create', KnowledgeBaseArticle::class)) {
             $query->whereKey($ticket->sector_id);
@@ -380,6 +414,26 @@ class KnowledgeBaseArticleController extends Controller
 
                 $article->attachments()->save($attachment);
             });
+    }
+
+    private function storeCoverImage(?UploadedFile $file): ?string
+    {
+        if (! $file instanceof UploadedFile) {
+            return null;
+        }
+
+        $storedPath = $file->store('knowledge-base-covers', 'public');
+
+        return is_string($storedPath) ? $storedPath : null;
+    }
+
+    private function deleteCoverImagePath(?string $path): void
+    {
+        if (! $path) {
+            return;
+        }
+
+        Storage::disk('public')->delete($path);
     }
 
     private function removeAttachments(KnowledgeBaseArticle $article, array $attachmentIds): void

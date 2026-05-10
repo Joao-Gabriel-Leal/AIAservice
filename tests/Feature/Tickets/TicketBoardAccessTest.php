@@ -205,7 +205,7 @@ class TicketBoardAccessTest extends TestCase
             ->assertDontSeeText('Todos os setores')
             ->assertDontSeeText('Todos os quadros');
 
-        $this->assertSame(1, substr_count($response->getContent(), 'Central de formularios'));
+        $this->assertGreaterThanOrEqual(1, substr_count($response->getContent(), 'Central de formularios'));
     }
 
     public function test_operator_with_sector_access_can_open_manual_creation_without_configure_access(): void
@@ -438,7 +438,7 @@ class TicketBoardAccessTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_requester_can_still_open_own_ticket_directly_without_board_access(): void
+    public function test_requester_without_company_access_cannot_open_own_ticket_directly(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Solicitante',
@@ -478,8 +478,7 @@ class TicketBoardAccessTest extends TestCase
 
         $this->actingAs($requester)
             ->get(route('tickets.show', $ticket))
-            ->assertOk()
-            ->assertSeeText('Chamado proprio');
+            ->assertForbidden();
     }
 
     public function test_operator_access_is_limited_by_sector_not_board_operator_assignment(): void

@@ -11,6 +11,7 @@ use App\Enums\TicketFormOpeningAccessLevel;
 use App\Enums\TicketPriority;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\TicketAutomationRule;
 use App\Modules\Tickets\Models\TicketAutomationRuleAction;
@@ -181,7 +182,9 @@ class SettingsPage extends Component
             $this->selectedBoardId = $this->availableBoards()->first()?->id;
         }
 
-        if (! $this->selectedSectorId && $this->hasAnyActiveSector()) {
+        $currentCompanyId = app(CurrentCompanyContext::class)->currentCompanyId(auth()->user());
+
+        if (! $this->selectedSectorId && ($currentCompanyId ? $this->hasAnyActiveSector() : Sector::query()->where('is_active', true)->exists())) {
             abort(403);
         }
 
@@ -1754,6 +1757,7 @@ class SettingsPage extends Component
     private function availableSectors(): Collection
     {
         $query = Sector::query()->with('company')->orderBy('name');
+        $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0);
         if (! auth()->user()->isSuperAdmin()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
@@ -1903,7 +1907,10 @@ class SettingsPage extends Component
 
     private function hasAnyActiveSector(): bool
     {
-        return Sector::query()->where('is_active', true)->exists();
+        return Sector::query()
+            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0)
+            ->where('is_active', true)
+            ->exists();
     }
 
     private function groupImpact(TicketGroup $group): array

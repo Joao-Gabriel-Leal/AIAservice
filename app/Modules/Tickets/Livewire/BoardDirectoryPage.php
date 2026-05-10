@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Livewire;
 
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketBoardUserPreference;
 use App\Modules\Tickets\Services\SectorProvisioningService;
@@ -36,6 +37,7 @@ class BoardDirectoryPage extends Component
 
             abort_unless($board, 404);
             abort_unless(auth()->user()->canOperateBoard($board), 403);
+            abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $board->sector?->company_id), 403);
 
             $this->redirectToBoard($board);
 
@@ -48,6 +50,8 @@ class BoardDirectoryPage extends Component
             if (! $board) {
                 return;
             }
+
+            abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $board->sector?->company_id), 403);
 
             $this->redirectToBoard($board);
         }
@@ -113,6 +117,7 @@ class BoardDirectoryPage extends Component
                 },
             ])
             ->where('is_active', true);
+        $query->whereHas('sector', fn (Builder $sectorQuery) => $sectorQuery->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0));
 
         if (! auth()->user()->isGlobalAdmin()) {
             $query->whereIn('id', auth()->user()->operationalBoardIds());
@@ -183,6 +188,7 @@ class BoardDirectoryPage extends Component
     private function firstAccessibleBoardForSector(int $sectorId): ?TicketBoard
     {
         $query = TicketBoard::query()
+            ->with('sector')
             ->where('sector_id', $sectorId)
             ->where('is_active', true)
             ->orderByDesc('is_default')

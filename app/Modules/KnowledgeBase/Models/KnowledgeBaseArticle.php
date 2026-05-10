@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class KnowledgeBaseArticle extends Model
 {
@@ -24,6 +25,7 @@ class KnowledgeBaseArticle extends Model
         'generated_from_ticket_id',
         'title',
         'summary',
+        'cover_image_path',
         'content',
         'visibility',
         'editorial_status',
@@ -72,6 +74,15 @@ class KnowledgeBaseArticle extends Model
     public function isDraft(): bool
     {
         return $this->editorial_status === KnowledgeBaseArticleStatus::DRAFT;
+    }
+
+    public function coverImageUrl(): ?string
+    {
+        if (! $this->cover_image_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->cover_image_path);
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

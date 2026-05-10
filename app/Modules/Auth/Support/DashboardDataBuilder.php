@@ -19,6 +19,7 @@ use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleFeedback;
 use App\Modules\Licenses\Models\License;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,7 +40,7 @@ class DashboardDataBuilder
         $ticketsQuery = $this->ticketQuery($user, $selectedSectorId);
 
         $stats = [
-            'companies' => $user->isSuperAdmin() ? Company::query()->count() : null,
+            'companies' => $user->isSuperAdmin() ? (app(\App\Modules\Shared\Support\CurrentCompanyContext::class)->currentCompanyId($user) ? 1 : 0) : null,
             'sectors' => $selectedSectorId ? 1 : $availableSectors->count(),
             'collaborators' => $this->collaboratorCount($user, $selectedSectorId),
             'tickets_total' => (clone $ticketsQuery)->count(),
@@ -196,17 +197,14 @@ class DashboardDataBuilder
 
     private function availableSectors(User $user): Collection
     {
-        if ($user->isSuperAdmin()) {
-            return Sector::query()
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get();
-        }
+        $sectorIds = collect(AccessScope::currentCompanySectorIds($user, $this->usesOperationalDashboardScope($user)));
 
-        $sectorIds = $this->usesOperationalDashboardScope($user)
-            ? collect($user->operationalSectorIds())
-            : collect($user->allSectorIds())
-                ->merge(Ticket::query()->visibleTo($user)->pluck('sector_id'));
+        if (! $this->usesOperationalDashboardScope($user) && ! $user->isSuperAdmin()) {
+            $sectorIds = $sectorIds->merge(Ticket::query()
+                ->visibleTo($user)
+                ->whereHas('sector', fn (Builder $query) => $query->where('company_id', app(\App\Modules\Shared\Support\CurrentCompanyContext::class)->currentCompanyId($user) ?: 0))
+                ->pluck('sector_id'));
+        }
 
         $sectorIds = $sectorIds
             ->filter()
@@ -244,6 +242,8 @@ class DashboardDataBuilder
             $query->visibleTo($user);
         }
 
+        AccessScope::applyCurrentCompanyScope($query, $user);
+
         return $query
             ->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('sector_id', $selectedSectorId));
     }
@@ -255,7 +255,7 @@ class DashboardDataBuilder
 
     private function applyDashboardSectorScope(Builder $query, User $user, string $column = 'sector_id'): Builder
     {
-        $sectorIds = $user->operationalSectorIds();
+        $sectorIds = AccessScope::currentCompanySectorIds($user, true);
 
         if ($sectorIds === []) {
             return $query->whereRaw('1 = 0');
@@ -493,9 +493,9 @@ class DashboardDataBuilder
 
     private function licenseQuery(User $user, ?int $sectorId): Builder
     {
-        return License::query()
+        $query = License::query()
             ->when(! $user->isSuperAdmin(), function (Builder $query) use ($user) {
-                $sectorIds = $user->operationalSectorIds();
+                $sectorIds = AccessScope::currentCompanySectorIds($user, true);
 
                 if ($sectorIds === []) {
                     $query->whereRaw('1 = 0');
@@ -504,8 +504,11 @@ class DashboardDataBuilder
                 }
 
                 $query->whereIn('sector_id', $sectorIds);
-            })
-            ->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('sector_id', $selectedSectorId));
+            });
+
+        AccessScope::applyCurrentCompanyScope($query, $user);
+
+        return $query->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('sector_id', $selectedSectorId));
     }
 
     private function applyExpiredLicenseFilter(Builder $query, string $today): Builder
@@ -620,6 +623,8 @@ class DashboardDataBuilder
             }
         }
 
+        AccessScope::applyCurrentCompanyScope($query, $user, 'currentSector');
+
         return $query->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('current_sector_id', $selectedSectorId));
     }
 
@@ -675,8 +680,12 @@ class DashboardDataBuilder
     private function knowledgeBaseAdminQuery(User $user, ?int $sectorId): Builder
     {
         return KnowledgeBaseArticle::query()
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', app(\App\Modules\Shared\Support\CurrentCompanyContext::class)->currentCompanyId($user) ?: 0))
             ->when(! $user->isSuperAdmin(), function (Builder $query) use ($user) {
-                $sectorIds = $user->adminSectorIds();
+                $sectorIds = collect($user->adminSectorIds())
+                    ->intersect(AccessScope::currentCompanySectorIds($user))
+                    ->values()
+                    ->all();
 
                 if ($sectorIds === []) {
                     $query->whereRaw('1 = 0');
@@ -694,10 +703,11 @@ class DashboardDataBuilder
         return $query
             ->where('is_active', true)
             ->where('editorial_status', KnowledgeBaseArticleStatus::PUBLISHED->value)
+            ->whereHas('sector', fn (Builder $sectorQuery) => $sectorQuery->where('company_id', app(\App\Modules\Shared\Support\CurrentCompanyContext::class)->currentCompanyId($user) ?: 0))
             ->where(function (Builder $visibilityQuery) use ($user) {
                 $visibilityQuery->where('visibility', KnowledgeBaseVisibility::PUBLIC->value);
 
-                $operationalSectorIds = $user->operationalSectorIds();
+                $operationalSectorIds = AccessScope::currentCompanySectorIds($user, true);
 
                 if ($operationalSectorIds !== []) {
                     $visibilityQuery->orWhere(function (Builder $privateQuery) use ($operationalSectorIds) {
@@ -956,7 +966,7 @@ class DashboardDataBuilder
 
         $sectorIds = $sectorId
             ? [$sectorId]
-            : ($this->usesOperationalDashboardScope($user) ? $user->operationalSectorIds() : $user->allSectorIds());
+            : AccessScope::currentCompanySectorIds($user, $this->usesOperationalDashboardScope($user));
 
         if ($sectorIds === []) {
             return 0;

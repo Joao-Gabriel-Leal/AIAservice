@@ -52,17 +52,17 @@ class LicenseManagementTest extends TestCase
         $this->actingAs($context['developer'])
             ->get(route('knowledge-base.index'))
             ->assertOk()
-            ->assertSee('Licencas');
+            ->assertSee(route('licenses.index', absolute: false), false);
 
         $this->actingAs($context['technicianA'])
             ->get(route('knowledge-base.index'))
             ->assertOk()
-            ->assertDontSee('Licencas');
+            ->assertDontSee(route('licenses.index', absolute: false), false);
 
         $this->actingAs($context['requesterA'])
             ->get(route('knowledge-base.index'))
             ->assertOk()
-            ->assertDontSee('Licencas');
+            ->assertDontSee(route('licenses.index', absolute: false), false);
     }
 
     public function test_global_admin_can_create_license_for_any_sector(): void

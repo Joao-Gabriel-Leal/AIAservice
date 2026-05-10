@@ -4,6 +4,7 @@ namespace App\Modules\Shared\Support;
 
 use App\Enums\SectorAccessLevel;
 use App\Models\User;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use Illuminate\Database\Eloquent\Builder;
 
 class AccessScope
@@ -34,5 +35,29 @@ class AccessScope
         }
 
         return $query->whereIn($column, $sectorIds);
+    }
+
+    public static function applyCurrentCompanyScope(Builder $query, ?User $user, string $relation = 'sector'): Builder
+    {
+        if (! $user) {
+            return $query;
+        }
+
+        $companyId = app(CurrentCompanyContext::class)->currentCompanyId($user);
+
+        if (! $companyId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($relation === '') {
+            return $query->where('company_id', $companyId);
+        }
+
+        return $query->whereHas($relation, fn (Builder $relationQuery) => $relationQuery->where('company_id', $companyId));
+    }
+
+    public static function currentCompanySectorIds(User $user, bool $operational = false): array
+    {
+        return app(CurrentCompanyContext::class)->scopedSectorIds($user, $operational);
     }
 }

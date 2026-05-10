@@ -4,6 +4,7 @@ namespace App\Modules\Tickets\Support;
 
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketField;
@@ -14,19 +15,12 @@ class TicketIndexOptions
 {
     public function sectorOptions(User $user): Collection
     {
-        if ($user->isSuperAdmin()) {
-            return Sector::query()
-                ->with('company')
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get();
-        }
-
-        $sectorIds = collect($user->allSectorIds())
+        $sectorIds = collect(AccessScope::currentCompanySectorIds($user))
             ->merge(
                 Ticket::query()
                     ->topLevel()
                     ->where('requester_id', $user->id)
+                    ->whereHas('sector', fn ($query) => $query->whereIn('id', AccessScope::currentCompanySectorIds($user)))
                     ->pluck('sector_id')
                     ->all(),
             )
@@ -90,6 +84,7 @@ class TicketIndexOptions
                 Ticket::query()
                     ->topLevel()
                     ->where('requester_id', $user->id)
+                    ->whereHas('sector', fn ($query) => $query->whereIn('id', AccessScope::currentCompanySectorIds($user)))
                     ->pluck('ticket_board_id')
                     ->all(),
             )
@@ -104,6 +99,7 @@ class TicketIndexOptions
         return TicketBoard::query()
             ->with('sector.company')
             ->whereIn('id', $boardIds->all())
+            ->whereHas('sector', fn ($query) => $query->whereIn('id', AccessScope::currentCompanySectorIds($user)))
             ->when($sectorId, fn ($query) => $query->where('sector_id', $sectorId))
             ->where('is_active', true)
             ->orderByDesc('is_default')

@@ -19,7 +19,7 @@ class CentralPageTest extends TestCase
     {
         ['firstSector' => $firstSector, 'secondSector' => $secondSector] = $this->centralContext();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->centralUser($firstSector, $secondSector))
             ->get(route('tickets.central', ['sector' => $secondSector->id]))
             ->assertOk()
             ->assertSeeText("Formularios de {$secondSector->name}")
@@ -33,7 +33,7 @@ class CentralPageTest extends TestCase
     {
         ['firstSector' => $firstSector] = $this->centralContext();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->centralUser($firstSector))
             ->get(route('tickets.central', ['sector' => 99999]))
             ->assertOk()
             ->assertSeeText("Formularios de {$firstSector->name}");
@@ -45,7 +45,7 @@ class CentralPageTest extends TestCase
 
         $secondSector->board->forms()->update(['is_active' => false]);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->centralUser($secondSector))
             ->get(route('tickets.central', ['sector' => $secondSector->id]))
             ->assertOk()
             ->assertSeeText('Este setor ainda nao possui formularios ativos para abertura.')
@@ -54,9 +54,9 @@ class CentralPageTest extends TestCase
 
     public function test_central_page_does_not_offer_a_general_ticket_shortcut(): void
     {
-        $this->centralContext();
+        ['firstSector' => $firstSector] = $this->centralContext();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->centralUser($firstSector))
             ->get(route('tickets.central'))
             ->assertOk()
             ->assertDontSeeText('Abrir chamado geral')
@@ -65,7 +65,7 @@ class CentralPageTest extends TestCase
 
     public function test_central_page_filters_sectors_by_name_or_company(): void
     {
-        ['company' => $company] = $this->centralContext();
+        ['company' => $company, 'firstSector' => $firstSector, 'secondSector' => $secondSector] = $this->centralContext();
 
         Sector::query()->create([
             'company_id' => $company->id,
@@ -75,7 +75,7 @@ class CentralPageTest extends TestCase
             'is_active' => true,
         ]);
 
-        Livewire::actingAs(User::factory()->create())
+        Livewire::actingAs($this->centralUser($firstSector, $secondSector))
             ->test(CentralPage::class)
             ->set('sectorSearch', 'ti')
             ->assertSee('TI')
@@ -118,5 +118,21 @@ class CentralPageTest extends TestCase
             'firstSector' => $firstSector,
             'secondSector' => $secondSector,
         ];
+    }
+
+    private function centralUser(Sector ...$sectors): User
+    {
+        $user = User::factory()->create([
+            'sector_id' => $sectors[0]?->id,
+        ]);
+
+        foreach ($sectors as $sector) {
+            $user->sectorAccesses()->updateOrCreate(
+                ['sector_id' => $sector->id],
+                ['access_level' => 'requester'],
+            );
+        }
+
+        return $user;
     }
 }

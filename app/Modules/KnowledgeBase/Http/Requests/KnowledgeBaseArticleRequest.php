@@ -35,6 +35,8 @@ class KnowledgeBaseArticleRequest extends FormRequest
             'sector_id' => ['required', 'integer', 'exists:sectors,id'],
             'title' => ['required', 'string', 'max:160'],
             'summary' => ['required', 'string', 'max:500'],
+            'cover_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'remove_cover_image' => ['nullable', 'boolean'],
             'content' => ['required', 'string'],
             'visibility' => ['required', Rule::enum(KnowledgeBaseVisibility::class)],
             'editorial_status' => ['nullable', Rule::enum(KnowledgeBaseArticleStatus::class)],

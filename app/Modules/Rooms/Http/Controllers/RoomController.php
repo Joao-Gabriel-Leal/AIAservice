@@ -9,6 +9,7 @@ use App\Modules\Rooms\Http\Requests\RoomRequest;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Rooms\Support\RoomIndexQuery;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -70,6 +71,8 @@ class RoomController extends Controller
         $returnToCompanyId = $payload['return_to_company_id'] ?? null;
         unset($payload['return_to_company_id']);
 
+        abort_unless(in_array((int) $payload['sector_id'], AccessScope::currentCompanySectorIds(auth()->user()), true), 403);
+
         if (! auth()->user()->canManageRooms()) {
             abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
         }
@@ -101,6 +104,8 @@ class RoomController extends Controller
         $returnToCompanyId = $payload['return_to_company_id'] ?? null;
         unset($payload['return_to_company_id']);
 
+        abort_unless(in_array((int) $payload['sector_id'], AccessScope::currentCompanySectorIds(auth()->user()), true), 403);
+
         if (! auth()->user()->canManageRooms()) {
             abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
         }
@@ -129,6 +134,8 @@ class RoomController extends Controller
         if (! auth()->user()->canManageRooms()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
+
+        $query->where('company_id', app(\App\Modules\Shared\Support\CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0);
 
         return $query->get();
     }

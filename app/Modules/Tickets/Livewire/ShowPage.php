@@ -7,6 +7,7 @@ use App\Enums\TicketTimeEntryApprovalStatus;
 use App\Enums\TicketTimeEntrySource;
 use App\Models\User;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
@@ -84,6 +85,7 @@ class ShowPage extends Component
     public function mount(Ticket $ticket): void
     {
         $this->authorize('view', $ticket);
+        abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $ticket->sector?->company_id), 403);
         $this->ticketId = $ticket->id;
         $this->timeEntryForm = $this->defaultTimeEntryForm();
     }

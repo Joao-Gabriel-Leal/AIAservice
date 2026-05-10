@@ -195,8 +195,9 @@ class AssetImportCommandTest extends TestCase
             ->assertOk()
             ->assertSee('Ultima importacao patrimonial')
             ->assertSee('Linhas pendentes de saneamento')
-            ->assertSee('PLACA-5002')
+            ->assertSee('PLACA-5003')
             ->assertSee('Pendente de saneamento')
+            ->assertDontSee('PLACA-5002')
             ->assertDontSee('PLACA-5001');
 
         $this->actingAs($admin)

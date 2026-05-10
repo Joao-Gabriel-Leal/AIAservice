@@ -2,7 +2,9 @@
 
 namespace App\Modules\Assets\Support;
 
+use App\Models\User;
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Shared\Support\AccessScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -20,10 +22,14 @@ class AssetIndexQuery
         ];
     }
 
-    public function build(array $filters): Builder
+    public function build(array $filters, User $user): Builder
     {
-        return Asset::query()
-            ->with(['currentSector', 'currentRoom', 'currentUser'])
+        $query = Asset::query()
+            ->with(['currentSector', 'currentRoom', 'currentUser']);
+
+        AccessScope::applyCurrentCompanyScope($query, $user, 'currentSector');
+
+        return $query
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $query->where(function (Builder $searchQuery) use ($filters) {
                     $searchQuery

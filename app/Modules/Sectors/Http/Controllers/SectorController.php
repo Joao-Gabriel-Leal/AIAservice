@@ -9,6 +9,7 @@ use App\Modules\Sectors\Http\Requests\SectorRequest;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Sectors\Support\SectorIndexQuery;
 use App\Modules\SectorTemplates\Models\SectorTemplate;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
@@ -35,7 +36,7 @@ class SectorController extends Controller
         return view('modules.sectors.index', [
             'sectors' => $sectors,
             'filters' => $filters,
-            'companies' => Company::query()->orderBy('name')->get(),
+            'companies' => app(CurrentCompanyContext::class)->availableCompanies(auth()->user()),
         ]);
     }
 
@@ -53,12 +54,13 @@ class SectorController extends Controller
     {
         $this->authorize('create', Sector::class);
 
-        $companyId = $request->integer('company_id') ?: null;
-        $companyId = $companyId && Company::query()->whereKey($companyId)->exists() ? $companyId : null;
+        $availableCompanyIds = app(CurrentCompanyContext::class)->availableCompanies($request->user())->pluck('id');
+        $companyId = $request->integer('company_id') ?: app(CurrentCompanyContext::class)->currentCompanyId($request->user());
+        $companyId = $companyId && $availableCompanyIds->contains($companyId) ? $companyId : null;
 
         return view('modules.sectors.create', [
             'sector' => new Sector(['company_id' => $companyId]),
-            'companies' => Company::query()->orderBy('name')->get(),
+            'companies' => app(CurrentCompanyContext::class)->availableCompanies($request->user()),
             'templates' => SectorTemplate::query()->where('is_active', true)->orderBy('name')->get(),
             'returnToCompanyId' => $this->returnToCompanyId($request, $companyId),
         ]);
@@ -71,6 +73,7 @@ class SectorController extends Controller
         $payload = $request->validated();
         $returnToCompanyId = $payload['return_to_company_id'] ?? null;
         unset($payload['return_to_company_id']);
+        abort_unless(app(CurrentCompanyContext::class)->availableCompanies($request->user())->pluck('id')->contains((int) $payload['company_id']), 403);
 
         $sector = Sector::query()->create([
             ...$payload,
@@ -90,7 +93,7 @@ class SectorController extends Controller
 
         return view('modules.sectors.edit', [
             'sector' => $sector,
-            'companies' => Company::query()->orderBy('name')->get(),
+            'companies' => app(CurrentCompanyContext::class)->availableCompanies($request->user()),
             'templates' => SectorTemplate::query()->where('is_active', true)->orderBy('name')->get(),
             'returnToCompanyId' => $this->returnToCompanyId($request),
         ]);
@@ -103,6 +106,7 @@ class SectorController extends Controller
         $payload = $request->validated();
         $returnToCompanyId = $payload['return_to_company_id'] ?? null;
         unset($payload['return_to_company_id']);
+        abort_unless(app(CurrentCompanyContext::class)->availableCompanies($request->user())->pluck('id')->contains((int) $payload['company_id']), 403);
 
         $sector->update([
             ...$payload,

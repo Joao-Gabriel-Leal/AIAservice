@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Livewire;
 
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\TicketForm;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -78,6 +79,7 @@ class CentralPage extends Component
                     ->orderBy('name'),
             ])
             ->where('is_active', true)
+            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0)
             ->orderBy('name')
             ->get();
     }

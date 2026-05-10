@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Users\Exports\UsersExport;
 use App\Modules\Users\Http\Requests\UserRequest;
 use App\Modules\Users\Notifications\AccountCreatedNotification;
@@ -237,6 +238,8 @@ class UserController extends Controller
         if (! auth()->user()->isGlobalAdmin()) {
             $query->whereIn('id', auth()->user()->adminSectorIds());
         }
+
+        $query->whereIn('id', AccessScope::currentCompanySectorIds(auth()->user()));
 
         return $query->get();
     }

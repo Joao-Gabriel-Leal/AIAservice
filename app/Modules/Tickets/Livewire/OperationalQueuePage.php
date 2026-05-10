@@ -4,6 +4,8 @@ namespace App\Modules\Tickets\Livewire;
 
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\AccessScope;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketIndexQuery;
@@ -118,7 +120,14 @@ class OperationalQueuePage extends Component
     {
         /** @var User $user */
         $user = auth()->user();
-        $boardIds = $user->operationalBoardIds();
+        $sectorIds = AccessScope::currentCompanySectorIds($user, true);
+        $boardIds = $sectorIds === []
+            ? []
+            : \App\Modules\Tickets\Models\TicketBoard::query()
+                ->whereIn('id', $user->operationalBoardIds())
+                ->whereIn('sector_id', $sectorIds)
+                ->pluck('id')
+                ->all();
 
         $query = Ticket::query()
             ->visibleTo($user)
@@ -194,7 +203,7 @@ class OperationalQueuePage extends Component
 
     private function sectorOptions(): Collection
     {
-        $sectorIds = auth()->user()->operationalSectorIds();
+        $sectorIds = AccessScope::currentCompanySectorIds(auth()->user(), true);
 
         if ($sectorIds === []) {
             return collect();
@@ -203,6 +212,7 @@ class OperationalQueuePage extends Component
         return Sector::query()
             ->with('company')
             ->whereIn('id', $sectorIds)
+            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();

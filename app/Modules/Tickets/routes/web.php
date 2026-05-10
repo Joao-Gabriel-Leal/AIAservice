@@ -13,6 +13,7 @@ use App\Modules\Tickets\Livewire\SettingsPage;
 use App\Modules\Tickets\Livewire\ShowPage;
 use App\Modules\Tickets\Livewire\TrashPage;
 use App\Modules\Tickets\Models\TicketBoard;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->prefix('tickets')->name('tickets.')->group(function () {
@@ -50,6 +51,7 @@ Route::middleware('auth')->prefix('tickets')->name('tickets.')->group(function (
         }
 
         abort_unless(auth()->user()->canOperateBoard($board), 403);
+        abort_unless(app(CurrentCompanyContext::class)->ensureForCompany(auth()->user(), (int) $board->sector?->company_id), 403);
 
         return redirect()->route('tickets.board.show', [
             'board' => $board,

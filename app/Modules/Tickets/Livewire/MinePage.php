@@ -4,6 +4,7 @@ namespace App\Modules\Tickets\Livewire;
 
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Support\TicketReferenceCode;
 use Illuminate\Contracts\View\View;
@@ -62,6 +63,7 @@ class MinePage extends Component
         $ticketsQuery = Ticket::query()
             ->topLevel()
             ->where('requester_id', $user->id)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId($user) ?: 0))
             ->with([
                 'sector.company',
                 'group',
@@ -137,6 +139,7 @@ class MinePage extends Component
         $sectorIds = Ticket::query()
             ->topLevel()
             ->where('requester_id', auth()->id())
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0))
             ->whereNotNull('sector_id')
             ->distinct()
             ->pluck('sector_id');
@@ -148,6 +151,7 @@ class MinePage extends Component
         return Sector::query()
             ->with('company')
             ->whereIn('id', $sectorIds->all())
+            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0)
             ->orderBy('name')
             ->get();
     }
