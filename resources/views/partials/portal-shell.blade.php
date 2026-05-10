@@ -121,18 +121,59 @@
 
                 @if ($currentCompany)
                     <div class="portal-company-switcher">
-                        <p class="portal-company-switcher-label">Empresa atual</p>
+                        <div class="portal-company-switcher-expanded">
+                            <p class="portal-company-switcher-label">Empresa atual</p>
+                            @if ($availableCompanies->count() > 1)
+                                <form method="POST" action="{{ route('context.company.store') }}">
+                                    @csrf
+                                    <select name="company_id" class="portal-company-select" onchange="this.form.submit()" aria-label="Trocar empresa atual">
+                                        @foreach ($availableCompanies as $companyOption)
+                                            <option value="{{ $companyOption->id }}" @selected($currentCompany->id === $companyOption->id)>{{ $companyOption->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </form>
+                            @else
+                                <p class="portal-company-current">{{ $currentCompany->name }}</p>
+                            @endif
+                        </div>
+
                         @if ($availableCompanies->count() > 1)
-                            <form method="POST" action="{{ route('context.company.store') }}">
-                                @csrf
-                                <select name="company_id" class="portal-company-select" onchange="this.form.submit()" aria-label="Trocar empresa atual">
-                                    @foreach ($availableCompanies as $companyOption)
-                                        <option value="{{ $companyOption->id }}" @selected($currentCompany->id === $companyOption->id)>{{ $companyOption->name }}</option>
-                                    @endforeach
-                                </select>
-                            </form>
+                            <details class="portal-company-compact-menu">
+                                <summary
+                                    class="portal-company-compact-trigger"
+                                    aria-label="Trocar empresa atual: {{ $currentCompany->name }}"
+                                    title="Trocar empresa atual: {{ $currentCompany->name }}"
+                                >
+                                    {!! $portalNavIcon('companies') !!}
+                                </summary>
+
+                                <div class="portal-company-compact-panel">
+                                    <p class="portal-company-compact-heading">Empresa atual</p>
+                                    <div class="portal-company-compact-list">
+                                        @foreach ($availableCompanies as $companyOption)
+                                            <form method="POST" action="{{ route('context.company.store') }}">
+                                                @csrf
+                                                <input type="hidden" name="company_id" value="{{ $companyOption->id }}">
+                                                <button
+                                                    type="submit"
+                                                    class="portal-company-compact-option {{ $currentCompany->id === $companyOption->id ? 'portal-company-compact-option-active' : '' }}"
+                                                    @disabled($currentCompany->id === $companyOption->id)
+                                                >
+                                                    <span>{{ $companyOption->name }}</span>
+                                                </button>
+                                            </form>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </details>
                         @else
-                            <p class="portal-company-current">{{ $currentCompany->name }}</p>
+                            <span
+                                class="portal-company-compact-current"
+                                aria-label="Empresa atual: {{ $currentCompany->name }}"
+                                title="Empresa atual: {{ $currentCompany->name }}"
+                            >
+                                {!! $portalNavIcon('companies') !!}
+                            </span>
                         @endif
                     </div>
                 @endif
