@@ -73,7 +73,17 @@
                     x-bind:aria-label="showPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'"
                     x-bind:aria-pressed="showPassword.toString()"
                 >
-                    <span x-text="showPassword ? 'Ocultar' : 'Mostrar'">Mostrar</span>
+                    <span class="sr-only" x-text="showPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'">Mostrar nova senha</span>
+                    <svg x-show="! showPassword" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M2.5 12S6 5.5 12 5.5S21.5 12 21.5 12S18 18.5 12 18.5S2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8" />
+                    </svg>
+                    <svg x-cloak x-show="showPassword" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M3 3L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                        <path d="M10.7 5.7C11.1 5.6 11.5 5.5 12 5.5C18 5.5 21.5 12 21.5 12C20.7 13.4 19.8 14.6 18.8 15.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M6.6 6.9C4.1 8.8 2.5 12 2.5 12S6 18.5 12 18.5C13.6 18.5 15 18 16.2 17.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M9.9 9.9A3.1 3.1 0 0 0 14.1 14.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
                 </button>
             </div>
 
@@ -112,7 +122,17 @@
                     x-bind:aria-label="showPasswordConfirmation ? 'Ocultar confirmacao de senha' : 'Mostrar confirmacao de senha'"
                     x-bind:aria-pressed="showPasswordConfirmation.toString()"
                 >
-                    <span x-text="showPasswordConfirmation ? 'Ocultar' : 'Mostrar'">Mostrar</span>
+                    <span class="sr-only" x-text="showPasswordConfirmation ? 'Ocultar confirmacao de senha' : 'Mostrar confirmacao de senha'">Mostrar confirmacao de senha</span>
+                    <svg x-show="! showPasswordConfirmation" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M2.5 12S6 5.5 12 5.5S21.5 12 21.5 12S18 18.5 12 18.5S2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8" />
+                    </svg>
+                    <svg x-cloak x-show="showPasswordConfirmation" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M3 3L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                        <path d="M10.7 5.7C11.1 5.6 11.5 5.5 12 5.5C18 5.5 21.5 12 21.5 12C20.7 13.4 19.8 14.6 18.8 15.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M6.6 6.9C4.1 8.8 2.5 12 2.5 12S6 18.5 12 18.5C13.6 18.5 15 18 16.2 17.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M9.9 9.9A3.1 3.1 0 0 0 14.1 14.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
                 </button>
             </div>
 

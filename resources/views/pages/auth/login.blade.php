@@ -1,9 +1,10 @@
 <x-layouts::auth.split
     :title="'Entrar'"
     panel-eyebrow=""
-    panel-title="Entrar"
-    panel-description="Use seu email corporativo e senha para acessar."
-    hero-description="Acesso seguro ao portal interno."
+    panel-title="Bem-vindo de volta!"
+    panel-description="Entre com suas credenciais para acessar o sistema"
+    hero-title="Gerencie seus chamados com eficiencia"
+    hero-description="Sistema completo de gestao operacional para sua empresa"
 >
     @if (session('status'))
         <div class="auth-status">
@@ -33,7 +34,7 @@
                     required
                     autofocus
                     autocomplete="email"
-                    placeholder="voce@empresa.com.br"
+                    placeholder="seu@email.com"
                     class="ui-input auth-field-input auth-field-input-icon"
                 />
             </div>
@@ -72,7 +73,17 @@
                     x-bind:aria-label="showPassword ? 'Ocultar senha' : 'Mostrar senha'"
                     x-bind:aria-pressed="showPassword.toString()"
                 >
-                    <span x-text="showPassword ? 'Ocultar' : 'Mostrar'">Mostrar</span>
+                    <span class="sr-only" x-text="showPassword ? 'Ocultar senha' : 'Mostrar senha'">Mostrar senha</span>
+                    <svg x-show="! showPassword" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M2.5 12S6 5.5 12 5.5S21.5 12 21.5 12S18 18.5 12 18.5S2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8" />
+                    </svg>
+                    <svg x-cloak x-show="showPassword" class="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M3 3L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                        <path d="M10.7 5.7C11.1 5.6 11.5 5.5 12 5.5C18 5.5 21.5 12 21.5 12C20.7 13.4 19.8 14.6 18.8 15.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M6.6 6.9C4.1 8.8 2.5 12 2.5 12S6 18.5 12 18.5C13.6 18.5 15 18 16.2 17.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M9.9 9.9A3.1 3.1 0 0 0 14.1 14.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
                 </button>
             </div>
 
@@ -90,12 +101,12 @@
                     value="1"
                     @checked(old('remember'))
                 />
-                <span>Lembrar neste dispositivo</span>
+                <span>Lembrar-me</span>
             </label>
 
             @if (Route::has('password.request'))
                 <flux:link class="auth-inline-link text-sm" :href="route('password.request')" wire:navigate>
-                    Esqueci minha senha
+                    Esqueceu a senha?
                 </flux:link>
             @endif
         </div>
@@ -105,7 +116,12 @@
             class="ui-action ui-action-primary auth-submit"
             data-test="login-button"
         >
-            Entrar no portal
+            <span>Entrar</span>
+            <svg class="h-5 w-5 auth-submit-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M10 7L15 12L10 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M14 5H18C19.7 5 21 6.3 21 8V16C21 17.7 19.7 19 18 19H14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
         </button>
     </form>
 
