@@ -335,8 +335,8 @@ new #[Title('Meu perfil')] class extends Component {
     @endif
 
     <div class="space-y-6">
-        <section class="ui-panel overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                <div class="bg-slate-950 px-6 py-7 text-white">
+        <section class="ui-panel overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                <div class="rounded-t-2xl bg-slate-950 px-6 py-7 text-white">
                     <div class="grid gap-7 lg:grid-cols-[156px_minmax(0,1fr)_360px]">
                         <div class="flex justify-center lg:block">
                             <div class="shrink-0">
@@ -421,7 +421,7 @@ new #[Title('Meu perfil')] class extends Component {
                                         x-show="open"
                                         x-transition.origin.top.left
                                         x-on:click.outside="open = false"
-                                        class="absolute left-0 z-30 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950 p-2 shadow-2xl ring-1 ring-white/10"
+                                        class="absolute left-0 z-50 mt-2 max-h-72 w-64 overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-slate-950 p-2 shadow-2xl ring-1 ring-white/10"
                                         role="listbox"
                                     >
                                         @foreach ($workStatusOptions as $value => $option)

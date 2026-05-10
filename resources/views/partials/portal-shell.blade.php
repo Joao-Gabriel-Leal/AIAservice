@@ -218,7 +218,7 @@
 
                 <div class="portal-sidebar-actions">
                     <div class="portal-sidebar-actions-grid">
-                        <a href="{{ route('profile.edit') }}" class="portal-sidebar-action {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}" title="Perfil">
+                        <a href="{{ route('profile.edit') }}" class="portal-sidebar-action portal-sidebar-action-wide {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}" title="Perfil">
                             {!! $portalNavIcon('profile') !!}
                             <span>Perfil</span>
                         </a>
