@@ -1,13 +1,70 @@
-@php($portalMode = $portalMode ?? 'default')
-@php($isFocusedForm = $portalMode === 'focused-form')
-@php($showHeader = $showHeader ?? true)
-@php($showSubtitle = $showSubtitle ?? false)
-@php($headerVariant = $headerVariant ?? null)
-@php($headerVariant = $headerVariant ?? ($showHeader ? 'quiet' : 'none'))
-@php($headerVariant = in_array($headerVariant, ['hero', 'quiet', 'none'], true) ? $headerVariant : 'quiet')
-@php($focusedHeaderActionClass = 'ui-action portal-focused-header-action')
-@php($user = auth()->user())
-@php($unreadNotificationsCount = $user?->unreadNotifications()->count() ?? 0)
+@php
+    $portalMode = $portalMode ?? 'default';
+    $isFocusedForm = $portalMode === 'focused-form';
+    $showHeader = $showHeader ?? true;
+    $showSubtitle = $showSubtitle ?? false;
+    $headerVariant = $headerVariant ?? null;
+    $headerVariant = $headerVariant ?? ($showHeader ? 'quiet' : 'none');
+    $headerVariant = in_array($headerVariant, ['hero', 'quiet', 'none'], true) ? $headerVariant : 'quiet';
+    $focusedHeaderActionClass = 'ui-action portal-focused-header-action';
+    $user = auth()->user();
+    $unreadNotificationsCount = $user?->unreadNotifications()->count() ?? 0;
+
+    $portalNavIcon = static function (string $icon): string {
+        $attrs = 'aria-hidden="true" viewBox="0 0 24 24" class="portal-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
+
+        return match ($icon) {
+            'dashboard' => '<svg '.$attrs.'><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>',
+            'search' => '<svg '.$attrs.'><circle cx="11" cy="11" r="6" /><path d="M16 16L20 20" /></svg>',
+            'forms' => '<svg '.$attrs.'><path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7.5 3.5Z" /><path d="M14 3.5V8h4" /><path d="M9 12h6M9 16h4" /></svg>',
+            'tickets' => '<svg '.$attrs.'><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H10l-4.5 4v-4A2.5 2.5 0 0 1 3 12.5v-6Z" /></svg>',
+            'knowledge' => '<svg '.$attrs.'><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5A2.5 2.5 0 0 1 20 21.5v-16Z" /></svg>',
+            'boards' => '<svg '.$attrs.'><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M8 5v14M16 5v14M4 10h16" /></svg>',
+            'licenses' => '<svg '.$attrs.'><circle cx="8" cy="15" r="3" /><path d="M10.5 12.5 19 4M15.5 7.5 18 10M13.5 9.5 16 12" /></svg>',
+            'companies' => '<svg '.$attrs.'><path d="M5 20V7.5A1.5 1.5 0 0 1 6.5 6H11v14" /><path d="M11 20V4.5A1.5 1.5 0 0 1 12.5 3H18v17" /><path d="M3.5 20h17" /><path d="M8 10h.01M8 14h.01M14 7h.01M14 11h.01M14 15h.01" /></svg>',
+            'templates' => '<svg '.$attrs.'><path d="M8 4.5h8A1.5 1.5 0 0 1 17.5 6v13A1.5 1.5 0 0 1 16 20.5H8A1.5 1.5 0 0 1 6.5 19V6A1.5 1.5 0 0 1 8 4.5Z" /><path d="M9.5 4.5A2.5 2.5 0 0 1 12 2a2.5 2.5 0 0 1 2.5 2.5" /><path d="M9.5 10h5M9.5 14h5M9.5 17h3" /></svg>',
+            'users' => '<svg '.$attrs.'><path d="M16 19v-1.2a3.8 3.8 0 0 0-3.8-3.8H7.8A3.8 3.8 0 0 0 4 17.8V19" /><circle cx="10" cy="8" r="3" /><path d="M20 19v-1a3 3 0 0 0-2.4-2.9" /><path d="M16.5 5.3a3 3 0 0 1 0 5.4" /></svg>',
+            'emails' => '<svg '.$attrs.'><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><path d="m5 8 7 5 7-5" /></svg>',
+            'assets' => '<svg '.$attrs.'><path d="M12 3.5 20 8l-8 4.5L4 8l8-4.5Z" /><path d="M20 12.5 12 17 4 12.5" /><path d="M20 17 12 21.5 4 17" /></svg>',
+            'appearance' => '<svg '.$attrs.'><path d="M12 3.5a8.5 8.5 0 0 0 0 17h1.2a1.9 1.9 0 0 0 1.3-3.3 1.55 1.55 0 0 1 1.1-2.7H17a4 4 0 0 0 4-4c0-3.8-3.8-7-9-7Z" /><circle cx="8.5" cy="10" r=".7" /><circle cx="11" cy="7.7" r=".7" /><circle cx="14.2" cy="8.2" r=".7" /><circle cx="16" cy="11" r=".7" /></svg>',
+            'profile' => '<svg '.$attrs.'><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>',
+            'logout' => '<svg '.$attrs.'><path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H9" /><path d="M14 8l4 4-4 4" /><path d="M18 12H9" /></svg>',
+            default => '<svg '.$attrs.'><circle cx="12" cy="12" r="8" /></svg>',
+        };
+    };
+
+    $generalNavItems = [
+        ['label' => 'Dashboard', 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard'), 'icon' => 'dashboard'],
+    ];
+
+    if ($user->isGlobalAdmin()) {
+        $generalNavItems[] = ['label' => 'Busca global', 'href' => route('search'), 'active' => request()->routeIs('search'), 'icon' => 'search'];
+    }
+
+    $generalNavItems[] = ['label' => 'Central de formulários', 'href' => route('tickets.central'), 'active' => request()->routeIs('tickets.central', 'tickets.create'), 'icon' => 'forms'];
+    $generalNavItems[] = ['label' => 'Meus chamados', 'href' => route('tickets.mine'), 'active' => request()->routeIs('tickets.mine'), 'icon' => 'tickets'];
+    $generalNavItems[] = ['label' => 'Base de conhecimento', 'href' => route('knowledge-base.index'), 'active' => request()->routeIs('knowledge-base.*'), 'icon' => 'knowledge'];
+
+    if ($user->hasOperationalAccess()) {
+        $generalNavItems[] = ['label' => 'Quadros', 'href' => route('tickets.index'), 'active' => request()->routeIs('tickets.index', 'tickets.board', 'tickets.board.show', 'tickets.settings', 'tickets.show'), 'icon' => 'boards'];
+    }
+
+    if ($user->isGlobalAdmin()) {
+        $generalNavItems[] = ['label' => 'Licenças', 'href' => route('licenses.index'), 'active' => request()->routeIs('licenses.*'), 'icon' => 'licenses'];
+    }
+
+    $adminNavItems = [];
+
+    if ($user->isGlobalAdmin()) {
+        $adminNavItems = [
+            ['label' => 'Empresas', 'href' => route('companies.index'), 'active' => request()->routeIs('companies.*', 'sectors.*', 'rooms.*'), 'icon' => 'companies'],
+            ['label' => 'Templates de setor', 'href' => route('sector-templates.index'), 'active' => request()->routeIs('sector-templates.*'), 'icon' => 'templates'],
+            ['label' => 'Usuários', 'href' => route('users.index'), 'active' => request()->routeIs('users.*'), 'icon' => 'users'],
+            ['label' => 'E-mails', 'href' => route('admin.emails.index'), 'active' => request()->routeIs('admin.emails.*'), 'icon' => 'emails'],
+            ['label' => 'Patrimônios', 'href' => route('assets.index'), 'active' => request()->routeIs('assets.*'), 'icon' => 'assets'],
+        ];
+    }
+@endphp
 
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -15,92 +72,93 @@
         @include('partials.head', ['title' => $title ?? null])
     </head>
     <body class="portal-shell {{ $isFocusedForm ? 'portal-shell-focused' : '' }} min-h-screen bg-[#e7edf7] text-slate-900 dark:bg-[#07101f] dark:text-slate-100">
-        <div class="min-h-screen {{ $isFocusedForm ? 'block' : 'lg:grid lg:grid-cols-[290px_1fr]' }}">
+        <div class="min-h-screen {{ $isFocusedForm ? 'block' : 'lg:grid lg:grid-cols-[264px_1fr]' }}">
             @unless ($isFocusedForm)
-            <aside class="portal-sidebar hidden lg:block">
-                <a href="{{ route('dashboard') }}" class="portal-brand-link">
-                    <div class="portal-brand-mark">
-                        <x-app-logo-icon class="h-full w-full" />
-                    </div>
-
-                    <div>
-                        <p class="text-sm font-semibold uppercase tracking-[0.26em] text-[#93b9ff]">AIA Service</p>
-                        <p class="mt-1 text-sm text-slate-300/72">Gestao interna modular</p>
-                    </div>
-                </a>
-
+            <aside class="portal-sidebar hidden lg:flex lg:flex-col">
                 <div class="portal-user-panel">
-                    <div class="flex items-center gap-3">
-                        <x-user-avatar :user="$user" size="md" class="ring-2 ring-white/10" />
-
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center justify-between gap-2">
-                                <p class="min-w-0 truncate text-sm font-semibold text-white">{{ $user->name }}</p>
-
-                                <a
-                                    href="{{ route('notifications.index') }}"
-                                    class="portal-notification-link {{ request()->routeIs('notifications.*') ? 'portal-notification-link-active' : '' }}"
-                                    aria-label="Notificacoes"
-                                    title="Notificacoes"
-                                >
-                                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4.5 w-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                                        <path d="M10 20a2 2 0 0 0 4 0" />
-                                    </svg>
-
-                                    @if ($unreadNotificationsCount > 0)
-                                        <span class="portal-notification-badge">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
-                                    @endif
-                                </a>
-                            </div>
-                            <p class="mt-1 truncate text-xs text-slate-300/78">{{ $user->global_role?->label() ?? 'Colaborador' }}</p>
-                            <p class="mt-1 text-xs text-slate-400/80">{{ $user->accessSummary() }}</p>
-                            <p class="mt-1 truncate text-xs text-slate-400/80">{{ $user->email }}</p>
-                        </div>
+                    <div class="portal-user-avatar-wrap">
+                        <x-user-avatar :user="$user" size="md" class="portal-user-avatar" />
+                        <span class="portal-user-status" aria-hidden="true"></span>
                     </div>
+
+                    <div class="portal-user-copy">
+                        <p class="portal-user-name">{{ $user->name }}</p>
+                        <p class="portal-user-role">{{ $user->global_role?->label() ?? 'Colaborador' }}</p>
+                        <p class="portal-user-access">{{ $user->accessSummary() }}</p>
+                    </div>
+
+                    <a
+                        href="{{ route('notifications.index') }}"
+                        class="portal-notification-link {{ request()->routeIs('notifications.*') ? 'portal-notification-link-active' : '' }}"
+                        aria-label="Notificações"
+                        title="Notificações"
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4.5 w-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                            <path d="M10 20a2 2 0 0 0 4 0" />
+                        </svg>
+
+                        @if ($unreadNotificationsCount > 0)
+                            <span class="portal-notification-badge">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
+                        @endif
+                    </a>
                 </div>
 
-                <nav class="relative z-10 mt-8 space-y-8">
-                    <div>
-                        <p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400/72">Geral</p>
-                        <div class="space-y-2">
-                            <a href="{{ route('dashboard') }}" class="portal-nav-link {{ request()->routeIs('dashboard') ? 'portal-nav-link-active' : '' }}">Dashboard</a>
-                            @if ($user->isGlobalAdmin())
-                                <a href="{{ route('search') }}" class="portal-nav-link {{ request()->routeIs('search') ? 'portal-nav-link-active' : '' }}">Busca global</a>
-                            @endif
-                            <a href="{{ route('tickets.central') }}" class="portal-nav-link {{ request()->routeIs('tickets.central', 'tickets.create') ? 'portal-nav-link-active' : '' }}">Central de formularios</a>
-                            <a href="{{ route('tickets.mine') }}" class="portal-nav-link {{ request()->routeIs('tickets.mine') ? 'portal-nav-link-active' : '' }}">Meus chamados</a>
-                            <a href="{{ route('knowledge-base.index') }}" class="portal-nav-link {{ request()->routeIs('knowledge-base.*') ? 'portal-nav-link-active' : '' }}">Base de conhecimento</a>
-                            @if ($user->hasOperationalAccess())
-                                <a href="{{ route('tickets.index') }}" class="portal-nav-link {{ request()->routeIs('tickets.index', 'tickets.board', 'tickets.board.show', 'tickets.settings', 'tickets.show') ? 'portal-nav-link-active' : '' }}">Quadros</a>
-                            @endif
-                            @if ($user->isGlobalAdmin())
-                                <a href="{{ route('licenses.index') }}" class="portal-nav-link {{ request()->routeIs('licenses.*') ? 'portal-nav-link-active' : '' }}">Licencas</a>
-                            @endif
+                <nav class="portal-nav" aria-label="Navegação principal">
+                    <section class="portal-nav-section">
+                        <p class="portal-nav-heading">Geral</p>
+                        <div class="portal-nav-list">
+                            @foreach ($generalNavItems as $item)
+                                <a
+                                    href="{{ $item['href'] }}"
+                                    class="portal-nav-link {{ $item['active'] ? 'portal-nav-link-active' : '' }}"
+                                    @if ($item['active']) aria-current="page" @endif
+                                >
+                                    {!! $portalNavIcon($item['icon']) !!}
+                                    <span>{{ $item['label'] }}</span>
+                                </a>
+                            @endforeach
                         </div>
-                    </div>
+                    </section>
 
                     @if ($user->isGlobalAdmin())
-                        <div>
-                            <p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400/72">Administracao</p>
-                            <div class="space-y-2">
-                                <a href="{{ route('companies.index') }}" class="portal-nav-link {{ request()->routeIs('companies.*', 'sectors.*', 'rooms.*') ? 'portal-nav-link-active' : '' }}">Empresas</a>
-                                <a href="{{ route('sector-templates.index') }}" class="portal-nav-link {{ request()->routeIs('sector-templates.*') ? 'portal-nav-link-active' : '' }}">Templates de setor</a>
-                                <a href="{{ route('users.index') }}" class="portal-nav-link {{ request()->routeIs('users.*') ? 'portal-nav-link-active' : '' }}">Usuarios</a>
-                                <a href="{{ route('admin.emails.index') }}" class="portal-nav-link {{ request()->routeIs('admin.emails.*') ? 'portal-nav-link-active' : '' }}">E-mails</a>
-                                <a href="{{ route('assets.index') }}" class="portal-nav-link {{ request()->routeIs('assets.*') ? 'portal-nav-link-active' : '' }}">Patrimonios</a>
+                        <section class="portal-nav-section">
+                            <p class="portal-nav-heading">Administração</p>
+                            <div class="portal-nav-list">
+                                @foreach ($adminNavItems as $item)
+                                    <a
+                                        href="{{ $item['href'] }}"
+                                        class="portal-nav-link {{ $item['active'] ? 'portal-nav-link-active' : '' }}"
+                                        @if ($item['active']) aria-current="page" @endif
+                                    >
+                                        {!! $portalNavIcon($item['icon']) !!}
+                                        <span>{{ $item['label'] }}</span>
+                                    </a>
+                                @endforeach
                             </div>
-                        </div>
+                        </section>
                     @endif
                 </nav>
 
-                <div class="relative z-10 mt-8 flex flex-wrap gap-3 border-t border-white/8 pt-6">
-                    <a href="{{ route('appearance.edit') }}" class="portal-sidebar-action">Aparencia</a>
-                    <a href="{{ route('profile.edit') }}" class="portal-sidebar-action">Meu perfil</a>
+                <div class="portal-sidebar-actions">
+                    <div class="portal-sidebar-actions-grid">
+                        <a href="{{ route('appearance.edit') }}" class="portal-sidebar-action {{ request()->routeIs('appearance.*') ? 'portal-sidebar-action-active' : '' }}">
+                            {!! $portalNavIcon('appearance') !!}
+                            <span>Aparência</span>
+                        </a>
 
-                    <form method="POST" action="{{ route('logout') }}">
+                        <a href="{{ route('profile.edit') }}" class="portal-sidebar-action {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}">
+                            {!! $portalNavIcon('profile') !!}
+                            <span>Perfil</span>
+                        </a>
+                    </div>
+
+                    <form method="POST" action="{{ route('logout') }}" class="portal-sidebar-logout-form">
                         @csrf
-                        <button type="submit" class="portal-sidebar-action">Sair</button>
+                        <button type="submit" class="portal-sidebar-action portal-sidebar-action-wide portal-sidebar-action-danger">
+                            {!! $portalNavIcon('logout') !!}
+                            <span>Sair</span>
+                        </button>
                     </form>
                 </div>
             </aside>
