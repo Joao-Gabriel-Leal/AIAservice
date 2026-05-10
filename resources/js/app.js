@@ -4,6 +4,56 @@ import './echo';
 
 const activeCharts = new Map();
 
+if (! window.ticketInlineTitle) {
+    window.ticketInlineTitle = function (config) {
+        return {
+            ticketId: config.ticketId,
+            editing: false,
+            value: config.title ?? '',
+            original: config.title ?? '',
+
+            startEditing() {
+                this.original = this.value;
+                this.editing = true;
+
+                this.$nextTick(() => {
+                    this.$refs.input?.focus();
+                    this.$refs.input?.select();
+                });
+            },
+
+            saveTitle(wire) {
+                if (! this.editing) {
+                    return;
+                }
+
+                const previous = String(this.original ?? '');
+                const next = String(this.value ?? '').trim();
+
+                if (next === '') {
+                    this.value = previous;
+                    this.editing = false;
+
+                    return;
+                }
+
+                this.value = next;
+                this.original = next;
+                this.editing = false;
+
+                if (next !== previous) {
+                    wire.updateFixedField(this.ticketId, 'title', next);
+                }
+            },
+
+            cancelEditing() {
+                this.value = this.original;
+                this.editing = false;
+            },
+        };
+    };
+}
+
 function onlyDigits(value) {
     return value.replace(/\D/g, '');
 }

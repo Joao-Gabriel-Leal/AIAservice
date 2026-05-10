@@ -164,11 +164,13 @@
                                                             wire:key="ticket-title-list-{{ $ticket->id }}"
                                                             x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
                                                             class="ui-inline-title-editor"
+                                                            data-no-drag
                                                         >
                                                             <button
                                                                 type="button"
                                                                 x-show="! editing"
-                                                                x-on:click.stop="startEditing()"
+                                                                x-on:pointerdown.stop="$event.stopPropagation()"
+                                                                x-on:click.stop.prevent="startEditing()"
                                                                 x-bind:title="value"
                                                                 class="ui-inline-title-display ui-inline-title-display-list"
                                                             >
@@ -181,6 +183,8 @@
                                                                 x-ref="input"
                                                                 type="text"
                                                                 x-model="value"
+                                                                x-on:pointerdown.stop="$event.stopPropagation()"
+                                                                x-on:click.stop="$event.stopPropagation()"
                                                                 x-on:keydown.enter.prevent="saveTitle($wire)"
                                                                 x-on:keydown.escape.prevent="cancelEditing()"
                                                                 x-on:blur="saveTitle($wire)"
@@ -424,11 +428,13 @@
                                                     wire:key="ticket-title-kanban-{{ $ticket->id }}"
                                                     x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
                                                     class="ui-inline-title-editor"
+                                                    data-no-drag
                                                 >
                                                     <button
                                                         type="button"
                                                         x-show="! editing"
-                                                        x-on:click.stop="startEditing()"
+                                                        x-on:pointerdown.stop="$event.stopPropagation()"
+                                                        x-on:click.stop.prevent="startEditing()"
                                                         x-bind:title="value"
                                                         class="ui-inline-title-display ui-inline-title-display-kanban"
                                                     >
@@ -441,6 +447,8 @@
                                                         x-ref="input"
                                                         type="text"
                                                         x-model="value"
+                                                        x-on:pointerdown.stop="$event.stopPropagation()"
+                                                        x-on:click.stop="$event.stopPropagation()"
                                                         x-on:keydown.enter.prevent="saveTitle($wire)"
                                                         x-on:keydown.escape.prevent="cancelEditing()"
                                                         x-on:blur="saveTitle($wire)"
@@ -579,56 +587,6 @@
 
 @push('scripts')
     <script>
-        if (! window.ticketInlineTitle) {
-            window.ticketInlineTitle = function (config) {
-                return {
-                    ticketId: config.ticketId,
-                    editing: false,
-                    value: config.title ?? '',
-                    original: config.title ?? '',
-
-                    startEditing() {
-                        this.original = this.value;
-                        this.editing = true;
-
-                        this.$nextTick(() => {
-                            this.$refs.input?.focus();
-                            this.$refs.input?.select();
-                        });
-                    },
-
-                    saveTitle(wire) {
-                        if (! this.editing) {
-                            return;
-                        }
-
-                        const previous = String(this.original ?? '');
-                        const next = String(this.value ?? '').trim();
-
-                        if (next === '') {
-                            this.value = previous;
-                            this.editing = false;
-
-                            return;
-                        }
-
-                        this.value = next;
-                        this.original = next;
-                        this.editing = false;
-
-                        if (next !== previous) {
-                            wire.updateFixedField(this.ticketId, 'title', next);
-                        }
-                    },
-
-                    cancelEditing() {
-                        this.value = this.original;
-                        this.editing = false;
-                    },
-                };
-            };
-        }
-
         if (! window.ticketBoard) {
             window.ticketBoard = function (config) {
                 return {

@@ -97,8 +97,36 @@
                                 >
                                     <td>
                                         <div class="space-y-1">
-                                            <div wire:key="ticket-title-stages-{{ $ticket->id }}">
-                                                <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-72" />
+                                            <div
+                                                wire:key="ticket-title-stages-{{ $ticket->id }}"
+                                                x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                                class="ui-inline-title-editor"
+                                                data-no-drag
+                                            >
+                                                <button
+                                                    type="button"
+                                                    x-show="! editing"
+                                                    x-on:pointerdown.stop="$event.stopPropagation()"
+                                                    x-on:click.stop.prevent="startEditing()"
+                                                    x-bind:title="value"
+                                                    class="ui-inline-title-display ui-inline-title-display-list"
+                                                >
+                                                    <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                                </button>
+
+                                                <input
+                                                    x-cloak
+                                                    x-show="editing"
+                                                    x-ref="input"
+                                                    type="text"
+                                                    x-model="value"
+                                                    x-on:pointerdown.stop="$event.stopPropagation()"
+                                                    x-on:click.stop="$event.stopPropagation()"
+                                                    x-on:keydown.enter.prevent="saveTitle($wire)"
+                                                    x-on:keydown.escape.prevent="cancelEditing()"
+                                                    x-on:blur="saveTitle($wire)"
+                                                    class="ui-input ui-inline-title-input w-72"
+                                                />
                                             </div>
 
                                             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
@@ -254,7 +282,37 @@
                             <div class="ticket-mobile-card-header">
                                 <div class="min-w-0 flex-1">
                                     <p class="ticket-mobile-reference">{{ $ticket->fullReference() }}</p>
-                                    <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input ticket-mobile-title-input" />
+                                    <div
+                                        wire:key="ticket-title-stages-mobile-{{ $ticket->id }}"
+                                        x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                        class="ui-inline-title-editor"
+                                        data-no-drag
+                                    >
+                                        <button
+                                            type="button"
+                                            x-show="! editing"
+                                            x-on:pointerdown.stop="$event.stopPropagation()"
+                                            x-on:click.stop.prevent="startEditing()"
+                                            x-bind:title="value"
+                                            class="ui-inline-title-display ui-inline-title-display-mobile"
+                                        >
+                                            <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                        </button>
+
+                                        <input
+                                            x-cloak
+                                            x-show="editing"
+                                            x-ref="input"
+                                            type="text"
+                                            x-model="value"
+                                            x-on:pointerdown.stop="$event.stopPropagation()"
+                                            x-on:click.stop="$event.stopPropagation()"
+                                            x-on:keydown.enter.prevent="saveTitle($wire)"
+                                            x-on:keydown.escape.prevent="cancelEditing()"
+                                            x-on:blur="saveTitle($wire)"
+                                            class="ui-input ui-inline-title-input ticket-mobile-title-input"
+                                        />
+                                    </div>
                                     <p class="ticket-mobile-subtitle">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
                                 </div>
 

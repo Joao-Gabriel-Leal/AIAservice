@@ -83,8 +83,36 @@
                         >
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0 flex-1">
-                                    <div wire:key="ticket-title-kanban-{{ $ticket->id }}">
-                                        <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input w-full text-sm font-medium" />
+                                    <div
+                                        wire:key="ticket-title-kanban-{{ $ticket->id }}"
+                                        x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                        class="ui-inline-title-editor"
+                                        data-no-drag
+                                    >
+                                        <button
+                                            type="button"
+                                            x-show="! editing"
+                                            x-on:pointerdown.stop="$event.stopPropagation()"
+                                            x-on:click.stop.prevent="startEditing()"
+                                            x-bind:title="value"
+                                            class="ui-inline-title-display ui-inline-title-display-kanban"
+                                        >
+                                            <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                        </button>
+
+                                        <input
+                                            x-cloak
+                                            x-show="editing"
+                                            x-ref="input"
+                                            type="text"
+                                            x-model="value"
+                                            x-on:pointerdown.stop="$event.stopPropagation()"
+                                            x-on:click.stop="$event.stopPropagation()"
+                                            x-on:keydown.enter.prevent="saveTitle($wire)"
+                                            x-on:keydown.escape.prevent="cancelEditing()"
+                                            x-on:blur="saveTitle($wire)"
+                                            class="ui-input ui-inline-title-input w-full text-sm font-medium"
+                                        />
                                     </div>
                                     <p class="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
 

@@ -262,6 +262,7 @@
     .ui-inline-title-display {
         @apply block max-w-full rounded-xl border border-transparent bg-transparent px-2 py-1 text-left outline-hidden transition;
         color: #0f172a;
+        cursor: text;
         letter-spacing: 0;
         line-height: 1.35;
     }
@@ -282,6 +283,10 @@
 
     .ui-inline-title-display-kanban {
         @apply w-full text-sm font-semibold;
+    }
+
+    .ui-inline-title-display-mobile {
+        @apply mt-1 w-full text-base font-bold;
     }
 
     .ui-inline-title-text {
