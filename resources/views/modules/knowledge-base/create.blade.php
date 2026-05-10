@@ -1,6 +1,13 @@
-<x-layouts.portal title="Novo artigo">
+<x-layouts.portal title="Novo artigo" header-variant="none">
     <div class="space-y-6">
-        <form method="POST" action="{{ $formAction ?? route('knowledge-base.store') }}" enctype="multipart/form-data" class="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <x-portal.page-intro
+            variant="compact"
+            eyebrow="Base de conhecimento"
+            title="Novo artigo"
+            description="Cadastre um conteudo consultivo com resumo, detalhes, anexos e foto de capa."
+        />
+
+        <form method="POST" action="{{ $formAction ?? route('knowledge-base.store') }}" enctype="multipart/form-data" class="space-y-6">
             @csrf
             @if (($formMethod ?? 'POST') !== 'POST')
                 @method($formMethod)
@@ -8,9 +15,9 @@
 
             @include('modules.knowledge-base.form')
 
-            <div class="flex justify-end gap-3">
-                <a href="{{ ($sourceTicket ?? null) ? route('tickets.show', $sourceTicket) : route('knowledge-base.manage') }}" class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</a>
-                <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            <div class="flex flex-col justify-end gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row">
+                <a href="{{ ($sourceTicket ?? null) ? route('tickets.show', $sourceTicket) : route('knowledge-base.manage') }}" class="ui-action ui-action-secondary px-4 py-3 text-sm">Cancelar</a>
+                <button type="submit" class="ui-action ui-action-primary px-4 py-3 text-sm">
                     {{ ($sourceTicket ?? null) ? 'Salvar a partir do chamado' : 'Salvar artigo' }}
                 </button>
             </div>
