@@ -910,7 +910,11 @@
                                         <button
                                             type="button"
                                             wire:click="deleteSubelement({{ $subelement->id }})"
-                                            wire:confirm="Excluir este subelemento?"
+                                            data-confirm
+                                            data-confirm-variant="danger"
+                                            data-confirm-title="Remover subelemento?"
+                                            data-confirm-message="Tem certeza que deseja remover este subelemento? Esta ação não pode ser desfeita."
+                                            data-confirm-label="Sim, remover"
                                             wire:loading.attr="disabled"
                                             wire:loading.class="ui-loading"
                                             wire:target="deleteSubelement"
@@ -1079,7 +1083,7 @@
                             <button type="button" x-on:click="composer = composer === 'close' ? null : 'close'; menuOpen = false; linkedOpen = true; suggestionsOpen = false" class="ticket-incident-menu-item">
                                 Fechar selecionados
                             </button>
-                            <button type="button" wire:click="toggleMajorIncident" wire:confirm="Desmarcar incidente?" x-on:click="menuOpen = false" class="ticket-incident-menu-item ticket-incident-menu-danger">
+                            <button type="button" wire:click="toggleMajorIncident" data-confirm data-confirm-variant="warning" data-confirm-title="Desmarcar incidente?" data-confirm-message="Esta ação pode afetar outros usuários do sistema. Deseja continuar?" data-confirm-label="Continuar" x-on:click="menuOpen = false" class="ticket-incident-menu-item ticket-incident-menu-danger">
                                 Desmarcar incidente
                             </button>
                         @else
@@ -1160,7 +1164,7 @@
                             <div x-cloak x-show="composer === 'close'" x-transition.opacity.duration.120ms class="ticket-incident-popover">
                                 <textarea wire:model="incidentResolutionMessage" rows="3" class="ui-input w-full" placeholder="Solucao"></textarea>
                                 @error('incidentResolutionMessage') <span class="ticket-incident-error">{{ $message }}</span> @enderror
-                                <button type="button" wire:click="closeIncidentChildren" wire:confirm="Fechar selecionados?" class="ui-action ui-action-primary w-full rounded-2xl px-4 py-3 text-sm font-medium">
+                                <button type="button" wire:click="closeIncidentChildren" data-confirm data-confirm-variant="warning" data-confirm-title="Fechar selecionados?" data-confirm-message="Esta ação pode afetar outros usuários do sistema. Deseja continuar?" data-confirm-label="Continuar" class="ui-action ui-action-primary w-full rounded-2xl px-4 py-3 text-sm font-medium">
                                     Fechar
                                 </button>
                             </div>
@@ -1209,7 +1213,11 @@
                         <button
                             type="button"
                             wire:click="deleteCurrentTicket"
-                            wire:confirm="Excluir {{ $ticket->isSubelement() ? 'este subelemento' : 'este chamado' }}? Esta acao remove o item das listas operacionais."
+                            data-confirm
+                            data-confirm-variant="danger"
+                            data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
+                            data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                            data-confirm-label="Sim, remover"
                             wire:loading.attr="disabled"
                             wire:loading.class="ui-loading"
                             wire:target="deleteCurrentTicket"
@@ -1232,7 +1240,11 @@
                                 <button
                                     type="button"
                                     wire:click="closeOwnTicket"
-                                    wire:confirm="Deseja finalizar este chamado?"
+                                    data-confirm
+                                    data-confirm-variant="warning"
+                                    data-confirm-title="Finalizar chamado?"
+                                    data-confirm-message="Esta ação pode afetar outros usuários do sistema. Deseja continuar?"
+                                    data-confirm-label="Continuar"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="ui-loading"
                                     wire:target="closeOwnTicket"
@@ -1247,7 +1259,11 @@
                                 <button
                                     type="button"
                                     wire:click="reopenOwnTicket"
-                                    wire:confirm="Deseja reabrir este chamado?"
+                                    data-confirm
+                                    data-confirm-variant="warning"
+                                    data-confirm-title="Reabrir chamado?"
+                                    data-confirm-message="Esta ação pode afetar outros usuários do sistema. Deseja continuar?"
+                                    data-confirm-label="Continuar"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="ui-loading"
                                     wire:target="reopenOwnTicket"
@@ -1682,7 +1698,12 @@
                                                         @if ($this->canDeleteTimeEntry($timeEntry))
                                                             <button
                                                                 type="button"
-                                                                onclick="if (confirm('Deseja remover esta sessao de tempo?')) { $wire.deleteTimeEntry({{ $timeEntry->id }}) }"
+                                                                wire:click="deleteTimeEntry({{ $timeEntry->id }})"
+                                                                data-confirm
+                                                                data-confirm-variant="danger"
+                                                                data-confirm-title="Remover sessão de tempo?"
+                                                                data-confirm-message="Tem certeza que deseja remover esta sessão de tempo? Esta ação não pode ser desfeita."
+                                                                data-confirm-label="Sim, remover"
                                                                 class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm"
                                                             >
                                                                 Excluir

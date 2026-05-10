@@ -261,6 +261,182 @@ function initializeCharts() {
     destroyMissingCharts();
 }
 
+const confirmationState = {
+    dialog: null,
+    lastFocusedElement: null,
+    resolver: null,
+};
+
+function confirmationIcon(variant) {
+    const icons = {
+        danger: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6m-8 4h10m-9 0 .7 12.2A2 2 0 0 0 10.7 21h2.6a2 2 0 0 0 2-1.8L16 7M10 11v6m4-6v6"/></svg>',
+        warning: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L12 3Zm0 6v5m0 4h.01"/></svg>',
+        success: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>',
+        info: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v-6m0-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>',
+    };
+
+    return icons[variant] ?? icons.info;
+}
+
+function ensureConfirmationDialog() {
+    if (confirmationState.dialog) {
+        return confirmationState.dialog;
+    }
+
+    const dialog = document.createElement('div');
+    dialog.className = 'ui-confirmation';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'ui-confirmation-title');
+    dialog.setAttribute('aria-describedby', 'ui-confirmation-message');
+    dialog.hidden = true;
+    dialog.innerHTML = `
+        <div class="ui-confirmation__backdrop" data-confirm-cancel></div>
+        <div class="ui-confirmation__panel" role="document">
+            <button type="button" class="ui-confirmation__close" aria-label="Fechar" data-confirm-cancel>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg>
+            </button>
+            <div class="ui-confirmation__icon" data-confirm-icon></div>
+            <h2 id="ui-confirmation-title" class="ui-confirmation__title"></h2>
+            <p id="ui-confirmation-message" class="ui-confirmation__message"></p>
+            <div class="ui-confirmation__actions">
+                <button type="button" class="ui-confirmation__button ui-confirmation__button--cancel" data-confirm-cancel>Cancelar</button>
+                <button type="button" class="ui-confirmation__button ui-confirmation__button--confirm" data-confirm-accept>Continuar</button>
+            </div>
+        </div>
+    `;
+
+    dialog.addEventListener('click', (event) => {
+        if (event.target.closest('[data-confirm-cancel]')) {
+            resolveConfirmation(false);
+        }
+
+        if (event.target.closest('[data-confirm-accept]')) {
+            resolveConfirmation(true);
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (!dialog.hidden && event.key === 'Escape') {
+            event.preventDefault();
+            resolveConfirmation(false);
+        }
+    });
+
+    document.body.append(dialog);
+    confirmationState.dialog = dialog;
+
+    return dialog;
+}
+
+function resolveConfirmation(confirmed) {
+    const dialog = confirmationState.dialog;
+
+    if (!dialog || dialog.hidden) {
+        return;
+    }
+
+    dialog.hidden = true;
+    document.documentElement.classList.remove('ui-confirmation-open');
+
+    const resolver = confirmationState.resolver;
+    confirmationState.resolver = null;
+    confirmationState.lastFocusedElement?.focus?.();
+    confirmationState.lastFocusedElement = null;
+    resolver?.(confirmed);
+}
+
+function showConfirmation(options = {}) {
+    const dialog = ensureConfirmationDialog();
+    const variant = options.variant || 'info';
+
+    dialog.dataset.variant = variant;
+    dialog.querySelector('[data-confirm-icon]').innerHTML = confirmationIcon(variant);
+    dialog.querySelector('#ui-confirmation-title').textContent = options.title || 'Confirmar ação?';
+    dialog.querySelector('#ui-confirmation-message').textContent = options.message || 'Deseja continuar?';
+    dialog.querySelector('.ui-confirmation__button--cancel').textContent = options.cancelLabel || 'Cancelar';
+    dialog.querySelector('[data-confirm-accept]').textContent = options.confirmLabel || 'Continuar';
+
+    confirmationState.lastFocusedElement = document.activeElement;
+    dialog.hidden = false;
+    document.documentElement.classList.add('ui-confirmation-open');
+
+    requestAnimationFrame(() => {
+        dialog.querySelector('[data-confirm-accept]')?.focus();
+    });
+
+    return new Promise((resolve) => {
+        confirmationState.resolver = resolve;
+    });
+}
+
+function confirmationOptionsFrom(element) {
+    return {
+        title: element.dataset.confirmTitle,
+        message: element.dataset.confirmMessage || element.dataset.confirm,
+        variant: element.dataset.confirmVariant,
+        confirmLabel: element.dataset.confirmLabel,
+        cancelLabel: element.dataset.confirmCancelLabel,
+    };
+}
+
+const confirmedSubmissions = new WeakSet();
+const confirmedClicks = new WeakSet();
+
+document.addEventListener('submit', async (event) => {
+    const form = event.target.closest?.('form[data-confirm]');
+
+    if (!form || confirmedSubmissions.has(form)) {
+        confirmedSubmissions.delete(form);
+        return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (!await showConfirmation(confirmationOptionsFrom(form))) {
+        return;
+    }
+
+    confirmedSubmissions.add(form);
+
+    if (event.submitter && typeof form.requestSubmit === 'function') {
+        form.requestSubmit(event.submitter);
+        return;
+    }
+
+    form.submit();
+}, true);
+
+document.addEventListener('click', async (event) => {
+    const trigger = event.target.closest?.('[data-confirm]');
+
+    if (!trigger || trigger.matches('form')) {
+        return;
+    }
+
+    if (confirmedClicks.has(trigger)) {
+        confirmedClicks.delete(trigger);
+        return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (!await showConfirmation(confirmationOptionsFrom(trigger))) {
+        return;
+    }
+
+    confirmedClicks.add(trigger);
+    trigger.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+    }));
+}, true);
+
+window.appConfirm = showConfirmation;
+
 document.addEventListener('DOMContentLoaded', initializeCharts);
 document.addEventListener('DOMContentLoaded', applyInputMasks);
 document.addEventListener('livewire:navigated', () => {

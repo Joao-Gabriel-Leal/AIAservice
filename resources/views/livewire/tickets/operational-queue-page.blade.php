@@ -97,7 +97,11 @@
                                 <button
                                     type="button"
                                     wire:click="deleteTicket({{ $ticket->id }})"
-                                    wire:confirm="Excluir {{ $ticket->isSubelement() ? 'este subelemento' : 'este chamado' }}? Esta acao remove o item das listas operacionais."
+                                    data-confirm
+                                    data-confirm-variant="danger"
+                                    data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
+                                    data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                                    data-confirm-label="Sim, remover"
                                     wire:loading.attr="disabled"
                                     wire:loading.class="ui-loading"
                                     wire:target="deleteTicket"

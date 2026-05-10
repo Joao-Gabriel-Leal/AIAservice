@@ -59,7 +59,7 @@
                             <td class="px-6 py-4">
                                 <div class="flex justify-end gap-2">
                                     <a href="{{ route('rooms.edit', $room) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
-                                    <form method="POST" action="{{ route('rooms.destroy', $room) }}" onsubmit="return confirm('Remover sala?');">
+                                    <form method="POST" action="{{ route('rooms.destroy', $room) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover sala?" data-confirm-message="Tem certeza que deseja remover esta sala? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600">Excluir</button>

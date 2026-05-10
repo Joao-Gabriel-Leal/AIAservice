@@ -104,7 +104,7 @@
                             <a href="{{ route('rooms.create', ['sector_id' => $sector->id, 'return_to_company_id' => $company->id]) }}" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white">Nova sala</a>
                             <a href="{{ route('sectors.edit', ['sector' => $sector, 'return_to_company_id' => $company->id]) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
                             @can('delete', $sector)
-                                <form method="POST" action="{{ route('sectors.destroy', $sector) }}" onsubmit="return confirm('Remover setor?');">
+                                <form method="POST" action="{{ route('sectors.destroy', $sector) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover setor?" data-confirm-message="Tem certeza que deseja remover este setor? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                     @csrf
                                     @method('DELETE')
                                     <input type="hidden" name="return_to_company_id" value="{{ $company->id }}">
@@ -132,7 +132,7 @@
                                         <div class="flex justify-end gap-2">
                                             <a href="{{ route('rooms.edit', ['room' => $room, 'return_to_company_id' => $company->id]) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
                                             @can('delete', $room)
-                                                <form method="POST" action="{{ route('rooms.destroy', $room) }}" onsubmit="return confirm('Remover sala?');">
+                                                <form method="POST" action="{{ route('rooms.destroy', $room) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover sala?" data-confirm-message="Tem certeza que deseja remover esta sala? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                                     @csrf
                                                     @method('DELETE')
                                                     <input type="hidden" name="return_to_company_id" value="{{ $company->id }}">

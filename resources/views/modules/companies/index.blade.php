@@ -57,7 +57,7 @@
                                 <div class="flex justify-end gap-2">
                                     <a href="{{ route('companies.show', $company) }}" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white">Abrir</a>
                                     <a href="{{ route('companies.edit', $company) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
-                                    <form method="POST" action="{{ route('companies.destroy', $company) }}" onsubmit="return confirm('Remover empresa?');">
+                                    <form method="POST" action="{{ route('companies.destroy', $company) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover empresa?" data-confirm-message="Tem certeza que deseja remover esta empresa? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600">Excluir</button>

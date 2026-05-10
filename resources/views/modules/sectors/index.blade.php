@@ -68,7 +68,7 @@
                                 <div class="flex justify-end gap-2">
                                     <a href="{{ route('sectors.edit', $sector) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
                                     @can('delete', $sector)
-                                        <form method="POST" action="{{ route('sectors.destroy', $sector) }}" onsubmit="return confirm('Remover setor?');">
+                                        <form method="POST" action="{{ route('sectors.destroy', $sector) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover setor?" data-confirm-message="Tem certeza que deseja remover este setor? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600">Excluir</button>

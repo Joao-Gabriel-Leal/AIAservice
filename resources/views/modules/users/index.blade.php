@@ -153,7 +153,7 @@
                                 <div class="flex justify-end gap-2">
                                     <a href="{{ route('users.edit', $listedUser) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
                                     @can('delete', $listedUser)
-                                        <form method="POST" action="{{ route('users.destroy', $listedUser) }}" onsubmit="return confirm('Remover usuario?');">
+                                        <form method="POST" action="{{ route('users.destroy', $listedUser) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover usuário?" data-confirm-message="Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600">Excluir</button>

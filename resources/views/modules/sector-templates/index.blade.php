@@ -39,7 +39,7 @@
                             <td class="px-6 py-4">
                                 <div class="flex justify-end gap-2">
                                     <a href="{{ route('sector-templates.edit', $template) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
-                                    <form method="POST" action="{{ route('sector-templates.destroy', $template) }}" onsubmit="return confirm('Remover template?');">
+                                    <form method="POST" action="{{ route('sector-templates.destroy', $template) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover template?" data-confirm-message="Tem certeza que deseja remover este template? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600">Excluir</button>

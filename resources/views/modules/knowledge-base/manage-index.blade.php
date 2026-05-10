@@ -67,7 +67,7 @@
                                 <div class="flex justify-end gap-2">
                                     <a href="{{ route('knowledge-base.show', $article) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Visualizar</a>
                                     <a href="{{ route('knowledge-base.edit', $article) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
-                                    <form method="POST" action="{{ route('knowledge-base.destroy', $article) }}" onsubmit="return confirm('Remover artigo?');">
+                                    <form method="POST" action="{{ route('knowledge-base.destroy', $article) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover artigo?" data-confirm-message="Tem certeza que deseja remover este artigo? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600">Excluir</button>
