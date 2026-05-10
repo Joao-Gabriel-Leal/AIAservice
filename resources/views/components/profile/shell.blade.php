@@ -8,8 +8,8 @@
     $user = auth()->user();
     $tabs = [
         ['key' => 'profile', 'label' => 'Meu perfil', 'route' => route('profile.edit')],
-        ['key' => 'security', 'label' => 'Seguranca', 'route' => route('security.edit')],
-        ['key' => 'appearance', 'label' => 'Aparencia', 'route' => route('appearance.edit')],
+        ['key' => 'security', 'label' => 'Seguranca', 'route' => route('profile.edit').'#seguranca'],
+        ['key' => 'preferences', 'label' => 'Preferencias', 'route' => route('profile.edit').'#preferencias'],
     ];
     $emailVerificationEnabled = $user instanceof \Illuminate\Contracts\Auth\MustVerifyEmail;
     $emailVerified = ! $emailVerificationEnabled || $user->hasVerifiedEmail();

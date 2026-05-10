@@ -47,6 +47,13 @@ class User extends Authenticatable
         'password',
         'profile_photo_path',
         'theme_preference',
+        'job_title',
+        'phone',
+        'mobile_phone',
+        'location',
+        'birth_date',
+        'work_anniversary',
+        'work_status',
         'role',
         'global_role',
         'sector_id',
@@ -74,6 +81,9 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'profile_photo_size' => 'integer',
             'theme_preference' => 'string',
+            'birth_date' => 'date',
+            'work_anniversary' => 'date',
+            'work_status' => 'string',
         ];
     }
 

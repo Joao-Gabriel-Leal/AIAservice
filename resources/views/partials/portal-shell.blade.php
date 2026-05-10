@@ -142,9 +142,9 @@
 
                 <div class="portal-sidebar-actions">
                     <div class="portal-sidebar-actions-grid">
-                        <a href="{{ route('appearance.edit') }}" class="portal-sidebar-action {{ request()->routeIs('appearance.*') ? 'portal-sidebar-action-active' : '' }}">
+                        <a href="{{ route('profile.edit') }}#preferencias" class="portal-sidebar-action {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}" title="Preferências">
                             {!! $portalNavIcon('appearance') !!}
-                            <span>Aparência</span>
+                            <span>Preferências</span>
                         </a>
 
                         <a href="{{ route('profile.edit') }}" class="portal-sidebar-action {{ request()->routeIs('profile.*') ? 'portal-sidebar-action-active' : '' }}">
@@ -300,7 +300,7 @@
                                         <a href="{{ route('users.index') }}">Usuarios</a>
                                         <a href="{{ route('assets.index') }}">Patrimonios</a>
                                     @endif
-                                    <a href="{{ route('appearance.edit') }}">Aparencia</a>
+                                    <a href="{{ route('profile.edit') }}#preferencias">Preferencias</a>
                                     <a href="{{ route('profile.edit') }}">Meu perfil</a>
                                 </div>
 

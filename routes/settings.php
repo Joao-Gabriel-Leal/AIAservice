@@ -34,7 +34,8 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::view('settings/appearance', 'pages.settings.appearance-page')->name('appearance.edit');
+    Route::get('settings/appearance', fn (): RedirectResponse => redirect()->to(route('profile.edit').'#preferencias'))
+        ->name('appearance.edit');
 
     Route::get('settings/security', function (): RedirectResponse {
         return redirect()->to(route('profile.edit').'#seguranca');

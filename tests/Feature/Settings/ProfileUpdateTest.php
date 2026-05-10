@@ -22,24 +22,24 @@ class ProfileUpdateTest extends TestCase
         $this->get(route('profile.edit'))
             ->assertOk()
             ->assertSee('Foto de perfil')
-            ->assertSee('Patrimonios vinculados')
+            ->assertSee('Informacoes pessoais')
+            ->assertSee('Status do trabalho')
+            ->assertSee('Preferencias')
             ->assertSee('Seguranca da conta')
-            ->assertSee('Conta administrada pela equipe')
+            ->assertSee('Historico da sessao')
+            ->assertSee('Patrimonios vinculados')
             ->assertDontSee('Laravel Starter Kit');
     }
 
-    public function test_appearance_page_is_displayed(): void
+    public function test_appearance_page_redirects_to_profile_preferences(): void
     {
         $this->actingAs(User::factory()->create());
 
         $this->get(route('appearance.edit'))
-            ->assertOk()
-            ->assertSee('Tema do sistema')
-            ->assertSee('Modo claro')
-            ->assertSee('Modo escuro');
+            ->assertRedirect(route('profile.edit').'#preferencias');
     }
 
-    public function test_user_can_update_theme_preference_from_appearance_page(): void
+    public function test_user_can_update_theme_preference_from_profile_page(): void
     {
         $user = User::factory()->create([
             'theme_preference' => 'light',
@@ -47,21 +47,77 @@ class ProfileUpdateTest extends TestCase
 
         $this->actingAs($user);
 
-        Livewire::test('pages::settings.appearance')
+        Livewire::test('pages::settings.profile')
             ->set('themePreference', 'dark')
+            ->call('saveThemePreference')
+            ->assertHasNoErrors()
             ->assertSet('themePreference', 'dark');
 
         $this->assertSame('dark', $user->refresh()->theme_preference);
     }
 
-    public function test_profile_page_hides_admin_managed_fields(): void
+    public function test_user_can_update_safe_personal_information(): void
     {
-        $this->actingAs(User::factory()->create());
+        $user = User::factory()->create([
+            'name' => 'Nome Antigo',
+            'email' => 'original@example.com',
+        ]);
+
+        $this->actingAs($user);
+
+        $response = Livewire::test('pages::settings.profile')
+            ->set('name', 'Nome Atualizado')
+            ->set('job_title', 'Analista de suporte')
+            ->set('phone', '11 3000-0000')
+            ->set('mobile_phone', '11 99999-0000')
+            ->set('location', 'Sao Paulo')
+            ->set('birth_date', '1995-05-10')
+            ->set('work_anniversary', '2024-01-15')
+            ->call('savePersonalInformation');
+
+        $response->assertHasNoErrors();
+
+        $user->refresh();
+
+        $this->assertSame('Nome Atualizado', $user->name);
+        $this->assertSame('original@example.com', $user->email);
+        $this->assertSame('Analista de suporte', $user->job_title);
+        $this->assertSame('11 3000-0000', $user->phone);
+        $this->assertSame('11 99999-0000', $user->mobile_phone);
+        $this->assertSame('Sao Paulo', $user->location);
+        $this->assertSame('1995-05-10', $user->birth_date->format('Y-m-d'));
+        $this->assertSame('2024-01-15', $user->work_anniversary->format('Y-m-d'));
+    }
+
+    public function test_user_can_update_work_status(): void
+    {
+        $user = User::factory()->create([
+            'work_status' => 'office',
+        ]);
+
+        $this->actingAs($user);
+
+        $response = Livewire::test('pages::settings.profile')
+            ->set('work_status', 'home')
+            ->call('saveWorkStatus');
+
+        $response->assertHasNoErrors();
+
+        $this->assertSame('home', $user->refresh()->work_status);
+    }
+
+    public function test_profile_page_keeps_admin_managed_fields_readonly(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'readonly@example.com',
+        ]);
+
+        $this->actingAs($user);
 
         $this->get(route('profile.edit'))
             ->assertOk()
+            ->assertSee('readonly@example.com')
             ->assertDontSee('Excluir conta')
-            ->assertDontSee('wire:model="name"', false)
             ->assertDontSee('wire:model="email"', false);
     }
 
