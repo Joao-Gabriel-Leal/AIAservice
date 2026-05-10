@@ -304,8 +304,45 @@
                     <div class="ticket-mobile-card-header">
                         <div class="min-w-0">
                             <p class="ticket-mobile-reference">{{ $ticket->fullReference() }}</p>
-                            <h2 class="ticket-mobile-title">{{ $ticket->title }}</h2>
+                            @if ($canUpdate)
+                                <div
+                                    wire:key="ticket-title-list-mobile-{{ $ticket->id }}"
+                                    x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                    class="ui-inline-title-editor"
+                                    data-no-drag
+                                >
+                                    <button
+                                        type="button"
+                                        x-show="! editing"
+                                        x-on:pointerdown.stop="$event.stopPropagation()"
+                                        x-on:click.stop.prevent="startEditing()"
+                                        x-bind:title="value"
+                                        class="ui-inline-title-display ui-inline-title-display-mobile"
+                                    >
+                                        <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                    </button>
+
+                                    <input
+                                        x-cloak
+                                        x-show="editing"
+                                        x-ref="input"
+                                        type="text"
+                                        x-model="value"
+                                        x-on:pointerdown.stop="$event.stopPropagation()"
+                                        x-on:click.stop="$event.stopPropagation()"
+                                        x-on:keydown.enter.prevent="saveTitle($wire)"
+                                        x-on:keydown.escape.prevent="cancelEditing()"
+                                        x-on:blur="saveTitle($wire)"
+                                        class="ui-input ui-inline-title-input ticket-mobile-title-input"
+                                    />
+                                </div>
+                            @else
+                                <h2 class="ticket-mobile-title">{{ $ticket->title }}</h2>
+                            @endif
                             <p class="ticket-mobile-subtitle">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
+                            @if ($ticket->isSubelement())
+                                <p class="ticket-mobile-subtitle">Subelemento de {{ $ticket->parentTicket?->publicReference() ?? 'chamado pai' }}</p>
+                            @endif
                         </div>
 
                         <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary ticket-mobile-open-button">
@@ -332,6 +369,11 @@
                                 Vinculado
                             </span>
                         @endif
+                        @if ($ticket->isSubelement())
+                            <span class="ticket-mobile-chip ticket-mobile-chip-info">
+                                Subelemento
+                            </span>
+                        @endif
                     </div>
 
                     @if ($needsRating)
@@ -352,7 +394,21 @@
                         </div>
                         <div>
                             <dt>Responsavel</dt>
-                            <dd><x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" /></dd>
+                            <dd>
+                                @if ($canUpdate)
+                                    <div class="ui-native-pill-select ticket-mobile-inline-select w-full" style="--ui-pill-color: {{ $ticket->assignee_id ? '#3b82f6' : '#94a3b8' }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateFixedField({{ $ticket->id }}, 'assignee_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            <option value="">Nao atribuido</option>
+                                            @foreach ($assignees as $assignee)
+                                                <option value="{{ $assignee->id }}" @selected($ticket->assignee_id === $assignee->id)>{{ $assignee->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @else
+                                    <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                                @endif
+                            </dd>
                         </div>
                         <div>
                             <dt>Atualizado</dt>
@@ -402,7 +458,41 @@
                         <tr class="ui-row-interactive ui-row-zebra {{ $loop->even ? 'ui-row-zebra-alt' : '' }}">
                             <td class="px-6 py-4">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                                    @if ($canUpdate)
+                                        <div
+                                            wire:key="ticket-title-list-{{ $ticket->id }}"
+                                            x-data="ticketInlineTitle({ ticketId: {{ $ticket->id }}, title: @js($ticket->title) })"
+                                            class="ui-inline-title-editor"
+                                            data-no-drag
+                                        >
+                                            <button
+                                                type="button"
+                                                x-show="! editing"
+                                                x-on:pointerdown.stop="$event.stopPropagation()"
+                                                x-on:click.stop.prevent="startEditing()"
+                                                x-bind:title="value"
+                                                class="ui-inline-title-display ui-inline-title-display-list"
+                                            >
+                                                <span class="ui-inline-title-text" x-text="value">{{ $ticket->title }}</span>
+                                            </button>
+
+                                            <input
+                                                x-cloak
+                                                x-show="editing"
+                                                x-ref="input"
+                                                type="text"
+                                                x-model="value"
+                                                x-on:pointerdown.stop="$event.stopPropagation()"
+                                                x-on:click.stop="$event.stopPropagation()"
+                                                x-on:keydown.enter.prevent="saveTitle($wire)"
+                                                x-on:keydown.escape.prevent="cancelEditing()"
+                                                x-on:blur="saveTitle($wire)"
+                                                class="ui-input ui-inline-title-input w-72"
+                                            />
+                                        </div>
+                                    @else
+                                        <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                                    @endif
                                     @if ($ticket->canBeRatedBy(auth()->user()))
                                         <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
                                             Chamado encerrado. Avalie o atendimento.
@@ -417,9 +507,21 @@
                                             Vinculado a incidente
                                         </span>
                                     @endif
+                                    @if ($ticket->isSubelement())
+                                        <span class="inline-flex rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 ring-1 ring-inset ring-cyan-200">
+                                            Subelemento
+                                        </span>
+                                    @elseif (($ticket->sub_tickets_count ?? 0) > 0)
+                                        <span class="inline-flex rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 ring-1 ring-inset ring-cyan-200">
+                                            {{ $ticket->sub_tickets_count }} subelemento(s), {{ $ticket->open_sub_tickets_count ?? 0 }} aberto(s)
+                                        </span>
+                                    @endif
                                 </div>
                                 <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                                 <p class="text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
+                                @if ($ticket->isSubelement())
+                                    <p class="text-xs text-slate-500">Pai: {{ $ticket->parentTicket?->publicReference() ?? '-' }} - {{ $ticket->parentTicket?->title ?? 'Nao informado' }}</p>
+                                @endif
                             </td>
                             <td class="px-6 py-4 text-slate-600">
                                 <x-sector-badge :sector="$ticket->sector" mode="dot" />
@@ -438,8 +540,20 @@
                             <td class="ui-person-column-cell">
                                 <x-person-reference :user="$ticket->requester" empty-label="Nao informado" />
                             </td>
-                            <td class="ui-person-column-cell">
-                                <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                            <td @class(['ui-person-column-cell' => ! $canUpdate])>
+                                @if ($canUpdate)
+                                    <div class="ui-native-pill-select w-52" style="--ui-pill-color: {{ $ticket->assignee_id ? '#3b82f6' : '#94a3b8' }}" wire:key="ticket-assignee-list-{{ $ticket->id }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateFixedField({{ $ticket->id }}, 'assignee_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            <option value="">Nao atribuido</option>
+                                            @foreach ($assignees as $assignee)
+                                                <option value="{{ $assignee->id }}" @selected($ticket->assignee_id === $assignee->id)>{{ $assignee->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @else
+                                    <x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" />
+                                @endif
                             </td>
                             <td class="px-6 py-4 text-slate-500">{{ $ticket->updated_at?->diffForHumans() }}</td>
                             @foreach ($fieldOptions as $field)
