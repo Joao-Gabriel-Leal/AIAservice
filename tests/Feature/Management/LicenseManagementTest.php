@@ -167,12 +167,13 @@ class LicenseManagementTest extends TestCase
         $this->actingAs($context['developer'])
             ->get(route('licenses.show', $license))
             ->assertOk()
-            ->assertSee('Licencas atribuidas')
+            ->assertSee('Assentos em uso')
             ->assertSee('Atribuir licenca')
             ->assertSee('Transferir')
-            ->assertSee('Desatribuir licenca')
+            ->assertSee('Liberar assento')
             ->assertSee('ACTIVE-REF')
             ->assertSee('Registro legado sem usuario interno')
+            ->assertDontSee('Desatribuir licenca')
             ->assertDontSee('OLD-REF');
     }
 
