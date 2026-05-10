@@ -89,6 +89,17 @@
                                     <p class="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
 
                                     <div class="mt-3 flex flex-wrap items-center gap-2">
+                                        @if ($ticket->is_major_incident)
+                                            <span class="ui-tone-chip" style="--ui-pill-color: #e11d48">
+                                                <span class="ui-tone-dot"></span>
+                                                Incidente - {{ $ticket->incident_children_count ?? 0 }}
+                                            </span>
+                                        @elseif ($ticket->major_incident_ticket_id)
+                                            <span class="ui-tone-chip" style="--ui-pill-color: #0284c7">
+                                                <span class="ui-tone-dot"></span>
+                                                Vinculado
+                                            </span>
+                                        @endif
                                         <span class="ui-tone-chip ui-tone-chip-neutral">{{ $ticket->requester?->name ?? 'Nao informado' }}</span>
                                         <span class="ui-tone-chip" style="--ui-pill-color: {{ $slaMeta['color'] }}">
                                             <span class="ui-tone-dot"></span>

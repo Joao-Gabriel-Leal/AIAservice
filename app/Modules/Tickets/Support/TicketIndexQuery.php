@@ -55,6 +55,7 @@ class TicketIndexQuery
         $query = Ticket::query()
             ->visibleTo($user)
             ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem', 'fieldValues.field.options'])
+            ->withCount('incidentChildren')
             ->when($filters['sector_id'], fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->when($filters['board_id'] ?? null, fn (Builder $query, int $boardId) => $query->where('ticket_board_id', $boardId))
             ->when(($filters['title'] ?? '') !== '', fn (Builder $query) => $this->applyTicketReferenceOrTitleFilter($query, (string) $filters['title']))

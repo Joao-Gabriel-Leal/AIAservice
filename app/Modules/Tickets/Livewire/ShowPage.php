@@ -11,6 +11,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketMessageTemplate;
 use App\Modules\Tickets\Models\TicketTimeEntry;
+use App\Modules\Tickets\Services\MajorIncidentService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketAttachmentRules;
 use Illuminate\Contracts\View\View;
@@ -40,6 +41,14 @@ class ShowPage extends Component
     public array $internalChatFiles = [];
 
     public array $internalMentionedUserIds = [];
+
+    public string $incidentBulkMessage = '';
+
+    public string $incidentResolutionMessage = '';
+
+    public array $incidentSelectedChildIds = [];
+
+    public string $incidentSelectionSignature = '';
 
     public array $personalTemplateForm = [
         'channel' => 'public',
@@ -161,6 +170,107 @@ class ShowPage extends Component
         );
 
         $this->reset('internalMessage', 'internalChatFiles', 'internalMentionedUserIds');
+    }
+
+    public function toggleMajorIncident(MajorIncidentService $majorIncidentService): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        if ($ticket->is_major_incident) {
+            $majorIncidentService->unmarkMajorIncident(auth()->user(), $ticket);
+            $this->resetIncidentSelections();
+            session()->flash('status', 'Chamado desmarcado como incidente massivo.');
+
+            return;
+        }
+
+        $majorIncidentService->markAsMajorIncident(auth()->user(), $ticket);
+        $this->resetIncidentSelections();
+        session()->flash('status', 'Chamado marcado como incidente massivo.');
+    }
+
+    public function linkIncidentChild(MajorIncidentService $majorIncidentService, int $childId): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        $child = Ticket::query()
+            ->visibleTo(auth()->user())
+            ->findOrFail($childId);
+
+        $majorIncidentService->attachChild(auth()->user(), $ticket, $child);
+        $this->resetIncidentSelections();
+        session()->flash('status', 'Chamado vinculado ao incidente massivo.');
+    }
+
+    public function unlinkIncidentChild(MajorIncidentService $majorIncidentService, int $childId): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        $child = Ticket::query()
+            ->visibleTo(auth()->user())
+            ->with('majorIncident')
+            ->findOrFail($childId);
+        $incident = $ticket->is_major_incident ? $ticket : $child->majorIncident;
+
+        abort_unless($incident, 404);
+
+        $majorIncidentService->detachChild(auth()->user(), $incident, $child);
+        $this->resetIncidentSelections();
+        session()->flash('status', 'Chamado removido do incidente massivo.');
+    }
+
+    public function sendIncidentBulkMessage(MajorIncidentService $majorIncidentService): void
+    {
+        $validated = $this->validate([
+            'incidentBulkMessage' => ['required', 'string', 'max:4000'],
+            'incidentSelectedChildIds' => ['array'],
+            'incidentSelectedChildIds.*' => ['integer'],
+        ], [
+            'incidentBulkMessage.required' => 'Escreva uma mensagem para publicar no incidente.',
+        ]);
+
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        $majorIncidentService->sendMessage(
+            auth()->user(),
+            $ticket,
+            $validated['incidentBulkMessage'],
+            $validated['incidentSelectedChildIds'] ?? [],
+        );
+
+        $this->reset('incidentBulkMessage');
+        session()->flash('status', 'Atualizacao publicada no incidente massivo.');
+    }
+
+    public function closeIncidentChildren(MajorIncidentService $majorIncidentService): void
+    {
+        $validated = $this->validate([
+            'incidentResolutionMessage' => ['required', 'string', 'max:4000'],
+            'incidentSelectedChildIds' => ['required', 'array', 'min:1'],
+            'incidentSelectedChildIds.*' => ['integer'],
+        ], [
+            'incidentResolutionMessage.required' => 'Informe a mensagem de solucao para fechar os chamados selecionados.',
+            'incidentSelectedChildIds.required' => 'Selecione ao menos um chamado vinculado para fechar.',
+            'incidentSelectedChildIds.min' => 'Selecione ao menos um chamado vinculado para fechar.',
+        ]);
+
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        $closedCount = $majorIncidentService->closeChildren(
+            auth()->user(),
+            $ticket,
+            $validated['incidentSelectedChildIds'],
+            $validated['incidentResolutionMessage'],
+        );
+
+        $this->reset('incidentResolutionMessage');
+        $this->resetIncidentSelections();
+        session()->flash('status', "{$closedCount} chamado(s) vinculado(s) finalizado(s).");
     }
 
     public function applyMessageTemplate(int $templateId): void
@@ -443,6 +553,14 @@ class ShowPage extends Component
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
         $canCloseOwn = auth()->user()->can('closeOwn', $ticket);
         $canReopenOwn = auth()->user()->can('reopenOwn', $ticket);
+        $canManageMajorIncident = $canViewOperationalHistory && auth()->user()->can('update', $ticket);
+        $incidentChildren = $canManageMajorIncident && $ticket->is_major_incident
+            ? $ticket->incidentChildren->values()
+            : collect();
+        $incidentParent = $canManageMajorIncident ? $ticket->majorIncident : null;
+        $incidentSuggestions = ($canManageMajorIncident && ! $ticket->major_incident_ticket_id)
+            ? app(MajorIncidentService::class)->suggestions(auth()->user(), $ticket)
+            : collect();
         $activeOwnTimeEntry = $canViewTimeTracking ? $ticket->activeTimeEntryForUser(auth()->user()) : null;
         $timeEntriesByUser = $canViewTimeTracking ? $ticket->timeEntriesTotalByUser() : collect();
         $pendingTimeEntriesCount = $canViewTimeTracking
@@ -505,6 +623,8 @@ class ShowPage extends Component
                 ->get()
             : collect();
 
+        $this->syncIncidentSelections($ticket, $incidentChildren, $canManageMajorIncident);
+
         return view('livewire.tickets.show-page', [
             'ticket' => $ticket,
             'messages' => $publicMessages,
@@ -533,6 +653,10 @@ class ShowPage extends Component
             'internalMentionableUsers' => $internalMentionableUsers,
             'canCloseOwn' => $canCloseOwn,
             'canReopenOwn' => $canReopenOwn,
+            'canManageMajorIncident' => $canManageMajorIncident,
+            'incidentChildren' => $incidentChildren,
+            'incidentParent' => $incidentParent,
+            'incidentSuggestions' => $incidentSuggestions,
             'canViewOperationalHistory' => $canViewOperationalHistory,
             'canViewTimeTracking' => $canViewTimeTracking,
             'canTrackTime' => $canTrackTime,
@@ -665,6 +789,13 @@ class ShowPage extends Component
                 'rating.user',
                 'generatedKnowledgeBaseArticle',
                 'knowledgeBaseUsages',
+                'majorIncident.requester',
+                'majorIncident.group',
+                'majorIncident.status',
+                'incidentChildren.requester',
+                'incidentChildren.assignee',
+                'incidentChildren.group',
+                'incidentChildren.status',
             ])
             ->findOrFail($this->ticketId);
 
@@ -735,6 +866,36 @@ class ShowPage extends Component
                 return filled($value);
             })
             ->values();
+    }
+
+    private function syncIncidentSelections(Ticket $ticket, Collection $incidentChildren, bool $canManageMajorIncident): void
+    {
+        if (! $canManageMajorIncident || ! $ticket->is_major_incident) {
+            $this->incidentSelectionSignature = '';
+
+            return;
+        }
+
+        $childIds = $incidentChildren
+            ->reject(fn (Ticket $child) => $child->isClosed())
+            ->pluck('id')
+            ->map(fn (int $childId) => (string) $childId)
+            ->values()
+            ->all();
+        $signature = $ticket->id.':'.implode(',', $childIds);
+
+        if ($this->incidentSelectionSignature === $signature) {
+            return;
+        }
+
+        $this->incidentSelectedChildIds = $childIds;
+        $this->incidentSelectionSignature = $signature;
+    }
+
+    private function resetIncidentSelections(): void
+    {
+        $this->incidentSelectedChildIds = [];
+        $this->incidentSelectionSignature = '';
     }
 
     /**

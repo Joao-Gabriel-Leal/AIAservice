@@ -102,6 +102,15 @@
                                             </div>
 
                                             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
+                                            @if ($ticket->is_major_incident)
+                                                <span class="mt-1 inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-inset ring-rose-200">
+                                                    Incidente massivo - {{ $ticket->incident_children_count ?? 0 }}
+                                                </span>
+                                            @elseif ($ticket->major_incident_ticket_id)
+                                                <span class="mt-1 inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 ring-1 ring-inset ring-sky-200">
+                                                    Vinculado a incidente
+                                                </span>
+                                            @endif
                                             <p class="text-xs text-slate-400">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
                                         </div>
                                     </td>

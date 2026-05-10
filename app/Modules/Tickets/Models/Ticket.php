@@ -49,6 +49,8 @@ class Ticket extends Model
         'resolution_breached_at',
         'resolved_at',
         'last_activity_at',
+        'is_major_incident',
+        'major_incident_ticket_id',
     ];
 
     protected function casts(): array
@@ -67,6 +69,8 @@ class Ticket extends Model
             'resolution_breached_at' => 'datetime',
             'resolved_at' => 'datetime',
             'last_activity_at' => 'datetime',
+            'is_major_incident' => 'boolean',
+            'major_incident_ticket_id' => 'integer',
         ];
     }
 
@@ -177,6 +181,17 @@ class Ticket extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function majorIncident(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'major_incident_ticket_id');
+    }
+
+    public function incidentChildren(): HasMany
+    {
+        return $this->hasMany(self::class, 'major_incident_ticket_id')
+            ->latest('updated_at');
     }
 
     public function fieldValues(): HasMany
