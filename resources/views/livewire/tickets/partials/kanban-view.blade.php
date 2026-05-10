@@ -133,6 +133,12 @@
                                             <span class="ui-tone-dot"></span>
                                             {{ $slaMeta['label'] }}
                                         </span>
+                                        @if (($ticket->sub_tickets_count ?? 0) > 0)
+                                            <span class="ui-tone-chip" style="--ui-pill-color: #0891b2">
+                                                <span class="ui-tone-dot"></span>
+                                                {{ $ticket->sub_tickets_count }} subelemento(s)
+                                            </span>
+                                        @endif
                                     </div>
                                 </div>
 

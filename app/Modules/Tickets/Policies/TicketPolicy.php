@@ -14,8 +14,15 @@ class TicketPolicy
 
     public function view(User $user, Ticket $ticket): bool
     {
-        return $user->isSuperAdmin()
-            || $ticket->requester_id === $user->id
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($ticket->isSubelement()) {
+            return $user->canOperateBoard($ticket->board);
+        }
+
+        return $ticket->requester_id === $user->id
             || $user->canOperateBoard($ticket->board);
     }
 
@@ -31,12 +38,16 @@ class TicketPolicy
 
     public function closeOwn(User $user, Ticket $ticket): bool
     {
-        return $ticket->requester_id === $user->id && ! $ticket->isClosed();
+        return ! $ticket->isSubelement()
+            && $ticket->requester_id === $user->id
+            && ! $ticket->isClosed();
     }
 
     public function reopenOwn(User $user, Ticket $ticket): bool
     {
-        return $ticket->requester_id === $user->id && $ticket->isClosed();
+        return ! $ticket->isSubelement()
+            && $ticket->requester_id === $user->id
+            && $ticket->isClosed();
     }
 
     public function comment(User $user, Ticket $ticket): bool

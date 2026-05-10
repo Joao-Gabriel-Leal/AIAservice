@@ -58,6 +58,7 @@ class BoardPage extends Component
     {
         if ($field === 'ticket_group_id') {
             $this->moveTicketToGroup($workflowService, $ticketId, $value);
+
             return;
         }
 
@@ -278,6 +279,7 @@ class BoardPage extends Component
     {
         return Ticket::query()
             ->visibleTo(auth()->user())
+            ->topLevel()
             ->where('ticket_board_id', $board->id)
             ->with([
                 'requester',

@@ -105,7 +105,7 @@ class OperationalQueuePage extends Component
 
         $query = Ticket::query()
             ->visibleTo($user)
-            ->with(['sector.company', 'board', 'group', 'status', 'requester', 'assignee', 'catalogItem', 'timeEntries'])
+            ->with(['sector.company', 'board', 'group', 'status', 'requester', 'assignee', 'parentTicket', 'catalogItem', 'timeEntries'])
             ->whereIn('ticket_board_id', $boardIds)
             ->whereNull('resolved_at')
             ->where(function (Builder $statusQuery): void {

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketField;
+use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketMessageTemplate;
 use App\Modules\Tickets\Models\TicketTimeEntry;
 use App\Modules\Tickets\Services\MajorIncidentService;
@@ -51,6 +52,8 @@ class ShowPage extends Component
     public array $incidentSuggestedTicketIds = [];
 
     public string $incidentSelectionSignature = '';
+
+    public string $newSubelementTitle = '';
 
     public array $personalTemplateForm = [
         'channel' => 'public',
@@ -106,6 +109,51 @@ class ShowPage extends Component
 
         $this->authorize('update', $ticket);
         $workflowService->updateField(auth()->user(), $ticket, $field, $value);
+    }
+
+    public function createSubelement(TicketWorkflowService $workflowService): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        $title = trim($this->newSubelementTitle);
+
+        if ($title === '') {
+            $this->addError('newSubelementTitle', 'Informe um titulo para o subelemento.');
+
+            return;
+        }
+
+        $workflowService->createSubelement(auth()->user(), $ticket, $title, [
+            'source' => 'ticket_detail',
+        ]);
+
+        $this->newSubelementTitle = '';
+        $this->resetErrorBag('newSubelementTitle');
+        session()->flash('status', 'Subelemento criado com sucesso.');
+    }
+
+    public function updateSubelementFixedField(TicketWorkflowService $workflowService, int $subelementId, string $field, mixed $value): void
+    {
+        $subelement = $this->subelement($subelementId);
+        $this->authorize('update', $subelement);
+
+        if (! in_array($field, ['title', 'priority', 'ticket_group_id', 'assignee_id'], true)) {
+            return;
+        }
+
+        $workflowService->updateTicket(auth()->user(), $subelement, [
+            $field => $value === '' ? null : $value,
+        ]);
+    }
+
+    public function updateSubelementDynamicField(TicketWorkflowService $workflowService, int $subelementId, int $fieldId, mixed $value): void
+    {
+        $subelement = $this->subelement($subelementId);
+        $field = TicketField::query()->findOrFail($fieldId);
+
+        $this->authorize('update', $subelement);
+        $workflowService->updateField(auth()->user(), $subelement, $field, $value);
     }
 
     public function sendMessage(TicketWorkflowService $workflowService): void
@@ -588,6 +636,8 @@ class ShowPage extends Component
         $canCloseOwn = auth()->user()->can('closeOwn', $ticket);
         $canReopenOwn = auth()->user()->can('reopenOwn', $ticket);
         $canManageMajorIncident = $canViewOperationalHistory && auth()->user()->can('update', $ticket);
+        $canManageSubelements = $canViewOperationalHistory && auth()->user()->can('update', $ticket) && ! $ticket->isSubelement();
+        $subelements = $canManageSubelements ? $ticket->subTickets->values() : collect();
         $incidentChildren = $canManageMajorIncident && $ticket->is_major_incident
             ? $ticket->incidentChildren->values()
             : collect();
@@ -688,6 +738,8 @@ class ShowPage extends Component
             'canCloseOwn' => $canCloseOwn,
             'canReopenOwn' => $canReopenOwn,
             'canManageMajorIncident' => $canManageMajorIncident,
+            'canManageSubelements' => $canManageSubelements,
+            'subelements' => $subelements,
             'incidentChildren' => $incidentChildren,
             'incidentParent' => $incidentParent,
             'incidentSuggestions' => $incidentSuggestions,
@@ -720,6 +772,48 @@ class ShowPage extends Component
         $seconds = $totalSeconds % 60;
 
         return sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+    }
+
+    public function fieldValue(Ticket $ticket, TicketField $field): mixed
+    {
+        return $ticket->fieldValues->firstWhere('ticket_field_id', $field->id)?->primitive_value;
+    }
+
+    public function fieldOption(TicketField $field, mixed $value): ?TicketFieldOption
+    {
+        return $field->options->first(
+            fn (TicketFieldOption $option) => (string) $option->value === (string) $value
+        );
+    }
+
+    public function priorityColor(?TicketPriority $priority): string
+    {
+        return match ($priority) {
+            TicketPriority::LOW => '#22c55e',
+            TicketPriority::MEDIUM => '#f59e0b',
+            TicketPriority::HIGH => '#8b5cf6',
+            TicketPriority::URGENT => '#f97316',
+            default => '#94a3b8',
+        };
+    }
+
+    public function slaMeta(Ticket $ticket): array
+    {
+        $state = $ticket->overallSlaState();
+
+        return [
+            'state' => $state,
+            'color' => match ($state) {
+                'breached' => '#ef4444',
+                'warning' => '#f59e0b',
+                default => '#22c55e',
+            },
+            'label' => match ($state) {
+                'breached' => 'Estourado',
+                'warning' => 'A vencer',
+                default => 'Em dia',
+            },
+        ];
     }
 
     public function sourceLabel(TicketTimeEntrySource|string|null $source): string
@@ -811,6 +905,7 @@ class ShowPage extends Component
                 'sector.company',
                 'requester',
                 'assignee',
+                'parentTicket',
                 'group',
                 'status',
                 'catalogItem.form.fields.options',
@@ -830,6 +925,16 @@ class ShowPage extends Component
                 'incidentChildren.assignee',
                 'incidentChildren.group',
                 'incidentChildren.status',
+                'subTickets.requester',
+                'subTickets.assignee',
+                'subTickets.group',
+                'subTickets.status',
+                'subTickets.catalogItem',
+                'subTickets.fieldValues.field.options',
+            ])
+            ->withCount([
+                'subTickets',
+                'subTickets as open_sub_tickets_count' => fn ($query) => $query->open(),
             ])
             ->findOrFail($this->ticketId);
 
@@ -852,6 +957,13 @@ class ShowPage extends Component
         $this->authorize('view', $timeEntry);
 
         return $timeEntry;
+    }
+
+    private function subelement(int $subelementId): Ticket
+    {
+        return Ticket::query()
+            ->where('parent_ticket_id', $this->ticketId)
+            ->findOrFail($subelementId);
     }
 
     private function boardAssignees($board)

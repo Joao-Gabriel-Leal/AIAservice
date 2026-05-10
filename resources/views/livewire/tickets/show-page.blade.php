@@ -74,6 +74,11 @@
                     {{ $statusLabel }}
                 </span>
                 <span class="ticket-cockpit-priority">{{ $priorityLabel }}</span>
+                @if ($ticket->isSubelement() && $ticket->parentTicket)
+                    <a href="{{ route('tickets.show', $ticket->parentTicket) }}" class="ticket-cockpit-priority">
+                        Subelemento de {{ $ticket->parentTicket?->publicReference() ?? 'chamado pai' }}
+                    </a>
+                @endif
             </div>
 
             <div>
@@ -862,6 +867,130 @@
                         @empty
                             <div class="ticket-side-empty">
                                 Nenhum template pessoal ainda. Salve uma resposta frequente direto do composer.
+                            </div>
+                        @endforelse
+                    </div>
+                </section>
+            @endif
+
+            @if ($canManageSubelements)
+                <section
+                    class="ticket-side-card"
+                    wire:loading.class="ui-loading"
+                    wire:target="createSubelement,updateSubelementFixedField,updateSubelementDynamicField"
+                >
+                    <div class="ticket-panel-heading">
+                        <p class="ticket-panel-kicker">Subelementos</p>
+                        <h3 class="ticket-panel-title text-[1.35rem]">{{ $subelements->count() }} ramificacao(oes)</h3>
+                        <p class="ticket-panel-copy">Divida a demanda em partes operacionais com responsaveis proprios.</p>
+                    </div>
+
+                    <form wire:submit.prevent="createSubelement" class="mt-4 flex flex-col gap-3">
+                        <input wire:model="newSubelementTitle" type="text" class="ui-input w-full" placeholder="+ Adicionar subelemento" />
+                        @error('newSubelementTitle') <span class="text-xs text-rose-600">{{ $message }}</span> @enderror
+                        <button type="submit" class="ui-action ui-action-primary w-full rounded-2xl px-4 py-3 text-sm">
+                            Adicionar subelemento
+                        </button>
+                    </form>
+
+                    <div class="mt-5 space-y-3">
+                        @forelse ($subelements as $subelement)
+                            @php
+                                $subelementSlaMeta = $this->slaMeta($subelement);
+                            @endphp
+
+                            <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3" wire:key="detail-subelement-{{ $subelement->id }}">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0 flex-1">
+                                        <input type="text" value="{{ $subelement->title }}" wire:change="updateSubelementFixedField({{ $subelement->id }}, 'title', $event.target.value)" class="ui-input w-full text-sm font-medium" />
+                                        <p class="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-700">{{ $subelement->fullReference() }}</p>
+                                    </div>
+                                    <a href="{{ route('tickets.show', $subelement) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Ver</a>
+                                </div>
+
+                                <div class="mt-3 grid gap-3">
+                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $subelement->assignee_id ? '#3b82f6' : '#94a3b8' }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateSubelementFixedField({{ $subelement->id }}, 'assignee_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            <option value="">Nao atribuido</option>
+                                            @foreach ($assignees as $assignee)
+                                                <option value="{{ $assignee->id }}" @selected($subelement->assignee_id === $assignee->id)>{{ $assignee->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $this->priorityColor($subelement->priority) }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateSubelementFixedField({{ $subelement->id }}, 'priority', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            @foreach ($priorities as $priority)
+                                                <option value="{{ $priority->value }}" @selected($subelement->priority === $priority)>{{ $priority->label() }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $subelement->group?->color ?: '#94a3b8' }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateSubelementFixedField({{ $subelement->id }}, 'ticket_group_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            <option value="">Sem etapa</option>
+                                            @foreach ($groups as $group)
+                                                <option value="{{ $group->id }}" @selected($subelement->ticket_group_id === $group->id)>{{ $group->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <span class="ui-tone-chip" style="--ui-pill-color: {{ $subelementSlaMeta['color'] }}">
+                                        <span class="ui-tone-dot"></span>
+                                        {{ $subelementSlaMeta['label'] }}
+                                    </span>
+                                </div>
+
+                                @if ($fields->isNotEmpty())
+                                    <details class="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                                        <summary class="cursor-pointer text-sm font-medium text-slate-700">Campos do quadro</summary>
+                                        <div class="mt-3 grid gap-3">
+                                            @foreach ($fields as $field)
+                                                @php
+                                                    $value = $this->fieldValue($subelement, $field);
+                                                    $selectedOption = $this->fieldOption($field, $value);
+                                                @endphp
+
+                                                <label class="block text-sm text-slate-600" wire:key="detail-subelement-field-{{ $subelement->id }}-{{ $field->id }}">
+                                                    <span class="mb-1 block font-medium">{{ $field->name }}</span>
+                                                    @if (in_array($field->type->value, ['select', 'status'], true))
+                                                        <select wire:change="updateSubelementDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
+                                                            <option value="">Selecione</option>
+                                                            @foreach ($field->options as $option)
+                                                                <option value="{{ $option->value }}" @selected((string) $value === (string) $option->value)>{{ $option->label }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    @elseif ($field->type->value === 'checkbox')
+                                                        <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+                                                            <input type="checkbox" @checked((bool) $value) wire:change="updateSubelementDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                                                            Ativo
+                                                        </label>
+                                                    @elseif ($field->type->value === 'date')
+                                                        <input type="date" value="{{ $value }}" wire:change="updateSubelementDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-input w-full" />
+                                                    @elseif ($field->type->value === 'number')
+                                                        <input type="number" value="{{ $value }}" wire:change="updateSubelementDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-input w-full" />
+                                                    @elseif ($field->type->value === 'user')
+                                                        <select wire:change="updateSubelementDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-native-select w-full">
+                                                            <option value="">Selecione</option>
+                                                            @foreach ($sectorUsers as $sectorUser)
+                                                                <option value="{{ $sectorUser->id }}" @selected((string) $value === (string) $sectorUser->id)>{{ $sectorUser->name }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    @else
+                                                        <input type="text" value="{{ $value }}" wire:change="updateSubelementDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" data-mask="auto" data-mask-label="{{ $field->name }}" data-mask-placeholder="{{ $field->placeholder }}" class="ui-input w-full" />
+                                                    @endif
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                @endif
+                            </article>
+                        @empty
+                            <div class="ticket-side-empty">
+                                Nenhum subelemento criado nesta demanda.
                             </div>
                         @endforelse
                     </div>

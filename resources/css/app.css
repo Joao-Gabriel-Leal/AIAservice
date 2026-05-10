@@ -389,6 +389,18 @@
         background-image: linear-gradient(135deg, color-mix(in srgb, var(--ui-lane-color, #2563eb) 7%, white), white 72%);
     }
 
+    .ui-collapse-indicator {
+        @apply inline-flex size-8 shrink-0 items-center justify-center rounded-full border bg-white/80 shadow-sm;
+        border-color: color-mix(in srgb, var(--ui-lane-color, #2563eb) 18%, white);
+        color: color-mix(in srgb, var(--ui-lane-color, #2563eb) 70%, black 30%);
+    }
+
+    .ui-board-lane-header:hover .ui-collapse-indicator {
+        background-color: white;
+        border-color: color-mix(in srgb, var(--ui-lane-color, #2563eb) 32%, white);
+        color: color-mix(in srgb, var(--ui-lane-color, #2563eb) 82%, black 18%);
+    }
+
     .ui-board-table thead th {
         @apply whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400;
     }
@@ -4035,6 +4047,18 @@
         border-color: rgba(251, 146, 168, 0.32);
         background-color: rgba(84, 22, 41, 0.55);
         color: #ffd4de;
+    }
+
+    html.dark .portal-shell .ui-collapse-indicator {
+        border-color: rgba(80, 105, 163, 0.42);
+        background-color: rgba(14, 28, 56, 0.88);
+        color: #b9cdef;
+    }
+
+    html.dark .portal-shell .ui-board-lane-header:hover .ui-collapse-indicator {
+        border-color: rgba(102, 132, 198, 0.48);
+        background-color: rgba(18, 35, 69, 0.96);
+        color: #eff5ff;
     }
 
     html.dark .portal-shell .ui-input,

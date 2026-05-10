@@ -9,8 +9,8 @@ use App\Modules\Companies\Models\Company;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\Licenses\Models\License;
 use App\Modules\Rooms\Models\Room;
-use App\Modules\SectorTemplates\Models\SectorTemplate;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\SectorTemplates\Models\SectorTemplate;
 use App\Modules\Shared\Models\ActivityLog;
 use App\Modules\Tickets\Models\ServiceCatalogItem;
 use App\Modules\Tickets\Models\Ticket;
@@ -155,7 +155,7 @@ class GlobalSearchService
 
         return Ticket::query()
             ->visibleTo($user)
-            ->with(['sector.company', 'requester', 'assignee', 'group'])
+            ->with(['sector.company', 'requester', 'assignee', 'group', 'parentTicket'])
             ->when($filters['sector_id'] ?? null, fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->where(function (Builder $query) use ($like, $isNumeric, $term, $hasReferenceTerm, $referencePrefix) {
                 if ($isNumeric) {
@@ -228,16 +228,23 @@ class GlobalSearchService
             ->limit($limit)
             ->get()
             ->map(function (Ticket $ticket) use ($term) {
+                $isSubelement = $ticket->isSubelement();
+                $parent = $ticket->parentTicket;
+
                 return [
                     'type' => 'tickets',
                     'title' => $ticket->publicReference().' - '.$ticket->title,
-                    'subtitle' => $ticket->fullReference().' - '.($ticket->sector?->name ?? 'Sem setor'),
+                    'subtitle' => $isSubelement && $parent
+                        ? 'Subelemento de '.$parent->publicReference().' - '.$parent->title
+                        : $ticket->fullReference().' - '.($ticket->sector?->name ?? 'Sem setor'),
                     'snippet' => $this->excerpt($ticket->description, $term),
                     'url' => route('tickets.show', $ticket),
                     'meta' => [
+                        'kind' => $isSubelement ? 'Subelemento' : null,
                         'priority' => $ticket->priority?->label(),
                         'requester' => $ticket->requester?->name,
                         'assignee' => $ticket->assignee?->name,
+                        'parent' => $isSubelement && $parent ? 'Pai '.$parent->publicReference() : null,
                         'updated_at' => $ticket->updated_at?->diffForHumans(),
                     ],
                     'group_key' => 'tickets',

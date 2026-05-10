@@ -83,6 +83,79 @@ class TicketWorkflowService
         return $ticket->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee']);
     }
 
+    public function createSubelement(User $actor, Ticket $parent, string $title, array $context = []): Ticket
+    {
+        Gate::forUser($actor)->authorize('update', $parent);
+
+        $parent = $parent->fresh(['board', 'group', 'status', 'requester', 'assignee']) ?? $parent;
+        $title = trim($title);
+
+        if ($parent->isSubelement()) {
+            throw ValidationException::withMessages([
+                'subelementTitle' => 'Subelementos nao podem ter outros subelementos.',
+            ]);
+        }
+
+        if ($title === '') {
+            throw ValidationException::withMessages([
+                'subelementTitle' => 'Informe um titulo para o subelemento.',
+            ]);
+        }
+
+        $attributes = $this->normalizeLifecycleAttributes([
+            'parent_ticket_id' => $parent->id,
+            'sector_id' => $parent->sector_id,
+            'ticket_board_id' => $parent->ticket_board_id,
+            'ticket_group_id' => $parent->ticket_group_id,
+            'ticket_status_id' => $parent->ticket_status_id,
+            'service_catalog_item_id' => $parent->service_catalog_item_id,
+            'room_id' => $parent->room_id,
+            'title' => $title,
+            'description' => null,
+            'requester_id' => $parent->requester_id,
+            'assignee_id' => null,
+            'priority' => $parent->priority,
+        ]);
+
+        /** @var Ticket $subelement */
+        $subelement = Ticket::query()->create([
+            ...$attributes,
+            'last_activity_at' => now(),
+        ]);
+
+        $subelement = $this->ticketSlaService->applyPolicy($subelement);
+        $parent->updateQuietly(['last_activity_at' => now()]);
+
+        $this->activityLogService->log($actor, $parent, 'ticket.subelement.created', 'Subelemento criado no chamado.', [
+            'sector_id' => $parent->sector_id,
+            'subelement_id' => $subelement->id,
+        ]);
+
+        $this->activityLogService->log($actor, $subelement, 'ticket.subelement.created', 'Subelemento criado.', [
+            'sector_id' => $subelement->sector_id,
+            'parent_ticket_id' => $parent->id,
+        ]);
+
+        $subelement = $subelement->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee', 'parentTicket']);
+
+        $this->notifyUsers(
+            $subelement,
+            new TicketCreatedNotification($subelement, 'Novo subelemento criado', 'O subelemento '.$subelement->fullReference().' foi criado em '.$parent->fullReference().'.'),
+            [$actor->id],
+        );
+
+        $this->ticketAutomationEngine->handleEvent($subelement, TicketAutomationTrigger::TICKET_CREATED, [
+            ...$context,
+            'event' => [
+                'ticket_id' => $subelement->id,
+                'parent_ticket_id' => $parent->id,
+                'source' => 'subelement',
+            ],
+        ]);
+
+        return $subelement->fresh(['fieldValues', 'attachments', 'group', 'status', 'requester', 'assignee', 'parentTicket']);
+    }
+
     public function updateTicket(User $actor, Ticket $ticket, array $attributes, array $context = []): Ticket
     {
         $wasClosed = $ticket->isClosed();
@@ -110,10 +183,14 @@ class TicketWorkflowService
             $ticket->resolved_at = ($group?->is_closed || $status?->is_closed) ? now() : null;
         }
 
+        if (! $ticket->isSubelement() && ! $wasClosed && $this->ticketWouldBeClosed($ticket)) {
+            $this->ensureNoOpenSubelements($ticket);
+        }
+
         $ticket->last_activity_at = now();
         $ticket->save();
 
-        if ($this->sameGroupId($original['ticket_group_id'] ?? null, $ticket->ticket_group_id) === false) {
+        if (! $ticket->isSubelement() && $this->sameGroupId($original['ticket_group_id'] ?? null, $ticket->ticket_group_id) === false) {
             $this->ticketBoardOrderService->moveTicket(
                 $ticket,
                 $original['ticket_group_id'] ?? null,
@@ -410,8 +487,7 @@ class TicketWorkflowService
         array $context = [],
         bool $isInternal = false,
         array $mentionedUserIds = [],
-    ): TicketMessage
-    {
+    ): TicketMessage {
         Gate::forUser($actor)->authorize($isInternal ? 'commentInternally' : 'comment', $ticket);
 
         $mentionedUserIds = collect($mentionedUserIds)
@@ -447,9 +523,9 @@ class TicketWorkflowService
             $isInternal ? 'ticket.internal_message.created' : 'ticket.message.created',
             $isInternal ? 'Atualizacao interna registrada.' : 'Nova mensagem no chat.',
             [
-            'message_id' => $ticketMessage->id,
-            'mentioned_user_ids' => $mentionedUserIds,
-            'sector_id' => $ticket->sector_id,
+                'message_id' => $ticketMessage->id,
+                'mentioned_user_ids' => $mentionedUserIds,
+                'sector_id' => $ticket->sector_id,
             ],
         );
 
@@ -484,6 +560,8 @@ class TicketWorkflowService
     public function closeByRequester(User $actor, Ticket $ticket): Ticket
     {
         Gate::forUser($actor)->authorize('closeOwn', $ticket);
+        $this->ensureNoOpenSubelements($ticket);
+
         $sourceGroupId = $ticket->ticket_group_id;
 
         $closedGroup = $this->targetGroup($ticket, true);
@@ -876,9 +954,12 @@ class TicketWorkflowService
 
     private function ticketRecipients(Ticket $ticket, array $exceptUserIds = []): Collection
     {
+        $directRecipients = $ticket->isSubelement()
+            ? [$ticket->assignee]
+            : [$ticket->requester, $ticket->assignee];
+
         return collect([
-            $ticket->requester,
-            $ticket->assignee,
+            ...$directRecipients,
             ...User::query()
                 ->where(function ($query) use ($ticket) {
                     $query
@@ -894,6 +975,42 @@ class TicketWorkflowService
             ->reject(fn (User $user) => in_array($user->id, $exceptUserIds, true))
             ->unique('id')
             ->values();
+    }
+
+    private function ensureNoOpenSubelements(Ticket $ticket): void
+    {
+        if ($ticket->isSubelement()) {
+            return;
+        }
+
+        $openCount = $ticket->subTickets()->open()->count();
+
+        if ($openCount === 0) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'ticketLifecycle' => $openCount === 1
+                ? 'Finalize o subelemento aberto antes de encerrar a demanda.'
+                : "Finalize os {$openCount} subelementos abertos antes de encerrar a demanda.",
+        ]);
+    }
+
+    private function ticketWouldBeClosed(Ticket $ticket): bool
+    {
+        if ($ticket->resolved_at !== null) {
+            return true;
+        }
+
+        if ($ticket->ticket_group_id && TicketGroup::query()->whereKey($ticket->ticket_group_id)->where('is_closed', true)->exists()) {
+            return true;
+        }
+
+        if ($ticket->ticket_status_id && TicketStatus::query()->whereKey($ticket->ticket_status_id)->where('is_closed', true)->exists()) {
+            return true;
+        }
+
+        return false;
     }
 
     private function updateNotificationFor(Ticket $ticket, array $original, bool $wasClosed): ?TicketUpdateNotification

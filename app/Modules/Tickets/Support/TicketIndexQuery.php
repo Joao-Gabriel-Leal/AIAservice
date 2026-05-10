@@ -52,10 +52,17 @@ class TicketIndexQuery
 
     public function build(User $user, array $filters): Builder
     {
+        $includeSubelements = $this->shouldIncludeSubelements($filters);
+
         $query = Ticket::query()
             ->visibleTo($user)
-            ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem', 'fieldValues.field.options'])
-            ->withCount('incidentChildren')
+            ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem', 'parentTicket', 'fieldValues.field.options'])
+            ->withCount([
+                'incidentChildren',
+                'subTickets',
+                'subTickets as open_sub_tickets_count' => fn (Builder $query) => $query->open(),
+            ])
+            ->when(! $includeSubelements, fn (Builder $query) => $query->topLevel())
             ->when($filters['sector_id'], fn (Builder $query, int $sectorId) => $query->where('sector_id', $sectorId))
             ->when($filters['board_id'] ?? null, fn (Builder $query, int $boardId) => $query->where('ticket_board_id', $boardId))
             ->when(($filters['title'] ?? '') !== '', fn (Builder $query) => $this->applyTicketReferenceOrTitleFilter($query, (string) $filters['title']))
@@ -104,6 +111,12 @@ class TicketIndexQuery
         $this->applySlaStateFilter($query, $filters['sla_state'] ?? 'all');
 
         return $this->applyDynamicFieldFilters($query, $filters['field_filters'] ?? []);
+    }
+
+    private function shouldIncludeSubelements(array $filters): bool
+    {
+        return in_array($filters['assignee_state'] ?? 'all', ['me', 'assigned'], true)
+            || trim((string) ($filters['assignee'] ?? '')) !== '';
     }
 
     public function applySlaStateFilter(Builder $query, string $state): Builder

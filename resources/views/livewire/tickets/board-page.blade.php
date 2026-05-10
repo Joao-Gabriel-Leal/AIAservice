@@ -94,6 +94,7 @@
                         wire:click="toggleGroup({{ $group->id }})"
                         wire:loading.class="ui-loading"
                         wire:target="toggleGroup"
+                        title="{{ ($collapsedGroups[$group->id] ?? false) ? 'Expandir etapa' : 'Recolher etapa' }}"
                         class="ui-row-interactive ui-board-lane-header flex w-full items-center justify-between gap-4 border-b border-slate-200 px-6 py-5 text-left"
                     >
                         <div class="flex items-center gap-4">
@@ -127,9 +128,14 @@
                                 {{ $ticketsByGroup->get($group->id)?->count() ?? 0 }}
                             </span>
 
-                            <span class="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                                {{ ($collapsedGroups[$group->id] ?? false) ? 'Expandir' : 'Recolher' }}
+                            <span class="ui-collapse-indicator" aria-hidden="true">
+                                @if ($collapsedGroups[$group->id] ?? false)
+                                    <flux:icon.chevron-right variant="micro" />
+                                @else
+                                    <flux:icon.chevron-down variant="micro" />
+                                @endif
                             </span>
+                            <span class="sr-only">{{ ($collapsedGroups[$group->id] ?? false) ? 'Expandir etapa' : 'Recolher etapa' }}</span>
                         </div>
                     </button>
 

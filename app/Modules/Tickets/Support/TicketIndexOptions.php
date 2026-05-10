@@ -25,6 +25,7 @@ class TicketIndexOptions
         $sectorIds = collect($user->allSectorIds())
             ->merge(
                 Ticket::query()
+                    ->topLevel()
                     ->where('requester_id', $user->id)
                     ->pluck('sector_id')
                     ->all(),
@@ -87,6 +88,7 @@ class TicketIndexOptions
         $boardIds = collect($user->operationalBoardIds())
             ->merge(
                 Ticket::query()
+                    ->topLevel()
                     ->where('requester_id', $user->id)
                     ->pluck('ticket_board_id')
                     ->all(),

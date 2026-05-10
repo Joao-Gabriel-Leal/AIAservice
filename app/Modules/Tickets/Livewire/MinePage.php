@@ -60,6 +60,7 @@ class MinePage extends Component
         $user = auth()->user();
 
         $ticketsQuery = Ticket::query()
+            ->topLevel()
             ->where('requester_id', $user->id)
             ->with([
                 'sector.company',
@@ -134,6 +135,7 @@ class MinePage extends Component
     private function sectorOptions(): Collection
     {
         $sectorIds = Ticket::query()
+            ->topLevel()
             ->where('requester_id', auth()->id())
             ->whereNotNull('sector_id')
             ->distinct()

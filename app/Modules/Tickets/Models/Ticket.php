@@ -20,12 +20,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class Ticket extends Model
 {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
+        'parent_ticket_id',
         'sector_id',
         'ticket_board_id',
         'ticket_group_id',
@@ -38,6 +40,7 @@ class Ticket extends Model
         'assignee_id',
         'priority',
         'board_sort_order',
+        'subticket_sort_order',
         'first_response_sla_minutes',
         'first_response_due_at',
         'first_responded_at',
@@ -57,7 +60,9 @@ class Ticket extends Model
     {
         return [
             'priority' => TicketPriority::class,
+            'parent_ticket_id' => 'integer',
             'board_sort_order' => 'integer',
+            'subticket_sort_order' => 'integer',
             'first_response_sla_minutes' => 'integer',
             'first_response_due_at' => 'datetime',
             'first_responded_at' => 'datetime',
@@ -76,8 +81,40 @@ class Ticket extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Ticket $ticket): void {
+            if (! $ticket->parent_ticket_id) {
+                return;
+            }
+
+            if ($ticket->exists && (int) $ticket->parent_ticket_id === (int) $ticket->getKey()) {
+                throw ValidationException::withMessages([
+                    'subelement' => 'Um subelemento nao pode ser pai de si mesmo.',
+                ]);
+            }
+
+            $parentIsSubelement = static::withTrashed()
+                ->whereKey($ticket->parent_ticket_id)
+                ->whereNotNull('parent_ticket_id')
+                ->exists();
+
+            if ($parentIsSubelement) {
+                throw ValidationException::withMessages([
+                    'subelement' => 'Subelementos nao podem ter outros subelementos.',
+                ]);
+            }
+        });
+
         static::creating(function (Ticket $ticket): void {
             $ticket->ensureReferenceCode();
+
+            if ($ticket->parent_ticket_id !== null) {
+                $ticket->board_sort_order = null;
+                $ticket->subticket_sort_order ??= ((int) static::query()
+                    ->where('parent_ticket_id', $ticket->parent_ticket_id)
+                    ->max('subticket_sort_order')) + 1;
+
+                return;
+            }
 
             if ($ticket->board_sort_order !== null || ! $ticket->ticket_board_id) {
                 return;
@@ -101,6 +138,40 @@ class Ticket extends Model
             ->orderBy('board_sort_order')
             ->orderBy('created_at')
             ->orderBy('id');
+    }
+
+    public function scopeOrderedSubelements(Builder $query): Builder
+    {
+        return $query
+            ->orderBy('subticket_sort_order')
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
+
+    public function scopeTopLevel(Builder $query): Builder
+    {
+        return $query->whereNull('parent_ticket_id');
+    }
+
+    public function scopeSubelements(Builder $query): Builder
+    {
+        return $query->whereNotNull('parent_ticket_id');
+    }
+
+    public function scopeOpen(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('resolved_at')
+            ->where(function (Builder $statusQuery): void {
+                $statusQuery
+                    ->whereDoesntHave('group')
+                    ->orWhereHas('group', fn (Builder $groupQuery) => $groupQuery->where('is_closed', false));
+            })
+            ->where(function (Builder $statusQuery): void {
+                $statusQuery
+                    ->whereDoesntHave('status')
+                    ->orWhereHas('status', fn (Builder $ticketStatusQuery) => $ticketStatusQuery->where('is_closed', false));
+            });
     }
 
     public function publicReference(): string
@@ -135,7 +206,11 @@ class Ticket extends Model
         $operationalBoardIds = $user->operationalBoardIds();
 
         return $query->where(function (Builder $visibleQuery) use ($user, $operationalBoardIds) {
-            $visibleQuery->where('requester_id', $user->id);
+            $visibleQuery->where(function (Builder $requesterQuery) use ($user): void {
+                $requesterQuery
+                    ->topLevel()
+                    ->where('requester_id', $user->id);
+            });
 
             if ($operationalBoardIds !== []) {
                 $visibleQuery->orWhereIn('ticket_board_id', $operationalBoardIds);
@@ -146,6 +221,17 @@ class Ticket extends Model
     public function sector(): BelongsTo
     {
         return $this->belongsTo(Sector::class);
+    }
+
+    public function parentTicket(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_ticket_id');
+    }
+
+    public function subTickets(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_ticket_id')
+            ->orderedSubelements();
     }
 
     public function board(): BelongsTo
@@ -253,9 +339,29 @@ class Ticket extends Model
         return (bool) ($this->group?->is_closed || $this->status?->is_closed || ! is_null($this->resolved_at));
     }
 
+    public function isSubelement(): bool
+    {
+        return $this->parent_ticket_id !== null;
+    }
+
+    public function openSubelementsCount(): int
+    {
+        if ($this->relationLoaded('subTickets')) {
+            return $this->subTickets->filter(fn (Ticket $ticket) => ! $ticket->isClosed())->count();
+        }
+
+        return $this->subTickets()->open()->count();
+    }
+
+    public function hasOpenSubelements(): bool
+    {
+        return $this->openSubelementsCount() > 0;
+    }
+
     public function canBeRatedBy(User $user): bool
     {
-        return $this->requester_id === $user->id
+        return ! $this->isSubelement()
+            && $this->requester_id === $user->id
             && $this->isClosed()
             && ! $this->hasRating();
     }

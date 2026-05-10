@@ -39,6 +39,7 @@ class TicketBoardOrderService
     private function groupTicketIds(int $boardId, ?int $groupId, int $exceptTicketId): array
     {
         return Ticket::query()
+            ->topLevel()
             ->where('ticket_board_id', $boardId)
             ->whereKeyNot($exceptTicketId)
             ->when(

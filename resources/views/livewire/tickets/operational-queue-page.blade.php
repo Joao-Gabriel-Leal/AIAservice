@@ -60,9 +60,19 @@
                     @php($slaMeta = $this->slaMeta($ticket))
                     <tr class="ui-row-interactive hover:bg-slate-50">
                         <td class="px-6 py-4">
-                            <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="font-medium text-slate-900">{{ $ticket->title }}</p>
+                                @if ($ticket->isSubelement())
+                                    <span class="inline-flex rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 ring-1 ring-inset ring-cyan-200">
+                                        Subelemento
+                                    </span>
+                                @endif
+                            </div>
                             <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                             <p class="mt-1 text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
+                            @if ($ticket->isSubelement())
+                                <p class="mt-1 text-xs text-slate-500">Pai: {{ $ticket->parentTicket?->publicReference() ?? '-' }} - {{ $ticket->parentTicket?->title ?? 'Nao informado' }}</p>
+                            @endif
                         </td>
                         <td class="px-6 py-4 text-slate-600">
                             <p class="font-medium text-slate-700">{{ $ticket->board?->name ?? 'Sem quadro' }}</p>

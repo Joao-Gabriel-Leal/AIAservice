@@ -16,8 +16,8 @@ use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketBoardOrderService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketIndexQuery;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -69,6 +69,10 @@ class IndexPage extends Component
     public array $fieldFilters = [];
 
     public array $collapsedGroups = [];
+
+    public array $expandedSubelements = [];
+
+    public array $newSubelementTitles = [];
 
     public array $columnLimits = [];
 
@@ -350,6 +354,7 @@ class IndexPage extends Component
     ): void {
         $ticket = Ticket::query()->findOrFail($ticketId);
         $this->authorize('update', $ticket);
+        abort_if($ticket->isSubelement(), 404);
 
         $board = $this->board();
         $normalizedGroupId = $this->normalizeGroupId($groupId);
@@ -365,6 +370,7 @@ class IndexPage extends Component
 
         if ($normalizedBeforeTicketId !== null) {
             $beforeTicket = Ticket::query()
+                ->topLevel()
                 ->whereKey($normalizedBeforeTicketId)
                 ->where('ticket_board_id', $board->id)
                 ->first();
@@ -416,6 +422,37 @@ class IndexPage extends Component
 
         $this->authorize('update', $ticket);
         $workflowService->updateField(auth()->user(), $ticket, $field, $value);
+    }
+
+    public function toggleSubelements(int $ticketId): void
+    {
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $this->authorize('view', $ticket);
+
+        $this->expandedSubelements[$ticketId] = ! ($this->expandedSubelements[$ticketId] ?? false);
+    }
+
+    public function createSubelement(TicketWorkflowService $workflowService, int $ticketId): void
+    {
+        $title = trim((string) ($this->newSubelementTitles[$ticketId] ?? ''));
+
+        if ($title === '') {
+            $this->addError("newSubelementTitles.{$ticketId}", 'Informe um titulo para o subelemento.');
+
+            return;
+        }
+
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $this->authorize('update', $ticket);
+
+        $workflowService->createSubelement(auth()->user(), $ticket, $title, [
+            'source' => 'board_inline',
+        ]);
+
+        $this->newSubelementTitles[$ticketId] = '';
+        $this->expandedSubelements[$ticketId] = true;
+        $this->resetErrorBag("newSubelementTitles.{$ticketId}");
+        $this->resetBoardColumnLimits();
     }
 
     public function toggleGroup(int $groupId): void
@@ -685,6 +722,7 @@ class IndexPage extends Component
     public function displayFieldValue(Ticket $ticket, TicketField $field): mixed
     {
         $value = $this->fieldValue($ticket, $field);
+
         return is_bool($value) ? ($value ? 'Sim' : 'Nao') : $value;
     }
 
@@ -1047,6 +1085,7 @@ class IndexPage extends Component
     private function columnTicketQuery(Builder $baseQuery, TicketBoard $board, ?int $groupId): Builder
     {
         return (clone $baseQuery)
+            ->topLevel()
             ->where('ticket_board_id', $board->id)
             ->when(
                 $groupId === null,
@@ -1059,6 +1098,16 @@ class IndexPage extends Component
                 'group',
                 'catalogItem',
                 'fieldValues.field.options',
+                'subTickets.requester',
+                'subTickets.assignee',
+                'subTickets.group',
+                'subTickets.status',
+                'subTickets.catalogItem',
+                'subTickets.fieldValues.field.options',
+            ])
+            ->withCount([
+                'subTickets',
+                'subTickets as open_sub_tickets_count' => fn (Builder $query) => $query->open(),
             ])
             ->reorder()
             ->orderedForBoardDisplay();

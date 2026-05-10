@@ -11,9 +11,8 @@ class TicketsExport
 {
     public function __construct(
         private readonly Collection $tickets,
-        private readonly Collection $fields = new Collection(),
-    ) {
-    }
+        private readonly Collection $fields = new Collection,
+    ) {}
 
     public function fileName(): string
     {
@@ -31,6 +30,8 @@ class TicketsExport
                 [
                     'Codigo',
                     'ID interno',
+                    'Tipo',
+                    'Demanda pai',
                     'Titulo',
                     'Setor',
                     'Empresa',
@@ -45,6 +46,8 @@ class TicketsExport
                     return [
                         $ticket->publicReference(),
                         $ticket->technicalReference(),
+                        $ticket->isSubelement() ? 'Subelemento' : 'Demanda',
+                        $ticket->parentTicket?->publicReference() ?? '',
                         $ticket->title,
                         $ticket->sector?->name ?? 'Sem setor',
                         $ticket->sector?->company?->name ?? '',

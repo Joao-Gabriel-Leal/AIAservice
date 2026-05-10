@@ -11,6 +11,7 @@
                 wire:click="toggleGroup({{ $group->id }})"
                 wire:loading.class="ui-loading"
                 wire:target="toggleGroup"
+                title="{{ ($collapsedGroups[$group->id] ?? false) ? 'Expandir etapa' : 'Recolher etapa' }}"
                 class="ui-row-interactive ui-board-lane-header flex w-full items-center justify-between gap-4 border-b border-slate-200 px-6 py-5 text-left"
             >
                 <div class="flex items-center gap-4">
@@ -44,9 +45,14 @@
                         {{ $groupTicketTotals->get($group->id, 0) }}
                     </span>
 
-                    <span class="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                        {{ ($collapsedGroups[$group->id] ?? false) ? 'Expandir' : 'Recolher' }}
+                    <span class="ui-collapse-indicator" aria-hidden="true">
+                        @if ($collapsedGroups[$group->id] ?? false)
+                            <flux:icon.chevron-right variant="micro" />
+                        @else
+                            <flux:icon.chevron-down variant="micro" />
+                        @endif
                     </span>
+                    <span class="sr-only">{{ ($collapsedGroups[$group->id] ?? false) ? 'Expandir etapa' : 'Recolher etapa' }}</span>
                 </div>
             </button>
 
@@ -55,6 +61,7 @@
                     <table class="ui-board-table min-w-full divide-y divide-slate-200 text-sm">
                         <thead class="bg-slate-50/80 text-left text-slate-500">
                             <tr>
+                                <th class="w-12"></th>
                                 <th>Titulo</th>
                                 <th class="ui-person-column-head">Solicitante</th>
                                 <th>Responsavel</th>
@@ -80,7 +87,7 @@
                                     data-board-drop-placement="before"
                                     data-board-drop-before-ticket-id="{{ $ticket->id }}"
                                 >
-                                    <td colspan="{{ 7 + $fields->count() }}">
+                                    <td colspan="{{ 8 + $fields->count() }}">
                                         <div class="ui-board-drop-indicator ui-board-drop-indicator-line"></div>
                                     </td>
                                 </tr>
@@ -95,6 +102,17 @@
                                         'ui-kanban-card-lifted': isPointerCandidate({{ $ticket->id }})
                                     }"
                                 >
+                                    <td class="w-12">
+                                        <button
+                                            type="button"
+                                            wire:click.stop="toggleSubelements({{ $ticket->id }})"
+                                            class="inline-flex size-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600 transition hover:border-sky-300 hover:text-sky-700"
+                                            title="{{ ($expandedSubelements[$ticket->id] ?? false) ? 'Recolher subelementos' : 'Expandir subelementos' }}"
+                                            data-no-drag
+                                        >
+                                            {{ ($expandedSubelements[$ticket->id] ?? false) ? '-' : '+' }}
+                                        </button>
+                                    </td>
                                     <td>
                                         <div class="space-y-1">
                                             <div
@@ -137,6 +155,11 @@
                                             @elseif ($ticket->major_incident_ticket_id)
                                                 <span class="mt-1 inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 ring-1 ring-inset ring-sky-200">
                                                     Vinculado a incidente
+                                                </span>
+                                            @endif
+                                            @if (($ticket->sub_tickets_count ?? 0) > 0)
+                                                <span class="mt-1 inline-flex rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-700 ring-1 ring-inset ring-cyan-200">
+                                                    {{ $ticket->sub_tickets_count }} subelemento(s), {{ $ticket->open_sub_tickets_count ?? 0 }} aberto(s)
                                                 </span>
                                             @endif
                                             <p class="text-xs text-slate-400">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
@@ -241,6 +264,138 @@
                                         <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Ver</a>
                                     </td>
                                 </tr>
+
+                                @if ($expandedSubelements[$ticket->id] ?? false)
+                                    <tr wire:key="subelements-stages-{{ $ticket->id }}">
+                                        <td class="bg-slate-50/60"></td>
+                                        <td colspan="{{ 7 + $fields->count() }}" class="bg-slate-50/60 px-4 py-4">
+                                            <div class="border-l-4 border-cyan-400 bg-white shadow-sm">
+                                                <div class="overflow-x-auto">
+                                                    <table class="min-w-full divide-y divide-slate-100 text-sm">
+                                                        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                                            <tr>
+                                                                <th class="px-4 py-3">Subelemento</th>
+                                                                <th class="px-4 py-3">Responsavel</th>
+                                                                <th class="px-4 py-3">Prioridade</th>
+                                                                <th class="px-4 py-3">Etapa</th>
+                                                                <th class="px-4 py-3">SLA</th>
+                                                                @foreach ($fields as $field)
+                                                                    <th class="px-4 py-3">{{ $field->name }}</th>
+                                                                @endforeach
+                                                                <th class="px-4 py-3">Abrir</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-slate-100">
+                                                            @foreach ($ticket->subTickets as $subelement)
+                                                                @php
+                                                                    $subelementSlaMeta = $this->slaMeta($subelement);
+                                                                @endphp
+                                                                <tr wire:key="subelement-row-stages-{{ $subelement->id }}" class="align-top">
+                                                                    <td class="px-4 py-3">
+                                                                        <input type="text" value="{{ $subelement->title }}" wire:change="updateFixedField({{ $subelement->id }}, 'title', $event.target.value)" class="ui-input w-72" />
+                                                                        <p class="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-700">{{ $subelement->fullReference() }}</p>
+                                                                    </td>
+                                                                    <td class="px-4 py-3">
+                                                                        <div class="ui-native-pill-select w-52" style="--ui-pill-color: {{ $subelement->assignee_id ? '#3b82f6' : '#94a3b8' }}">
+                                                                            <span class="ui-native-pill-dot"></span>
+                                                                            <select wire:change="updateFixedField({{ $subelement->id }}, 'assignee_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                                                <option value="">Nao atribuido</option>
+                                                                                @foreach ($assignees as $assignee)
+                                                                                    <option value="{{ $assignee->id }}" @selected($subelement->assignee_id === $assignee->id)>{{ $assignee->name }}</option>
+                                                                                @endforeach
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td class="px-4 py-3">
+                                                                        <div class="ui-native-pill-select w-44" style="--ui-pill-color: {{ $this->priorityColor($subelement->priority) }}">
+                                                                            <span class="ui-native-pill-dot"></span>
+                                                                            <select wire:change="updateFixedField({{ $subelement->id }}, 'priority', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                                                @foreach ($priorities as $priority)
+                                                                                    <option value="{{ $priority->value }}" @selected($subelement->priority === $priority)>{{ $priority->label() }}</option>
+                                                                                @endforeach
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td class="px-4 py-3">
+                                                                        <div class="ui-native-pill-select w-48" style="--ui-pill-color: {{ $subelement->group?->color ?: '#94a3b8' }}">
+                                                                            <span class="ui-native-pill-dot"></span>
+                                                                            <select wire:change="updateFixedField({{ $subelement->id }}, 'ticket_group_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                                                <option value="">Sem etapa</option>
+                                                                                @foreach ($board->groups as $boardGroup)
+                                                                                    <option value="{{ $boardGroup->id }}" @selected($subelement->ticket_group_id === $boardGroup->id)>{{ $boardGroup->name }}</option>
+                                                                                @endforeach
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td class="px-4 py-3">
+                                                                        <span class="ui-tone-chip" style="--ui-pill-color: {{ $subelementSlaMeta['color'] }}">
+                                                                            <span class="ui-tone-dot"></span>
+                                                                            {{ $subelementSlaMeta['label'] }}
+                                                                        </span>
+                                                                    </td>
+                                                                    @foreach ($fields as $field)
+                                                                        @php
+                                                                            $value = $this->fieldValue($subelement, $field);
+                                                                            $selectedOption = $this->fieldOption($field, $value);
+                                                                        @endphp
+                                                                        <td class="px-4 py-3" wire:key="subelement-field-stages-{{ $subelement->id }}-{{ $field->id }}">
+                                                                            @if (in_array($field->type->value, ['select', 'status'], true))
+                                                                                <div class="ui-native-pill-select w-48" style="--ui-pill-color: {{ $selectedOption?->color ?: '#94a3b8' }}">
+                                                                                    <span class="ui-native-pill-dot"></span>
+                                                                                    <select wire:change="updateDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                                                        <option value="">Selecione</option>
+                                                                                        @foreach ($field->options as $option)
+                                                                                            <option value="{{ $option->value }}" @selected((string) $value === (string) $option->value)>{{ $option->label }}</option>
+                                                                                        @endforeach
+                                                                                    </select>
+                                                                                </div>
+                                                                            @elseif ($field->type->value === 'checkbox')
+                                                                                <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+                                                                                    <input type="checkbox" @checked((bool) $value) wire:change="updateDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                                                                                    Ativo
+                                                                                </label>
+                                                                            @elseif ($field->type->value === 'date')
+                                                                                <input type="date" value="{{ $value }}" wire:change="updateDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-input w-40" />
+                                                                            @elseif ($field->type->value === 'number')
+                                                                                <input type="number" value="{{ $value }}" wire:change="updateDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-input w-32" />
+                                                                            @elseif ($field->type->value === 'user')
+                                                                                <div class="ui-native-pill-select w-48" style="--ui-pill-color: {{ $value ? '#3b82f6' : '#94a3b8' }}">
+                                                                                    <span class="ui-native-pill-dot"></span>
+                                                                                    <select wire:change="updateDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                                                        <option value="">Selecione</option>
+                                                                                        @foreach ($sectorUsers as $sectorUser)
+                                                                                            <option value="{{ $sectorUser->id }}" @selected((string) $value === (string) $sectorUser->id)>{{ $sectorUser->name }}</option>
+                                                                                        @endforeach
+                                                                                    </select>
+                                                                                </div>
+                                                                            @else
+                                                                                <input type="text" value="{{ $value }}" wire:change="updateDynamicField({{ $subelement->id }}, {{ $field->id }}, $event.target.value)" data-mask="auto" data-mask-label="{{ $field->name }}" data-mask-placeholder="{{ $field->placeholder }}" class="ui-input w-48" />
+                                                                            @endif
+                                                                        </td>
+                                                                    @endforeach
+                                                                    <td class="px-4 py-3">
+                                                                        <a href="{{ route('tickets.show', $subelement) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Ver</a>
+                                                                    </td>
+                                                                </tr>
+                                                            @endforeach
+                                                            <tr>
+                                                                <td colspan="{{ 6 + $fields->count() }}" class="px-4 py-3">
+                                                                    <form wire:submit.prevent="createSubelement({{ $ticket->id }})" class="flex flex-wrap items-start gap-3">
+                                                                        <div class="min-w-[280px] flex-1">
+                                                                            <input wire:model="newSubelementTitles.{{ $ticket->id }}" type="text" class="ui-input w-full" placeholder="+ Adicionar subelemento" />
+                                                                            @error("newSubelementTitles.{$ticket->id}") <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                                                        </div>
+                                                                        <button type="submit" class="ui-action ui-action-primary rounded-xl px-3 py-2 text-sm">Adicionar</button>
+                                                                    </form>
+                                                                </td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
                             @empty
                                 <tr
                                     x-cloak
@@ -248,13 +403,13 @@
                                     class="ui-board-drop-row"
                                     data-board-drop-placement="top"
                                 >
-                                    <td colspan="{{ 7 + $fields->count() }}">
+                                    <td colspan="{{ 8 + $fields->count() }}">
                                         <div class="ui-board-drop-indicator ui-board-drop-indicator-line"></div>
                                     </td>
                                 </tr>
 
                                 <tr>
-                                    <td colspan="{{ 7 + $fields->count() }}" class="px-4 py-8 text-center text-slate-500">Nenhum chamado neste grupo com os filtros atuais.</td>
+                                    <td colspan="{{ 8 + $fields->count() }}" class="px-4 py-8 text-center text-slate-500">Nenhum chamado neste grupo com os filtros atuais.</td>
                                 </tr>
                             @endforelse
 
@@ -264,7 +419,7 @@
                                 class="ui-board-drop-row"
                                 data-board-drop-placement="end"
                             >
-                                <td colspan="{{ 7 + $fields->count() }}">
+                                <td colspan="{{ 8 + $fields->count() }}">
                                     <div class="ui-board-drop-indicator ui-board-drop-indicator-line"></div>
                                 </td>
                             </tr>
@@ -335,6 +490,11 @@
                                 @elseif ($ticket->major_incident_ticket_id)
                                     <span class="ticket-mobile-chip ticket-mobile-chip-info">
                                         Vinculado
+                                    </span>
+                                @endif
+                                @if (($ticket->sub_tickets_count ?? 0) > 0)
+                                    <span class="ticket-mobile-chip ticket-mobile-chip-info">
+                                        {{ $ticket->sub_tickets_count }} subelemento(s)
                                     </span>
                                 @endif
                             </div>
