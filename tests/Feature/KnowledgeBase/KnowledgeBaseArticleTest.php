@@ -17,6 +17,7 @@ use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class KnowledgeBaseArticleTest extends TestCase
@@ -304,6 +305,54 @@ class KnowledgeBaseArticleTest extends TestCase
         $this->get(route('knowledge-base.attachments.show', $attachment))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
+    }
+
+    public function test_sector_admin_can_upload_and_remove_article_cover_image(): void
+    {
+        Storage::fake('public');
+
+        [$sectorA] = $this->seedSectors();
+        $sectorAdmin = User::factory()->create([
+            'global_role' => GlobalUserRole::COLLABORATOR,
+            'role' => UserRole::SECTOR_ADMIN,
+            'sector_id' => $sectorA->id,
+        ]);
+
+        $this->actingAs($sectorAdmin);
+
+        $coverImage = UploadedFile::fake()->image('capa-artigo.jpg', 1200, 720);
+
+        $this->post(route('knowledge-base.store'), [
+            'sector_id' => $sectorA->id,
+            'title' => 'Guia com capa',
+            'summary' => 'Resumo do artigo com capa',
+            'content' => 'Conteudo do artigo com capa',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE->value,
+            'is_active' => '1',
+            'cover_image' => $coverImage,
+        ])->assertRedirect(route('knowledge-base.manage', absolute: false));
+
+        $article = KnowledgeBaseArticle::query()->firstOrFail();
+
+        $this->assertNotNull($article->cover_image_path);
+        Storage::disk('public')->assertExists($article->cover_image_path);
+
+        $storedCoverPath = $article->cover_image_path;
+
+        $this->put(route('knowledge-base.update', $article), [
+            'sector_id' => $sectorA->id,
+            'title' => 'Guia com capa',
+            'summary' => 'Resumo do artigo com capa atualizado',
+            'content' => 'Conteudo do artigo com capa atualizado',
+            'visibility' => KnowledgeBaseVisibility::PRIVATE->value,
+            'is_active' => '1',
+            'remove_cover_image' => '1',
+        ])->assertRedirect(route('knowledge-base.manage', absolute: false));
+
+        $article->refresh();
+
+        $this->assertNull($article->cover_image_path);
+        Storage::disk('public')->assertMissing($storedCoverPath);
     }
 
     public function test_sector_admin_can_remove_existing_attachment_on_update(): void

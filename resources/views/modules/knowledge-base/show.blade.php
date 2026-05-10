@@ -1,3 +1,5 @@
+@php($coverImageUrl = $article->coverImageUrl())
+
 <x-layouts.portal :title="$article->title" :subtitle="$article->sector?->name ? 'Setor: '.$article->sector->name : null" header-variant="none">
     <div class="space-y-6">
         <x-portal.page-intro
@@ -24,6 +26,12 @@
                 @endif
             </x-slot:meta>
         </x-portal.page-intro>
+
+        @if ($coverImageUrl)
+            <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <img src="{{ $coverImageUrl }}" alt="Capa do artigo" class="h-64 w-full object-cover lg:h-80">
+            </section>
+        @endif
 
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div class="space-y-6">
