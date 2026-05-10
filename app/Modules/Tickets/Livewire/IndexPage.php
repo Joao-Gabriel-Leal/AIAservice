@@ -455,6 +455,29 @@ class IndexPage extends Component
         $this->resetBoardColumnLimits();
     }
 
+    public function deleteTicket(TicketWorkflowService $workflowService, int $ticketId): void
+    {
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $this->authorize('delete', $ticket);
+
+        $reference = $ticket->fullReference();
+        $parentTicketId = $ticket->parent_ticket_id;
+        $isSubelement = $ticket->isSubelement();
+
+        $workflowService->deleteTicket(auth()->user(), $ticket);
+
+        if ($parentTicketId !== null) {
+            $this->expandedSubelements[$parentTicketId] = true;
+        } else {
+            unset($this->expandedSubelements[$ticketId], $this->newSubelementTitles[$ticketId]);
+        }
+
+        $this->resetBoardColumnLimits();
+        $this->resetPage();
+
+        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' excluido com sucesso.');
+    }
+
     public function toggleGroup(int $groupId): void
     {
         $this->collapsedGroups[$groupId] = ! ($this->collapsedGroups[$groupId] ?? false);

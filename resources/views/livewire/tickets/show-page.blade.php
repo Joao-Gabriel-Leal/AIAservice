@@ -877,7 +877,7 @@
                 <section
                     class="ticket-side-card"
                     wire:loading.class="ui-loading"
-                    wire:target="createSubelement,updateSubelementFixedField,updateSubelementDynamicField"
+                    wire:target="createSubelement,updateSubelementFixedField,updateSubelementDynamicField,deleteSubelement"
                 >
                     <div class="ticket-panel-heading">
                         <p class="ticket-panel-kicker">Subelementos</p>
@@ -905,7 +905,21 @@
                                         <input type="text" value="{{ $subelement->title }}" wire:change="updateSubelementFixedField({{ $subelement->id }}, 'title', $event.target.value)" class="ui-input w-full text-sm font-medium" />
                                         <p class="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-700">{{ $subelement->fullReference() }}</p>
                                     </div>
-                                    <a href="{{ route('tickets.show', $subelement) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Ver</a>
+                                    <div class="flex shrink-0 flex-col gap-2">
+                                        <a href="{{ route('tickets.show', $subelement) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Ver</a>
+                                        <button
+                                            type="button"
+                                            wire:click="deleteSubelement({{ $subelement->id }})"
+                                            wire:confirm="Excluir este subelemento?"
+                                            wire:loading.attr="disabled"
+                                            wire:loading.class="ui-loading"
+                                            wire:target="deleteSubelement"
+                                            class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm"
+                                        >
+                                            <flux:icon.trash class="size-4" />
+                                            <span>Excluir</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="mt-3 grid gap-3">
@@ -1158,7 +1172,7 @@
             <section
                 class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
                 wire:loading.class="ui-loading"
-                wire:target="updateFixedField,updateDynamicField"
+                wire:target="updateFixedField,updateDynamicField,deleteCurrentTicket"
             >
                 <div class="ticket-panel-heading">
                     <p class="ticket-panel-kicker">Detalhes do chamado</p>
@@ -1184,6 +1198,29 @@
                         <p class="ticket-summary-value">{{ $ticket->created_at?->format('d/m/Y H:i') ?? 'Nao informado' }}</p>
                     </div>
                 </div>
+
+                @if ($canDeleteTicket)
+                    <div class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                        <p class="text-sm font-semibold text-rose-900">Exclusao operacional</p>
+                        <p class="mt-1 text-sm text-rose-700">
+                            {{ $ticket->isSubelement() ? 'Remove este subelemento das listas operacionais.' : 'Remove este chamado do quadro e tambem seus subelementos vinculados.' }}
+                        </p>
+
+                        <button
+                            type="button"
+                            wire:click="deleteCurrentTicket"
+                            wire:confirm="Excluir {{ $ticket->isSubelement() ? 'este subelemento' : 'este chamado' }}? Esta acao remove o item das listas operacionais."
+                            wire:loading.attr="disabled"
+                            wire:loading.class="ui-loading"
+                            wire:target="deleteCurrentTicket"
+                            class="ui-action ui-action-danger mt-3 rounded-2xl px-4 py-3 text-sm font-medium"
+                        >
+                            <flux:icon.trash class="size-4" />
+                            <span wire:loading.remove wire:target="deleteCurrentTicket">Excluir {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}</span>
+                            <span wire:loading wire:target="deleteCurrentTicket">Excluindo...</span>
+                        </button>
+                    </div>
+                @endif
 
                 @if ($canCloseOwn || $canReopenOwn)
                     <div class="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3">

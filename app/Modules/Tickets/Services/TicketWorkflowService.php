@@ -448,6 +448,37 @@ class TicketWorkflowService
         });
     }
 
+    public function deleteTicket(User $actor, Ticket $ticket): void
+    {
+        Gate::forUser($actor)->authorize('delete', $ticket);
+
+        DB::transaction(function () use ($actor, $ticket): void {
+            $ticket = $ticket->fresh(['parentTicket', 'subTickets', 'incidentChildren']) ?? $ticket;
+            $subelementIds = collect();
+
+            if (! $ticket->isSubelement()) {
+                $subelementIds = $ticket->subTickets->pluck('id');
+
+                $ticket->subTickets->each(function (Ticket $subelement) use ($actor, $ticket): void {
+                    $this->detachMajorIncidentLinks($subelement);
+                    $this->deleteSingleTicket($actor, $subelement, 'ticket.subelement.deleted_with_parent', 'Subelemento removido junto com o chamado pai.', [
+                        'parent_ticket_id' => $ticket->id,
+                    ]);
+                });
+            }
+
+            if ($ticket->isSubelement()) {
+                $ticket->parentTicket?->updateQuietly(['last_activity_at' => now()]);
+            }
+
+            $this->detachMajorIncidentLinks($ticket);
+            $this->deleteSingleTicket($actor, $ticket, 'ticket.deleted', $ticket->isSubelement() ? 'Subelemento removido.' : 'Chamado removido.', [
+                'parent_ticket_id' => $ticket->parent_ticket_id,
+                'subelement_ids' => $subelementIds->all(),
+            ]);
+        });
+    }
+
     public function updateField(User $actor, Ticket $ticket, TicketField $field, mixed $value, array $context = []): TicketFieldValue
     {
         $fieldValue = TicketFieldValue::query()->firstOrNew([
@@ -807,6 +838,34 @@ class TicketWorkflowService
             Notification::send($recipients, $notification);
         } catch (Throwable $throwable) {
             $this->logNotificationFailure($throwable, $ticket, $notification);
+        }
+    }
+
+    private function deleteSingleTicket(User $actor, Ticket $ticket, string $event, string $description, array $context = []): void
+    {
+        $this->activityLogService->log($actor, $ticket, $event, $description, [
+            ...$context,
+            'sector_id' => $ticket->sector_id,
+            'ticket_board_id' => $ticket->ticket_board_id,
+        ]);
+
+        $ticket->delete();
+    }
+
+    private function detachMajorIncidentLinks(Ticket $ticket): void
+    {
+        if ($ticket->is_major_incident) {
+            Ticket::query()
+                ->where('major_incident_ticket_id', $ticket->id)
+                ->update([
+                    'major_incident_ticket_id' => null,
+                    'last_activity_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        if ($ticket->major_incident_ticket_id !== null) {
+            $ticket->forceFill(['major_incident_ticket_id' => null])->saveQuietly();
         }
     }
 

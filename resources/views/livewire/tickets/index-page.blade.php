@@ -345,9 +345,26 @@
                             @endif
                         </div>
 
-                        <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary ticket-mobile-open-button">
-                            Abrir
-                        </a>
+                        <div class="flex shrink-0 flex-col gap-2">
+                            <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary ticket-mobile-open-button">
+                                Abrir
+                            </a>
+                            <button
+                                type="button"
+                                wire:click="deleteTicket({{ $ticket->id }})"
+                                data-confirm
+                                data-confirm-variant="danger"
+                                data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
+                                data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                                data-confirm-label="Sim, remover"
+                                wire:loading.attr="disabled"
+                                wire:loading.class="ui-loading"
+                                wire:target="deleteTicket"
+                                class="ui-action ui-action-danger ticket-mobile-open-button"
+                            >
+                                Excluir
+                            </button>
+                        </div>
                     </div>
 
                     <div class="ticket-mobile-chip-row">
@@ -559,8 +576,26 @@
                             @foreach ($fieldOptions as $field)
                                 <td class="px-6 py-4 text-slate-600">{{ $this->displayFieldValue($ticket, $field) ?? '-' }}</td>
                             @endforeach
-                            <td class="px-6 py-4 text-right">
-                                <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Abrir</a>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Abrir</a>
+                                    <button
+                                        type="button"
+                                        wire:click="deleteTicket({{ $ticket->id }})"
+                                        data-confirm
+                                        data-confirm-variant="danger"
+                                        data-confirm-title="Remover {{ $ticket->isSubelement() ? 'subelemento' : 'chamado' }}?"
+                                        data-confirm-message="Esta ação remove o item das listas operacionais. Esta ação não pode ser desfeita."
+                                        data-confirm-label="Sim, remover"
+                                        wire:loading.attr="disabled"
+                                        wire:loading.class="ui-loading"
+                                        wire:target="deleteTicket"
+                                        class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm"
+                                    >
+                                        <flux:icon.trash class="size-4" />
+                                        <span>Excluir</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     @empty

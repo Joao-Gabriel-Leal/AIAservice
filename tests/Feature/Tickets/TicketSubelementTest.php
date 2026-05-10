@@ -10,12 +10,14 @@ use App\Modules\Rooms\Models\Room;
 use App\Modules\Search\Services\GlobalSearchService;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Livewire\IndexPage;
+use App\Modules\Tickets\Livewire\ShowPage;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
 use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
@@ -131,6 +133,49 @@ class TicketSubelementTest extends TestCase
         ]);
 
         $this->assertCount(0, $requesterResults['groups']['tickets']['items']);
+    }
+
+    public function test_operational_users_can_delete_tickets_and_subelements(): void
+    {
+        Notification::fake();
+
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+        $operator = User::factory()->create(['role' => UserRole::TECHNICIAN, 'sector_id' => $sector->id, 'room_id' => $room->id]);
+        $manager = User::factory()->create(['role' => UserRole::SECTOR_ADMIN, 'sector_id' => $sector->id, 'room_id' => $room->id]);
+        $requester = User::factory()->create(['role' => UserRole::REQUESTER, 'sector_id' => $sector->id, 'room_id' => $room->id]);
+        $parent = $this->ticketFor($board, $group, $status, $requester, 'Demanda removivel', $operator);
+        $workflow = app(TicketWorkflowService::class);
+        $subelement = $workflow->createSubelement($operator, $parent, 'Parte removivel');
+
+        $this->assertTrue($operator->can('delete', $parent));
+        $this->assertTrue($manager->can('delete', $subelement));
+        $this->assertFalse($requester->can('delete', $parent));
+
+        try {
+            $workflow->deleteTicket($requester, $parent);
+            $this->fail('Requester deleted an operational ticket.');
+        } catch (AuthorizationException) {
+            $this->assertNotSoftDeleted('tickets', ['id' => $parent->id]);
+        }
+
+        Livewire::actingAs($operator)
+            ->test(IndexPage::class, ['board' => $board])
+            ->call('deleteTicket', $subelement->id)
+            ->assertHasNoErrors();
+
+        $this->assertSoftDeleted('tickets', ['id' => $subelement->id]);
+        $this->assertNotSoftDeleted('tickets', ['id' => $parent->id]);
+
+        $secondSubelement = $workflow->createSubelement($manager, $parent->fresh(), 'Parte removida com pai');
+
+        Livewire::actingAs($manager)
+            ->test(ShowPage::class, ['ticket' => $parent->fresh()])
+            ->assertSee('Excluir chamado')
+            ->call('deleteCurrentTicket')
+            ->assertRedirect();
+
+        $this->assertSoftDeleted('tickets', ['id' => $parent->id]);
+        $this->assertSoftDeleted('tickets', ['id' => $secondSubelement->id]);
     }
 
     private function ticketContext(): array

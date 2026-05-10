@@ -142,9 +142,27 @@
                                     </div>
                                 </div>
 
-                                <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" data-no-drag>
-                                    Ver
-                                </a>
+                                <div class="flex shrink-0 flex-col gap-2" data-no-drag>
+                                    <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">
+                                        Ver
+                                    </a>
+                                    <button
+                                        type="button"
+                                        wire:click="deleteTicket({{ $ticket->id }})"
+                                        data-confirm
+                                        data-confirm-variant="danger"
+                                        data-confirm-title="Remover chamado?"
+                                        data-confirm-message="Subelementos vinculados também serão removidos. Esta ação não pode ser desfeita."
+                                        data-confirm-label="Sim, remover"
+                                        wire:loading.attr="disabled"
+                                        wire:loading.class="ui-loading"
+                                        wire:target="deleteTicket"
+                                        class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm"
+                                    >
+                                        <flux:icon.trash class="size-4" />
+                                        <span>Excluir</span>
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="mt-3 grid gap-2 text-xs text-slate-500">

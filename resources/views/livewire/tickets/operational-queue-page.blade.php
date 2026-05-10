@@ -91,8 +91,22 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-slate-500">{{ $ticket->updated_at?->diffForHumans() }}</td>
-                        <td class="px-6 py-4 text-right">
-                            <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Abrir</a>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Abrir</a>
+                                <button
+                                    type="button"
+                                    wire:click="deleteTicket({{ $ticket->id }})"
+                                    wire:confirm="Excluir {{ $ticket->isSubelement() ? 'este subelemento' : 'este chamado' }}? Esta acao remove o item das listas operacionais."
+                                    wire:loading.attr="disabled"
+                                    wire:loading.class="ui-loading"
+                                    wire:target="deleteTicket"
+                                    class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm"
+                                >
+                                    <flux:icon.trash class="size-4" />
+                                    <span>Excluir</span>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 @empty

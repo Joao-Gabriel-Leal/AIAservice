@@ -5,10 +5,12 @@ namespace App\Modules\Tickets\Livewire;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketIndexQuery;
 use App\Modules\Tickets\Support\TicketReferenceCode;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -16,6 +18,7 @@ use Livewire\WithPagination;
 
 class OperationalQueuePage extends Component
 {
+    use AuthorizesRequests;
     use WithPagination;
 
     #[Url(as: 'bucket')]
@@ -53,6 +56,20 @@ class OperationalQueuePage extends Component
     {
         $this->bucket = $this->normalizeBucket($bucket);
         $this->resetPage();
+    }
+
+    public function deleteTicket(TicketWorkflowService $workflowService, int $ticketId): void
+    {
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $this->authorize('delete', $ticket);
+
+        $reference = $ticket->fullReference();
+        $isSubelement = $ticket->isSubelement();
+
+        $workflowService->deleteTicket(auth()->user(), $ticket);
+        $this->resetPage();
+
+        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' excluido com sucesso.');
     }
 
     public function render(TicketIndexQuery $ticketIndexQuery): View

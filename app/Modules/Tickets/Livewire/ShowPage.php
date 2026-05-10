@@ -479,6 +479,50 @@ class ShowPage extends Component
         session()->flash('status', 'Chamado reaberto com sucesso.');
     }
 
+    public function deleteCurrentTicket(TicketWorkflowService $workflowService): void
+    {
+        $ticket = $this->ticket();
+        $this->authorize('delete', $ticket);
+
+        $reference = $ticket->fullReference();
+        $board = $ticket->board;
+        $parent = $ticket->parentTicket;
+        $isSubelement = $ticket->isSubelement();
+
+        $workflowService->deleteTicket(auth()->user(), $ticket);
+
+        session()->flash('status', ($isSubelement ? 'Subelemento ' : 'Chamado ').$reference.' excluido com sucesso.');
+
+        if ($parent && auth()->user()->can('view', $parent)) {
+            $this->redirectRoute('tickets.show', ['ticket' => $parent]);
+
+            return;
+        }
+
+        if ($board) {
+            $this->redirectRoute('tickets.board.show', [
+                'board' => $board,
+                'view' => 'stages',
+            ]);
+
+            return;
+        }
+
+        $this->redirectRoute('tickets.index');
+    }
+
+    public function deleteSubelement(TicketWorkflowService $workflowService, int $subelementId): void
+    {
+        $subelement = $this->subelement($subelementId);
+        $this->authorize('delete', $subelement);
+
+        $reference = $subelement->fullReference();
+
+        $workflowService->deleteTicket(auth()->user(), $subelement);
+
+        session()->flash('status', 'Subelemento '.$reference.' excluido com sucesso.');
+    }
+
     public function submitRating(TicketWorkflowService $workflowService): void
     {
         $validated = $this->validate([
@@ -635,6 +679,7 @@ class ShowPage extends Component
         $canTrackTime = auth()->user()->can('trackTime', $ticket);
         $canCloseOwn = auth()->user()->can('closeOwn', $ticket);
         $canReopenOwn = auth()->user()->can('reopenOwn', $ticket);
+        $canDeleteTicket = auth()->user()->can('delete', $ticket);
         $canManageMajorIncident = $canViewOperationalHistory && auth()->user()->can('update', $ticket);
         $canManageSubelements = $canViewOperationalHistory && auth()->user()->can('update', $ticket) && ! $ticket->isSubelement();
         $subelements = $canManageSubelements ? $ticket->subTickets->values() : collect();
@@ -737,6 +782,7 @@ class ShowPage extends Component
             'internalMentionableUsers' => $internalMentionableUsers,
             'canCloseOwn' => $canCloseOwn,
             'canReopenOwn' => $canReopenOwn,
+            'canDeleteTicket' => $canDeleteTicket,
             'canManageMajorIncident' => $canManageMajorIncident,
             'canManageSubelements' => $canManageSubelements,
             'subelements' => $subelements,
