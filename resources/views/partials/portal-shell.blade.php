@@ -88,7 +88,6 @@
                                 <a href="{{ route('companies.index') }}" class="portal-nav-link {{ request()->routeIs('companies.*', 'sectors.*', 'rooms.*') ? 'portal-nav-link-active' : '' }}">Empresas</a>
                                 <a href="{{ route('sector-templates.index') }}" class="portal-nav-link {{ request()->routeIs('sector-templates.*') ? 'portal-nav-link-active' : '' }}">Templates de setor</a>
                                 <a href="{{ route('users.index') }}" class="portal-nav-link {{ request()->routeIs('users.*') ? 'portal-nav-link-active' : '' }}">Usuarios</a>
-                                <a href="{{ route('admin.emails.index') }}" class="portal-nav-link {{ request()->routeIs('admin.emails.*') ? 'portal-nav-link-active' : '' }}">E-mails</a>
                                 <a href="{{ route('assets.index') }}" class="portal-nav-link {{ request()->routeIs('assets.*') ? 'portal-nav-link-active' : '' }}">Patrimonios</a>
                             </div>
                         </div>
