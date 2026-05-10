@@ -28,6 +28,8 @@ class ProfileUpdateTest extends TestCase
             ->assertSee('Historico da sessao')
             ->assertSee('Patrimonios vinculados')
             ->assertDontSee('Informacoes pessoais')
+            ->assertDontSee('Telefone celular')
+            ->assertDontSee('Aniversario de trabalho')
             ->assertDontSee('wire:submit="savePersonalInformation"', false)
             ->assertDontSee('Preferencias')
             ->assertDontSee('Laravel Starter Kit');
@@ -74,14 +76,10 @@ class ProfileUpdateTest extends TestCase
             ->call('saveInlineProfileField', 'job_title')
             ->set('phone', '11 3000-0000')
             ->call('saveInlineProfileField', 'phone')
-            ->set('mobile_phone', '11 99999-0000')
-            ->call('saveInlineProfileField', 'mobile_phone')
             ->set('location', 'Sao Paulo')
             ->call('saveInlineProfileField', 'location')
             ->set('birth_date', '1995-05-10')
-            ->call('saveInlineProfileField', 'birth_date')
-            ->set('work_anniversary', '2024-01-15')
-            ->call('saveInlineProfileField', 'work_anniversary');
+            ->call('saveInlineProfileField', 'birth_date');
 
         $response->assertHasNoErrors();
 
@@ -91,10 +89,8 @@ class ProfileUpdateTest extends TestCase
         $this->assertSame('original@example.com', $user->email);
         $this->assertSame('Analista de suporte', $user->job_title);
         $this->assertSame('11 3000-0000', $user->phone);
-        $this->assertSame('11 99999-0000', $user->mobile_phone);
         $this->assertSame('Sao Paulo', $user->location);
         $this->assertSame('1995-05-10', $user->birth_date->format('Y-m-d'));
-        $this->assertSame('2024-01-15', $user->work_anniversary->format('Y-m-d'));
     }
 
     public function test_user_can_update_work_status(): void
@@ -106,8 +102,7 @@ class ProfileUpdateTest extends TestCase
         $this->actingAs($user);
 
         $response = Livewire::test('pages::settings.profile')
-            ->set('work_status', 'home')
-            ->call('saveWorkStatus');
+            ->call('selectWorkStatus', 'home');
 
         $response->assertHasNoErrors();
 

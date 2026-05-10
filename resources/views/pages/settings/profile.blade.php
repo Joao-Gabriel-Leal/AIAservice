@@ -25,10 +25,8 @@ new #[Title('Meu perfil')] class extends Component {
     public string $name = '';
     public string $job_title = '';
     public string $phone = '';
-    public string $mobile_phone = '';
     public string $location = '';
     public string $birth_date = '';
-    public string $work_anniversary = '';
     public string $work_status = 'office';
     public string $themePreference = 'light';
     public string $current_password = '';
@@ -47,10 +45,8 @@ new #[Title('Meu perfil')] class extends Component {
         $this->name = (string) $user->name;
         $this->job_title = (string) ($user->job_title ?? '');
         $this->phone = (string) ($user->phone ?? '');
-        $this->mobile_phone = (string) ($user->mobile_phone ?? '');
         $this->location = (string) ($user->location ?? '');
         $this->birth_date = $user->birth_date?->format('Y-m-d') ?? '';
-        $this->work_anniversary = $user->work_anniversary?->format('Y-m-d') ?? '';
         $this->work_status = array_key_exists((string) $user->work_status, $this->workStatusOptions())
             ? (string) $user->work_status
             : 'office';
@@ -82,7 +78,7 @@ new #[Title('Meu perfil')] class extends Component {
 
         abort_unless(array_key_exists($field, $rules), 404);
 
-        if (in_array($field, ['name', 'job_title', 'phone', 'mobile_phone', 'location'], true)) {
+        if (in_array($field, ['name', 'job_title', 'phone', 'location'], true)) {
             $this->{$field} = trim((string) $this->{$field});
         }
 
@@ -94,8 +90,8 @@ new #[Title('Meu perfil')] class extends Component {
 
         $value = $validated[$field] ?? null;
         $payloadValue = match ($field) {
-            'job_title', 'phone', 'mobile_phone', 'location' => $this->nullableString($value),
-            'birth_date', 'work_anniversary' => filled($value) ? $value : null,
+            'job_title', 'phone', 'location' => $this->nullableString($value),
+            'birth_date' => filled($value) ? $value : null,
             default => $value,
         };
 
@@ -117,46 +113,6 @@ new #[Title('Meu perfil')] class extends Component {
         $this->resetErrorBag($field);
     }
 
-    public function savePersonalInformation(): void
-    {
-        $validated = $this->validate(
-            [
-                'name' => ['required', 'string', 'max:120'],
-                'job_title' => ['nullable', 'string', 'max:120'],
-                'phone' => ['nullable', 'string', 'max:40'],
-                'mobile_phone' => ['nullable', 'string', 'max:40'],
-                'location' => ['nullable', 'string', 'max:120'],
-                'birth_date' => ['nullable', 'date', 'before_or_equal:today'],
-                'work_anniversary' => ['nullable', 'date', 'before_or_equal:today'],
-            ],
-            [],
-            [
-                'name' => 'nome',
-                'job_title' => 'cargo',
-                'phone' => 'telefone',
-                'mobile_phone' => 'telefone celular',
-                'location' => 'local',
-                'birth_date' => 'data de nascimento',
-                'work_anniversary' => 'aniversario de trabalho',
-            ],
-        );
-
-        $user = Auth::user();
-        $user->forceFill([
-            'name' => trim($validated['name']),
-            'job_title' => $this->nullableString($validated['job_title'] ?? null),
-            'phone' => $this->nullableString($validated['phone'] ?? null),
-            'mobile_phone' => $this->nullableString($validated['mobile_phone'] ?? null),
-            'location' => $this->nullableString($validated['location'] ?? null),
-            'birth_date' => filled($validated['birth_date'] ?? null) ? $validated['birth_date'] : null,
-            'work_anniversary' => filled($validated['work_anniversary'] ?? null) ? $validated['work_anniversary'] : null,
-        ])->save();
-
-        Auth::setUser($user->fresh());
-
-        session()->flash('status', 'Informacoes pessoais atualizadas com sucesso.');
-    }
-
     public function saveWorkStatus(): void
     {
         $validated = $this->validate(
@@ -170,6 +126,13 @@ new #[Title('Meu perfil')] class extends Component {
         Auth::setUser($user->fresh());
 
         session()->flash('status', 'Status do trabalho atualizado com sucesso.');
+    }
+
+    public function selectWorkStatus(string $status): void
+    {
+        $this->work_status = $status;
+
+        $this->saveWorkStatus();
     }
 
     public function saveThemePreference(): void
@@ -298,10 +261,8 @@ new #[Title('Meu perfil')] class extends Component {
             'name' => ['required', 'string', 'max:120'],
             'job_title' => ['nullable', 'string', 'max:120'],
             'phone' => ['nullable', 'string', 'max:40'],
-            'mobile_phone' => ['nullable', 'string', 'max:40'],
             'location' => ['nullable', 'string', 'max:120'],
             'birth_date' => ['nullable', 'date', 'before_or_equal:today'],
-            'work_anniversary' => ['nullable', 'date', 'before_or_equal:today'],
         ];
     }
 
@@ -311,17 +272,15 @@ new #[Title('Meu perfil')] class extends Component {
             'name' => 'nome',
             'job_title' => 'cargo',
             'phone' => 'telefone',
-            'mobile_phone' => 'telefone celular',
             'location' => 'local',
             'birth_date' => 'data de nascimento',
-            'work_anniversary' => 'aniversario de trabalho',
         ];
     }
 
     private function profileFieldValueFromUser($user, string $field): string
     {
         return match ($field) {
-            'birth_date', 'work_anniversary' => $user->{$field}?->format('Y-m-d') ?? '',
+            'birth_date' => $user->{$field}?->format('Y-m-d') ?? '',
             default => (string) ($user->{$field} ?? ''),
         };
     }
@@ -439,28 +398,57 @@ new #[Title('Meu perfil')] class extends Component {
                                 @error('job_title') <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
                             </div>
 
-                            <div class="mt-4 flex flex-wrap gap-2">
+                            <div class="mt-4 flex flex-wrap items-start gap-2">
                                 <span class="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white">{{ $user->global_role?->label() ?? 'Colaborador' }}</span>
-                                <span class="rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200">{{ $currentWorkStatus['label'] }}</span>
+                                <div x-data="{ open: false }" class="relative">
+                                    <button
+                                        type="button"
+                                        x-on:click="open = ! open"
+                                        x-on:keydown.escape.window="open = false"
+                                        class="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200 outline-none transition hover:border-white/30 hover:bg-white/10 focus:border-blue-300 focus:bg-white/10"
+                                        aria-label="Status do trabalho"
+                                        aria-haspopup="listbox"
+                                        x-bind:aria-expanded="open"
+                                    >
+                                        <span>{{ $currentWorkStatus['label'] }}</span>
+                                        <svg aria-hidden="true" viewBox="0 0 16 16" class="size-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="m4 6 4 4 4-4" />
+                                        </svg>
+                                    </button>
+
+                                    <div
+                                        x-cloak
+                                        x-show="open"
+                                        x-transition.origin.top.left
+                                        x-on:click.outside="open = false"
+                                        class="absolute left-0 z-30 mt-2 w-64 rounded-xl border border-white/10 bg-slate-950 p-2 shadow-2xl ring-1 ring-white/10"
+                                        role="listbox"
+                                    >
+                                        @foreach ($workStatusOptions as $value => $option)
+                                            <button
+                                                type="button"
+                                                wire:click="selectWorkStatus('{{ $value }}')"
+                                                x-on:click="open = false"
+                                                class="flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left text-xs transition hover:bg-white/10 {{ $work_status === $value ? 'bg-blue-500/20 text-white' : 'text-slate-300' }}"
+                                                role="option"
+                                                aria-selected="{{ $work_status === $value ? 'true' : 'false' }}"
+                                            >
+                                                <span>
+                                                    <span class="block font-semibold">{{ $option['label'] }}</span>
+                                                    <span class="mt-0.5 block text-[11px] text-slate-400">{{ $option['detail'] }}</span>
+                                                </span>
+                                                @if ($work_status === $value)
+                                                    <span class="mt-0.5 rounded-full bg-blue-500 px-2 py-0.5 text-[10px] font-semibold text-white">Atual</span>
+                                                @endif
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                </div>
                                 @if ($inlineSavedField)
                                     <span class="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-100">Salvo</span>
                                 @endif
                             </div>
-
-                            <div class="mt-6">
-                                <p class="text-sm font-semibold text-slate-100">Status do trabalho</p>
-                                <form class="mt-3 flex flex-wrap gap-2">
-                                    @foreach ($workStatusOptions as $value => $option)
-                                        <label class="cursor-pointer">
-                                            <input type="radio" wire:model="work_status" wire:change="saveWorkStatus" value="{{ $value }}" class="peer sr-only">
-                                            <span class="inline-flex rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition peer-checked:border-blue-400 peer-checked:bg-blue-500 peer-checked:text-white hover:border-white/30">
-                                                {{ $option['label'] }}
-                                            </span>
-                                        </label>
-                                    @endforeach
-                                </form>
-                                @error('work_status') <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
-                            </div>
+                            @error('work_status') <span class="mt-2 block text-xs text-rose-200">{{ $message }}</span> @enderror
                         </div>
 
                         <div class="grid content-start gap-4 text-sm sm:grid-cols-2 lg:grid-cols-1">
@@ -470,16 +458,13 @@ new #[Title('Meu perfil')] class extends Component {
                             </div>
                             @foreach ([
                                 ['field' => 'phone', 'label' => 'Telefone', 'placeholder' => 'Adicione um telefone', 'maxlength' => 40, 'type' => 'text'],
-                                ['field' => 'mobile_phone', 'label' => 'Telefone celular', 'placeholder' => 'Adicione um telefone celular', 'maxlength' => 40, 'type' => 'text'],
                                 ['field' => 'location', 'label' => 'Local', 'placeholder' => 'Adicione um local', 'maxlength' => 120, 'type' => 'text'],
                                 ['field' => 'birth_date', 'label' => 'Data de nascimento', 'placeholder' => 'Adicione uma data de nascimento', 'maxlength' => null, 'type' => 'date'],
-                                ['field' => 'work_anniversary', 'label' => 'Aniversario de trabalho', 'placeholder' => 'Adicione um aniversario de trabalho', 'maxlength' => null, 'type' => 'date'],
                             ] as $inlineField)
                                 @php
                                     $fieldName = $inlineField['field'];
                                     $fieldDisplay = match ($fieldName) {
                                         'birth_date' => $user->birth_date?->format('d/m/Y'),
-                                        'work_anniversary' => $user->work_anniversary?->format('d/m/Y'),
                                         default => $$fieldName ?: null,
                                     };
                                 @endphp
