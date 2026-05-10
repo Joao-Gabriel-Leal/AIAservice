@@ -11,7 +11,7 @@
     $unreadNotificationsCount = $user?->unreadNotifications()->count() ?? 0;
 
     $portalNavIcon = static function (string $icon): string {
-        $attrs = 'aria-hidden="true" viewBox="0 0 24 24" class="portal-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
+        $attrs = 'aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" style="width:1rem;height:1rem;min-width:1rem;max-width:1rem;min-height:1rem;max-height:1rem;flex:0 0 1rem;display:block" class="portal-nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
 
         return match ($icon) {
             'dashboard' => '<svg '.$attrs.'><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>',
