@@ -31,6 +31,7 @@
             @if ($board)
                 <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
                 <span class="portal-chip">{{ $board->groups->count() }} etapa(s)</span>
+                <span class="portal-chip">{{ $board->workflow_mode?->label() ?? 'Servico/Suporte' }}</span>
             @else
                 <span class="portal-chip">Sem quadro selecionado</span>
             @endif
@@ -106,10 +107,14 @@
             </div>
 
             <div x-show="openSection === 'board'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
-                    <div class="grid gap-4 lg:grid-cols-4">
+                    <div class="grid gap-4 lg:grid-cols-5">
                         <div class="rounded-2xl bg-slate-50 p-4">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Etapa inicial</p>
                             <p class="mt-2 text-sm font-semibold text-slate-900">{{ $board->groups->firstWhere('is_default', true)?->name ?? 'Nao definida' }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 p-4">
+                            <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Modo</p>
+                            <p class="mt-2 text-sm font-semibold text-slate-900">{{ $board->workflow_mode?->label() ?? 'Servico/Suporte' }}</p>
                         </div>
                         <div class="rounded-2xl bg-slate-50 p-4">
                             <p class="text-xs uppercase tracking-[0.22em] text-slate-500">Etapa final</p>
@@ -136,6 +141,15 @@
                             <textarea wire:model="boardDescription" rows="3" class="w-full rounded-2xl border border-slate-300 px-4 py-3 focus:border-sky-500 focus:outline-none"></textarea>
                             @error('boardDescription') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
                         </label>
+                        <label class="text-sm text-slate-600">
+                            <span class="mb-2 block font-medium">Modo de trabalho</span>
+                            <select wire:model="boardWorkflowMode" class="ui-native-select w-full">
+                                @foreach ($workflowModes as $workflowMode)
+                                    <option value="{{ $workflowMode->value }}">{{ $workflowMode->label() }}</option>
+                                @endforeach
+                            </select>
+                            @error('boardWorkflowMode') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                        </label>
                         <div class="md:col-span-2">
                             <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Salvar quadro</button>
                         </div>
@@ -144,8 +158,8 @@
                     <div class="mt-6 grid gap-4 lg:grid-cols-2">
                         <form wire:submit="saveBoardOperators" class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                             <div>
-                                <h4 class="text-base font-semibold text-slate-900">Operadores destacados</h4>
-                                <p class="mt-1 text-sm text-slate-500">Gestores e operadores do setor podem abrir este quadro. Marque aqui apenas quem atua diretamente nele.</p>
+                                <h4 class="text-base font-semibold text-slate-900">Operadores com acesso</h4>
+                                <p class="mt-1 text-sm text-slate-500">Gestores do setor veem todos os quadros. Tecnicos so acessam este quadro quando marcados aqui.</p>
                             </div>
 
                             <div class="mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1">
@@ -172,6 +186,12 @@
                                 <input type="text" wire:model="newBoardName" class="ui-input w-full" placeholder="Nome do novo quadro">
                                 @error('newBoardName') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
                                 <textarea wire:model="newBoardDescription" rows="3" class="ui-textarea w-full" placeholder="Descricao opcional"></textarea>
+                                <select wire:model="newBoardWorkflowMode" class="ui-native-select w-full">
+                                    @foreach ($workflowModes as $workflowMode)
+                                        <option value="{{ $workflowMode->value }}">{{ $workflowMode->label() }}</option>
+                                    @endforeach
+                                </select>
+                                @error('newBoardWorkflowMode') <span class="block text-xs text-rose-600">{{ $message }}</span> @enderror
                             </div>
 
                             @if ($boardOperatorOptions->isNotEmpty())
@@ -744,8 +764,20 @@
                                             <option value="{{ $accessLevel->value }}">{{ $accessLevel->label() }}</option>
                                         @endforeach
                                     </select>
-                                    <span class="mt-2 block text-xs text-slate-500">Publico libera para qualquer colaborador autenticado. Operador e Gestor seguem o nivel setorial.</span>
+                                    <span class="mt-2 block text-xs text-slate-500">Publico libera para qualquer colaborador autenticado. Operador exige acesso ao quadro; Gestor segue o nivel setorial.</span>
                                 </label>
+
+                                @if ($board->isDevelopment())
+                                    <label class="block text-sm text-slate-600">
+                                        <span class="mb-2 block font-medium">Tipo padrao do item</span>
+                                        <select wire:model="formForm.default_work_item_type" class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none">
+                                            @foreach ($workItemTypes as $workItemType)
+                                                <option value="{{ $workItemType->value }}">{{ $workItemType->label() }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error('formForm.default_work_item_type') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    </label>
+                                @endif
 
                                 <div class="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
                                     @if ($board->fields->isEmpty())
@@ -869,6 +901,9 @@
                                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $form->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $form->is_active ? 'Ativo' : 'Inativo' }}</span>
                                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $publishedCatalogCount > 0 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-800' }}">{{ $publishedCatalogCount > 0 ? 'Publicado na central' : 'Nao publicado na central' }}</span>
                                                         <span class="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">Abertura: {{ $form->opening_access_level?->label() ?? 'Publico' }}</span>
+                                                        @if ($board->isDevelopment())
+                                                            <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $form->default_work_item_type?->badgeColor() ?? 'bg-slate-100 text-slate-700' }}">{{ $form->default_work_item_type?->label() ?? 'Solicitacao' }}</span>
+                                                        @endif
                                                     </div>
                                                     <p class="mt-2 text-sm text-slate-500">{{ $form->fields->pluck('name')->join(', ') ?: 'Sem campos vinculados' }}</p>
                                                     <p class="mt-2 text-xs text-slate-400">{{ $publishedCatalogCount }} item(ns) de catalogo ativo(s) usando este formulario.</p>
@@ -922,6 +957,9 @@
                                                         <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $catalogItem->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">{{ $catalogItem->is_active ? 'Ativo' : 'Inativo' }}</span>
                                                     </div>
                                                     <p class="mt-2 text-sm text-slate-500">Formulario: {{ $catalogItem->form?->name ?? 'Sem formulario' }} / Etapa inicial: {{ $catalogItem->defaultGroup?->name ?? 'Livre' }}</p>
+                                                    @if ($board->isDevelopment())
+                                                        <p class="mt-1 text-xs text-slate-400">Tipo padrao: {{ $catalogItem->form?->default_work_item_type?->label() ?? 'Solicitacao' }}</p>
+                                                    @endif
                                                 </div>
                                                 <div class="flex flex-wrap gap-2">
                                                     <button type="button" wire:click="startEditingCatalogItem({{ $catalogItem->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Editar</button>
@@ -938,6 +976,151 @@
                     </div>
                 </div>
         </section>
+
+        @if ($board->isDevelopment())
+        <section x-show="openSection === 'sprints'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">Sprints</h3>
+                    <p class="text-sm text-slate-500">Planeje o backlog do quadro, inicie uma sprint e preserve o historico ao fechar.</p>
+                </div>
+                <span class="text-sm text-slate-500">{{ $board->activeSprint?->name ?? 'Sem sprint ativa' }}</span>
+            </div>
+
+            <div x-show="openSection === 'sprints'" x-transition.opacity.duration.150ms class="border-t border-slate-200 px-6 py-6">
+                @php
+                    $plannedSprints = $board->sprints->filter(fn ($sprint) => $sprint->status === \App\Enums\TicketSprintStatus::PLANNED)->values();
+                    $activeSprints = $board->sprints->filter(fn ($sprint) => $sprint->status === \App\Enums\TicketSprintStatus::ACTIVE)->values();
+                    $closedSprints = $board->sprints->filter(fn ($sprint) => $sprint->status === \App\Enums\TicketSprintStatus::CLOSED)->values();
+                @endphp
+
+                <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                    <section class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                        <div class="mb-4">
+                            <h4 class="text-base font-semibold text-slate-900">Nova sprint</h4>
+                            <p class="text-sm text-slate-500">Crie como planejada; depois inicie quando a equipe estiver pronta.</p>
+                        </div>
+
+                        <form wire:submit="createSprint" class="space-y-4">
+                            <label class="block text-sm text-slate-600">
+                                <span class="mb-2 block font-medium">Nome</span>
+                                <input type="text" wire:model="sprintForm.name" class="ui-input w-full" placeholder="Sprint 12">
+                                @error('sprintForm.name') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            </label>
+
+                            <label class="block text-sm text-slate-600">
+                                <span class="mb-2 block font-medium">Objetivo</span>
+                                <textarea wire:model="sprintForm.goal" rows="3" class="ui-input w-full" placeholder="Objetivo da sprint"></textarea>
+                                @error('sprintForm.goal') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                            </label>
+
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <label class="text-sm text-slate-600">
+                                    <span class="mb-2 block font-medium">Inicio</span>
+                                    <input type="date" wire:model="sprintForm.starts_at" class="ui-input w-full">
+                                    @error('sprintForm.starts_at') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                </label>
+                                <label class="text-sm text-slate-600">
+                                    <span class="mb-2 block font-medium">Fim</span>
+                                    <input type="date" wire:model="sprintForm.ends_at" class="ui-input w-full">
+                                    @error('sprintForm.ends_at') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                </label>
+                            </div>
+
+                            <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Criar sprint</button>
+                        </form>
+
+                        @if ($closingSprintId)
+                            <form wire:submit="closeSprint" class="mt-6 space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-amber-950">Fechar sprint</h4>
+                                    <p class="mt-1 text-xs text-amber-800">Defina o destino dos itens que ainda nao foram concluidos.</p>
+                                </div>
+                                <label class="block text-sm text-amber-900">
+                                    <span class="mb-2 block font-medium">Destino dos abertos</span>
+                                    <select wire:model.live="closeSprintForm.destination" class="ui-native-select w-full">
+                                        <option value="backlog">Voltar para backlog</option>
+                                        <option value="sprint">Mover para sprint planejada</option>
+                                    </select>
+                                    @error('closeSprintForm.destination') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                </label>
+                                @if (($closeSprintForm['destination'] ?? 'backlog') === 'sprint')
+                                    <label class="block text-sm text-amber-900">
+                                        <span class="mb-2 block font-medium">Sprint destino</span>
+                                        <select wire:model="closeSprintForm.target_sprint_id" class="ui-native-select w-full">
+                                            <option value="">Selecione</option>
+                                            @foreach ($plannedSprints->where('id', '!=', $closingSprintId) as $plannedSprint)
+                                                <option value="{{ $plannedSprint->id }}">{{ $plannedSprint->name }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error('closeSprintForm.target_sprint_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                                    </label>
+                                @endif
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="submit" class="ui-action ui-action-primary rounded-xl px-3 py-2 text-xs">Confirmar fechamento</button>
+                                    <button type="button" wire:click="cancelCloseSprint" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs">Cancelar</button>
+                                </div>
+                            </form>
+                        @endif
+                    </section>
+
+                    <section class="space-y-4">
+                        @foreach (['Ativa' => $activeSprints, 'Planejadas' => $plannedSprints, 'Fechadas' => $closedSprints] as $sprintGroupLabel => $sprints)
+                            <div class="rounded-3xl border border-slate-200 bg-white p-5">
+                                <div class="mb-4 flex items-center justify-between gap-3">
+                                    <h4 class="text-base font-semibold text-slate-900">{{ $sprintGroupLabel }}</h4>
+                                    <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{{ $sprints->count() }}</span>
+                                </div>
+
+                                <div class="space-y-3">
+                                    @forelse ($sprints as $sprint)
+                                        <div class="rounded-2xl border border-slate-200 p-4">
+                                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                                <div class="min-w-0">
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <p class="font-medium text-slate-900">{{ $sprint->name }}</p>
+                                                        <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $sprint->status === \App\Enums\TicketSprintStatus::ACTIVE ? 'bg-emerald-100 text-emerald-700' : ($sprint->status === \App\Enums\TicketSprintStatus::CLOSED ? 'bg-slate-100 text-slate-600' : 'bg-sky-100 text-sky-700') }}">{{ $sprint->status?->label() }}</span>
+                                                    </div>
+                                                    <p class="mt-2 text-sm text-slate-500">{{ $sprint->goal ?: 'Sem objetivo definido.' }}</p>
+                                                    <p class="mt-2 text-xs text-slate-400">
+                                                        {{ $sprint->starts_at?->format('d/m/Y') ?? 'Sem inicio' }} - {{ $sprint->ends_at?->format('d/m/Y') ?? 'sem fim' }}
+                                                        / {{ $sprint->tickets->count() }} item(ns) atuais
+                                                        / {{ $sprint->sprintItems->count() }} no historico
+                                                    </p>
+                                                </div>
+
+                                                <div class="flex flex-wrap gap-2">
+                                                    @if ($sprint->status === \App\Enums\TicketSprintStatus::PLANNED)
+                                                        <button type="button" wire:click="startSprint({{ $sprint->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Iniciar</button>
+                                                    @endif
+                                                    @if ($sprint->status === \App\Enums\TicketSprintStatus::ACTIVE)
+                                                        <button type="button" wire:click="prepareCloseSprint({{ $sprint->id }})" class="ui-action ui-action-danger rounded-xl px-3 py-2 text-sm">Fechar</button>
+                                                    @endif
+                                                </div>
+                                            </div>
+
+                                            @if ($sprint->sprintItems->isNotEmpty())
+                                                <div class="mt-4 grid gap-2">
+                                                    @foreach ($sprint->sprintItems->take(6) as $sprintItem)
+                                                        <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                                            <span class="font-medium text-slate-800">{{ $sprintItem->ticket?->publicReference() }} - {{ $sprintItem->ticket?->title }}</span>
+                                                            <span>{{ $sprintItem->result?->label() ?? 'Em andamento' }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @empty
+                                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">Nenhuma sprint nesta categoria.</div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        @endforeach
+                    </section>
+                </div>
+            </div>
+        </section>
+        @endif
 
         <section x-show="openSection === 'templates'" x-cloak class="ui-panel overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div class="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">

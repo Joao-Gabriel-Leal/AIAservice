@@ -3,6 +3,7 @@
 namespace App\Modules\Tickets\Support;
 
 use App\Enums\TicketPriority;
+use App\Enums\TicketWorkItemType;
 use App\Models\User;
 use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Tickets\Models\Ticket;
@@ -23,6 +24,7 @@ class TicketIndexQuery
             'assignee' => '',
             'assignee_state' => 'all',
             'priority' => '',
+            'work_item_type' => '',
             'sla_state' => 'all',
             'updated_from' => '',
             'updated_to' => '',
@@ -41,6 +43,7 @@ class TicketIndexQuery
             'assignee' => trim((string) $request->string('assignee')),
             'assignee_state' => trim((string) $request->string('assignee_state', 'all')),
             'priority' => trim((string) $request->string('priority')),
+            'work_item_type' => trim((string) $request->string('work_type')),
             'sla_state' => trim((string) $request->string('sla', 'all')),
             'updated_from' => trim((string) $request->string('updated_from')),
             'updated_to' => trim((string) $request->string('updated_to')),
@@ -103,6 +106,14 @@ class TicketIndexQuery
 
                 if (in_array($priority, $allowed, true)) {
                     $query->where('priority', $priority);
+                }
+            })
+            ->when(($filters['work_item_type'] ?? '') !== '', function (Builder $query) use ($filters) {
+                $type = (string) $filters['work_item_type'];
+                $allowed = collect(TicketWorkItemType::cases())->map(fn (TicketWorkItemType $case) => $case->value)->all();
+
+                if (in_array($type, $allowed, true)) {
+                    $query->where('work_item_type', $type);
                 }
             })
             ->when(($filters['updated_from'] ?? '') !== '', fn (Builder $query) => $query->whereDate('updated_at', '>=', $filters['updated_from']))

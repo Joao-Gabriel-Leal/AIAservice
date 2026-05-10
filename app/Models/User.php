@@ -326,7 +326,21 @@ class User extends Authenticatable
 
     public function operationalSectorIds(): array
     {
-        return $this->sectorIds([SectorAccessLevel::SECTOR_ADMIN, SectorAccessLevel::TECHNICIAN]);
+        if ($this->isGlobalAdmin()) {
+            return Sector::query()->pluck('id')->all();
+        }
+
+        return collect($this->adminSectorIds())
+            ->merge(
+                TicketBoard::query()
+                    ->whereIn('id', $this->assignedOperationalBoardIds())
+                    ->pluck('sector_id')
+                    ->map(fn ($sectorId) => (int) $sectorId)
+                    ->all()
+            )
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function operationalBoardIds(): array
@@ -339,17 +353,18 @@ class User extends Authenticatable
                 ->all();
         }
 
-        $sectorIds = $this->operationalSectorIds();
+        $adminSectorIds = $this->adminSectorIds();
+        $adminBoardIds = $adminSectorIds === []
+            ? []
+            : TicketBoard::query()
+                ->where('is_active', true)
+                ->whereIn('sector_id', $adminSectorIds)
+                ->pluck('id')
+                ->map(fn ($boardId) => (int) $boardId)
+                ->all();
 
-        if ($sectorIds === []) {
-            return [];
-        }
-
-        return TicketBoard::query()
-            ->where('is_active', true)
-            ->whereIn('sector_id', $sectorIds)
-            ->pluck('id')
-            ->map(fn ($boardId) => (int) $boardId)
+        return collect($adminBoardIds)
+            ->merge($this->assignedOperationalBoardIds())
             ->unique()
             ->values()
             ->all();
@@ -366,13 +381,16 @@ class User extends Authenticatable
             return true;
         }
 
-        $levels = [SectorAccessLevel::SECTOR_ADMIN, SectorAccessLevel::TECHNICIAN];
-
         if ($sectorId !== null) {
-            return $this->hasSectorAccess($sectorId, $levels);
+            return $this->isSectorAdmin($sectorId)
+                || TicketBoard::query()
+                    ->where('sector_id', $sectorId)
+                    ->whereIn('id', $this->assignedOperationalBoardIds())
+                    ->exists();
         }
 
-        return $this->hasAnySectorAccess($levels);
+        return $this->adminSectorIds() !== []
+            || $this->assignedOperationalBoardIds() !== [];
     }
 
     public function canOperateBoard(TicketBoard|int|null $board): bool
@@ -389,7 +407,18 @@ class User extends Authenticatable
             return true;
         }
 
-        return $this->hasOperationalAccess($board->sector_id);
+        if ($this->isSectorAdmin($board->sector_id)) {
+            return true;
+        }
+
+        if ($this->relationLoaded('ticketBoardAccesses')) {
+            return $this->getRelation('ticketBoardAccesses')
+                ->contains(fn (TicketBoardUserAccess $access) => (int) $access->ticket_board_id === (int) $board->id);
+        }
+
+        return $this->ticketBoardAccesses()
+            ->where('ticket_board_id', $board->id)
+            ->exists();
     }
 
     public function accessSummary(): string
@@ -522,6 +551,29 @@ class User extends Authenticatable
         $this->load('sectorAccesses.sector');
 
         return $this->getRelation('sectorAccesses');
+    }
+
+    private function assignedOperationalBoardIds(): array
+    {
+        if ($this->relationLoaded('ticketBoardAccesses')) {
+            return $this->getRelation('ticketBoardAccesses')
+                ->filter(fn (TicketBoardUserAccess $access) => (bool) ($access->board?->is_active ?? true))
+                ->pluck('ticket_board_id')
+                ->map(fn ($boardId) => (int) $boardId)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return TicketBoardUserAccess::query()
+            ->join('ticket_boards', 'ticket_board_user_accesses.ticket_board_id', '=', 'ticket_boards.id')
+            ->where('ticket_board_user_accesses.user_id', $this->id)
+            ->where('ticket_boards.is_active', true)
+            ->pluck('ticket_board_user_accesses.ticket_board_id')
+            ->map(fn ($boardId) => (int) $boardId)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function normalizeBinaryValue(mixed $value): ?string
