@@ -20,6 +20,7 @@ use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\Concerns\InteractsWithExcelDownloads;
 use Tests\TestCase;
 
@@ -122,6 +123,8 @@ class ExcelExportTest extends TestCase
 
     public function test_dashboard_export_generates_all_analytical_tabs(): void
     {
+        $this->travelTo(Carbon::parse('2026-05-09 12:00:00'));
+
         ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketScope();
         $requester = User::factory()->create(['sector_id' => $sector->id, 'room_id' => $room->id]);
 
@@ -135,11 +138,16 @@ class ExcelExportTest extends TestCase
             'description' => 'Teste dashboard',
             'requester_id' => $requester->id,
             'priority' => TicketPriority::MEDIUM,
+            'created_at' => Carbon::parse('2026-05-03 09:00:00'),
+            'updated_at' => Carbon::parse('2026-05-03 09:00:00'),
             'last_activity_at' => now(),
         ]);
 
         $spreadsheet = $this->spreadsheetFromResponse(
-            $this->actingAs($requester)->get(route('dashboard.export', ['period' => 30])),
+            $this->actingAs($requester)->get(route('dashboard.export', [
+                'date_from' => '2026-05-01',
+                'date_to' => '2026-05-09',
+            ])),
         );
 
         $this->assertSame([
@@ -154,7 +162,7 @@ class ExcelExportTest extends TestCase
             'Base de conhecimento',
         ], $spreadsheet->getSheetNames());
         $summaryRows = $this->sheetValues($spreadsheet->getSheet(0));
-        $this->assertContains('Periodo | 30 dias', $summaryRows);
+        $this->assertContains('Periodo | 01/05/2026 ate 09/05/2026', $summaryRows);
         $recentTicketRows = implode("\n", $this->sheetValues($spreadsheet->getSheet(2)));
         $this->assertStringContainsString($ticket->reference_code, $recentTicketRows);
         $this->assertStringContainsString('Chamado exportado', $recentTicketRows);

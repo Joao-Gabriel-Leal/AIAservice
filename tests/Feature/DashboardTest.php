@@ -22,6 +22,7 @@ use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -51,6 +52,7 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($user)->get(route('dashboard', ['period' => 30]));
 
         $response->assertOk();
+        $response->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['preset'] === 30 && $dateRange['days'] === 30);
         $response->assertSeeText('Volume no periodo');
         $response->assertSeeText('Distribuicao por status');
         $response->assertSeeText('Saude operacional');
@@ -63,6 +65,142 @@ class DashboardTest extends TestCase
         $response->assertDontSeeText('Licencas vencendo');
         $response->assertDontSeeText('Revisar base');
         $response->assertSee('data-chart=', false);
+    }
+
+    public function test_dashboard_uses_custom_date_range_for_period_metrics(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-09 12:00:00'));
+
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
+        $superAdmin = User::factory()->superAdmin()->create();
+        $requester = User::factory()->create([
+            'sector_id' => $sector->id,
+            'room_id' => $room->id,
+        ]);
+
+        $includedTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Chamado dentro do periodo customizado',
+            'description' => 'Deve entrar nas metricas do periodo.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => Carbon::parse('2026-05-05 15:00:00'),
+            'last_activity_at' => Carbon::parse('2026-05-04 10:00:00'),
+        ]);
+
+        Ticket::withoutTimestamps(fn () => $includedTicket->forceFill([
+            'created_at' => Carbon::parse('2026-05-03 09:00:00'),
+            'updated_at' => Carbon::parse('2026-05-04 10:00:00'),
+        ])->save());
+
+        $outsideTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Chamado fora do periodo customizado',
+            'description' => 'Nao deve entrar nas metricas do periodo.',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::HIGH,
+            'resolved_at' => Carbon::parse('2026-04-21 15:00:00'),
+            'last_activity_at' => Carbon::parse('2026-04-22 10:00:00'),
+        ]);
+
+        Ticket::withoutTimestamps(fn () => $outsideTicket->forceFill([
+            'created_at' => Carbon::parse('2026-04-20 09:00:00'),
+            'updated_at' => Carbon::parse('2026-04-22 10:00:00'),
+        ])->save());
+
+        $includedTicket->timeEntries()->create([
+            'user_id' => $superAdmin->id,
+            'source' => TicketTimeEntrySource::TIMER,
+            'approval_status' => TicketTimeEntryApprovalStatus::APPROVED,
+            'started_at' => Carbon::parse('2026-05-04 08:00:00'),
+            'ended_at' => Carbon::parse('2026-05-04 09:00:00'),
+            'duration_seconds' => 3600,
+        ]);
+
+        $includedTicket->timeEntries()->create([
+            'user_id' => $superAdmin->id,
+            'source' => TicketTimeEntrySource::TIMER,
+            'approval_status' => TicketTimeEntryApprovalStatus::APPROVED,
+            'started_at' => Carbon::parse('2026-04-25 08:00:00'),
+            'ended_at' => Carbon::parse('2026-04-25 10:00:00'),
+            'duration_seconds' => 7200,
+        ]);
+
+        $response = $this->actingAs($superAdmin)->get(route('dashboard', [
+            'date_from' => '2026-05-01',
+            'date_to' => '2026-05-05',
+            'sector_id' => $sector->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['date_from'] === '2026-05-01'
+            && $dateRange['date_to'] === '2026-05-05'
+            && $dateRange['range_label'] === '01/05/2026 ate 05/05/2026'
+            && $dateRange['days'] === 5
+            && $dateRange['preset'] === null);
+        $response->assertViewHas('stats', fn (array $stats) => $stats['created_in_period'] === 1
+            && $stats['resolved_in_period'] === 1
+            && $stats['active_in_period'] === 1);
+        $response->assertViewHas('timeTrackingSummary', fn (array $summary) => $summary['approved_seconds'] === 3600
+            && $summary['approved_human'] === '1h 0min');
+        $response->assertViewHas('chartDates', fn ($chartDates) => $chartDates->count() === 5);
+        $response->assertSeeText('01/05/2026 ate 05/05/2026');
+        $response->assertSee('dashboard/export?date_from=2026-05-01&amp;date_to=2026-05-05&amp;sector_id='.$sector->id, false);
+    }
+
+    public function test_dashboard_normalizes_partial_inverted_invalid_and_long_date_ranges(): void
+    {
+        $this->travelTo(Carbon::parse('2026-05-09 12:00:00'));
+
+        $user = User::factory()->superAdmin()->create();
+
+        $this->actingAs($user)
+            ->get(route('dashboard', ['date_from' => '2026-05-04']))
+            ->assertOk()
+            ->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['date_from'] === '2026-05-04'
+                && $dateRange['date_to'] === '2026-05-09'
+                && $dateRange['days'] === 6
+                && $dateRange['preset'] === null);
+
+        $this->actingAs($user)
+            ->get(route('dashboard', ['date_to' => '2026-05-04']))
+            ->assertOk()
+            ->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['date_from'] === '2026-04-28'
+                && $dateRange['date_to'] === '2026-05-04'
+                && $dateRange['days'] === 7
+                && $dateRange['preset'] === null);
+
+        $this->actingAs($user)
+            ->get(route('dashboard', ['date_from' => '2026-05-09', 'date_to' => '2026-05-01']))
+            ->assertOk()
+            ->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['date_from'] === '2026-05-01'
+                && $dateRange['date_to'] === '2026-05-09'
+                && $dateRange['days'] === 9
+                && $dateRange['preset'] === null);
+
+        $this->actingAs($user)
+            ->get(route('dashboard', ['date_from' => 'not-a-date', 'date_to' => '2026-02-31']))
+            ->assertOk()
+            ->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['date_from'] === '2026-05-03'
+                && $dateRange['date_to'] === '2026-05-09'
+                && $dateRange['days'] === 7
+                && $dateRange['preset'] === 7);
+
+        $this->actingAs($user)
+            ->get(route('dashboard', ['date_from' => '2025-01-01', 'date_to' => '2026-05-09']))
+            ->assertOk()
+            ->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['date_from'] === '2025-05-10'
+                && $dateRange['date_to'] === '2026-05-09'
+                && $dateRange['days'] === 365
+                && $dateRange['preset'] === null);
     }
 
     public function test_dashboard_shows_rooms_menu_only_for_dev_and_super_admin_profiles(): void
@@ -355,6 +493,9 @@ class DashboardTest extends TestCase
             'is_active' => false,
         ]);
 
+        $expectedDateFrom = now()->subDays(29)->toDateString();
+        $expectedDateTo = now()->toDateString();
+
         $response = $this->actingAs($superAdmin)->get(route('dashboard', [
             'period' => 30,
             'sector_id' => $sectorA->id,
@@ -370,7 +511,8 @@ class DashboardTest extends TestCase
         $response->assertSeeText('SLA em atraso');
         $response->assertSeeText('Sem responsavel');
         $response->assertSeeText('Alta ou urgente');
-        $response->assertSee('dashboard/export?period=30&amp;sector_id='.$sectorA->id, false);
+        $response->assertViewHas('dateRange', fn (array $dateRange) => $dateRange['preset'] === 30);
+        $response->assertSee('dashboard/export?date_from='.$expectedDateFrom.'&amp;date_to='.$expectedDateTo.'&amp;sector_id='.$sectorA->id, false);
     }
 
     public function test_operational_dashboard_ignores_requested_tickets_outside_operator_or_manager_sectors(): void

@@ -26,9 +26,12 @@ use Illuminate\Support\Collection;
 
 class DashboardDataBuilder
 {
-    public function build(User $user, int $period, ?int $sectorId = null, bool $includeAttentionQueue = true): array
+    public function build(User $user, DashboardDateRange $range, ?int $sectorId = null, bool $includeAttentionQueue = true): array
     {
-        $periodStart = now()->subDays($period - 1)->startOfDay();
+        $dateRange = $range->toArray();
+        $period = $dateRange['days'];
+        $periodStart = $range->from;
+        $periodEnd = $range->to;
         $slaWarningLimit = now()->addMinutes(30);
         $staleCutoff = now()->subDays(7);
         $availableSectors = $this->availableSectors($user);
@@ -42,9 +45,9 @@ class DashboardDataBuilder
             'tickets_total' => (clone $ticketsQuery)->count(),
             'open_tickets' => (clone $ticketsQuery)->whereNull('resolved_at')->count(),
             'closed_tickets' => (clone $ticketsQuery)->whereNotNull('resolved_at')->count(),
-            'created_in_period' => (clone $ticketsQuery)->where('created_at', '>=', $periodStart)->count(),
-            'resolved_in_period' => (clone $ticketsQuery)->where('resolved_at', '>=', $periodStart)->count(),
-            'active_in_period' => (clone $ticketsQuery)->where('last_activity_at', '>=', $periodStart)->count(),
+            'created_in_period' => (clone $ticketsQuery)->whereBetween('created_at', [$periodStart, $periodEnd])->count(),
+            'resolved_in_period' => (clone $ticketsQuery)->whereBetween('resolved_at', [$periodStart, $periodEnd])->count(),
+            'active_in_period' => (clone $ticketsQuery)->whereBetween('last_activity_at', [$periodStart, $periodEnd])->count(),
             'unassigned_open_tickets' => (clone $ticketsQuery)
                 ->whereNull('resolved_at')
                 ->whereNull('assignee_id')
@@ -101,7 +104,7 @@ class DashboardDataBuilder
         $ratingSummary = null;
 
         if ($user->hasOperationalAccess()) {
-            $closedTicketsQuery = (clone $ticketsQuery)->whereNotNull('resolved_at');
+            $closedTicketsQuery = (clone $ticketsQuery)->whereBetween('resolved_at', [$periodStart, $periodEnd]);
 
             $ratingSummary = [
                 'average' => number_format(
@@ -123,17 +126,17 @@ class DashboardDataBuilder
         ];
 
         $chartDates = collect(range(0, $period - 1))
-            ->map(fn (int $offset) => $periodStart->copy()->addDays($offset));
+            ->map(fn (int $offset) => $periodStart->addDays($offset));
 
         $createdByDay = (clone $ticketsQuery)
-            ->where('created_at', '>=', $periodStart)
+            ->whereBetween('created_at', [$periodStart, $periodEnd])
             ->selectRaw('DATE(created_at) as chart_date, COUNT(*) as total')
             ->groupBy('chart_date')
             ->pluck('total', 'chart_date');
 
         $resolvedByDay = (clone $ticketsQuery)
             ->whereNotNull('resolved_at')
-            ->where('resolved_at', '>=', $periodStart)
+            ->whereBetween('resolved_at', [$periodStart, $periodEnd])
             ->selectRaw('DATE(resolved_at) as chart_date, COUNT(*) as total')
             ->groupBy('chart_date')
             ->pluck('total', 'chart_date');
@@ -142,7 +145,7 @@ class DashboardDataBuilder
         $priorityDistribution = $this->priorityDistribution($ticketsQuery);
         $sectorBacklog = $this->sectorBacklog($ticketsQuery);
         $assigneeBacklog = $this->assigneeBacklog($ticketsQuery);
-        $timeTrackingSummary = $this->timeTrackingSummary($user, $periodStart, $selectedSectorId);
+        $timeTrackingSummary = $this->timeTrackingSummary($user, $periodStart, $periodEnd, $selectedSectorId);
         $licenseSummary = $this->licenseSummary($user, $selectedSectorId);
         $assetSummary = $this->assetSummary($user, $selectedSectorId);
         $knowledgeBaseSummary = $this->knowledgeBaseSummary($user, $selectedSectorId);
@@ -181,6 +184,7 @@ class DashboardDataBuilder
             'selectedSectorId',
             'ratingSummary',
             'period',
+            'dateRange',
             'periodOptions',
             'chartDates',
             'createdByDay',
@@ -380,19 +384,19 @@ class DashboardDataBuilder
             ->values();
     }
 
-    private function timeTrackingSummary(User $user, mixed $periodStart, ?int $sectorId): array
+    private function timeTrackingSummary(User $user, mixed $periodStart, mixed $periodEnd, ?int $sectorId): array
     {
         $timeEntryQuery = $this->timeEntryQuery($user, $sectorId);
 
         $approvedSeconds = (int) (clone $timeEntryQuery)
             ->where('approval_status', TicketTimeEntryApprovalStatus::APPROVED->value)
-            ->where('started_at', '>=', $periodStart)
+            ->whereBetween('started_at', [$periodStart, $periodEnd])
             ->sum('duration_seconds');
 
         $topUsers = (clone $timeEntryQuery)
             ->join('users', 'users.id', '=', 'ticket_time_entries.user_id')
             ->where('approval_status', TicketTimeEntryApprovalStatus::APPROVED->value)
-            ->where('started_at', '>=', $periodStart)
+            ->whereBetween('started_at', [$periodStart, $periodEnd])
             ->selectRaw('users.name as user_name, COUNT(*) as entries_count, SUM(ticket_time_entries.duration_seconds) as total_seconds')
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('total_seconds')

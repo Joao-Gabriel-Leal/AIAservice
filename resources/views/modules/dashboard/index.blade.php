@@ -1,6 +1,10 @@
 <x-layouts.portal title="Dashboard" subtitle="Indicadores operacionais e visao recente dos chamados no seu escopo." header-variant="none">
     @php
-        $sectorQuery = array_filter(['period' => $period, 'sector_id' => $selectedSectorId]);
+        $dateQuery = array_filter([
+            'date_from' => $dateRange['date_from'],
+            'date_to' => $dateRange['date_to'],
+            'sector_id' => $selectedSectorId,
+        ], fn ($value) => ! is_null($value) && $value !== '');
         $selectedSector = $availableSectors->firstWhere('id', $selectedSectorId);
         $alertToneClasses = [
             'rose' => 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200',
@@ -10,13 +14,22 @@
             'slate' => 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200',
         ];
 
+        $executiveCards = [
+            ['label' => 'SLA em atraso', 'value' => $stats['overdue_sla'], 'hint' => 'Chamados que ja romperam prazo.', 'tone' => 'rose'],
+            ['label' => 'SLA perto do prazo', 'value' => $stats['warning_sla'], 'hint' => 'Demandas dentro dos proximos 30 minutos.', 'tone' => 'amber'],
+            ['label' => 'Backlog aberto', 'value' => $stats['open_tickets'], 'hint' => 'Chamados ainda sem encerramento.', 'tone' => 'slate'],
+            ['label' => 'Sem responsavel', 'value' => $stats['unassigned_open_tickets'], 'hint' => 'Fila aberta para triagem.', 'tone' => 'amber'],
+            ['label' => 'Alta ou urgente', 'value' => $stats['high_priority_open_tickets'], 'hint' => 'Abertos com prioridade elevada.', 'tone' => 'orange'],
+            ['label' => 'Taxa de resolucao', 'value' => $stats['resolution_rate'].'%', 'hint' => 'Resolvidos sobre criados no periodo.', 'tone' => 'sky'],
+        ];
+
         $summaryCards = [
             ['label' => 'Total de chamados', 'value' => $stats['tickets_total'], 'hint' => 'Volume visivel no escopo atual.'],
-            ['label' => 'Criados no periodo', 'value' => $stats['created_in_period'], 'hint' => "Novos chamados nos ultimos {$period} dias."],
-            ['label' => 'Resolvidos no periodo', 'value' => $stats['resolved_in_period'], 'hint' => "Encerrados nos ultimos {$period} dias."],
-            ['label' => 'Taxa de resolucao', 'value' => $stats['resolution_rate'].'%', 'hint' => 'Resolvidos sobre criados no periodo.'],
+            ['label' => 'Criados no periodo', 'value' => $stats['created_in_period'], 'hint' => 'Novos chamados no periodo selecionado.'],
+            ['label' => 'Resolvidos no periodo', 'value' => $stats['resolved_in_period'], 'hint' => 'Encerrados no periodo selecionado.'],
+            ['label' => 'Criados x resolvidos', 'value' => $stats['created_in_period'].' / '.$stats['resolved_in_period'], 'hint' => 'Entrada e saida no mesmo recorte.'],
             ['label' => 'Tempo aprovado', 'value' => $timeTrackingSummary['approved_human'], 'hint' => 'Apontamentos aprovados no periodo.'],
-            ['label' => 'Com atividade recente', 'value' => $stats['active_in_period'], 'hint' => "Atualizados nos ultimos {$period} dias."],
+            ['label' => 'Com atividade recente', 'value' => $stats['active_in_period'], 'hint' => 'Atualizados no periodo selecionado.'],
         ];
 
         $ticketsListUrl = auth()->user()->hasOperationalAccess()
@@ -27,53 +40,82 @@
     <div class="space-y-6">
         <x-portal.page-intro
             eyebrow="Painel operacional"
-            title="Dashboard operacional"
+            title="Dashboard executivo"
             description="Tickets, SLA, produtividade, licencas, ativos e conhecimento no mesmo recorte de periodo e setor."
         >
             <x-slot:actions>
                 <a
-                    href="{{ route('dashboard.export', $sectorQuery) }}"
+                    href="{{ route('dashboard.export', $dateQuery) }}"
                     class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm font-medium"
                 >
                     Exportar Excel
                 </a>
-                @foreach ($periodOptions as $optionValue => $optionLabel)
-                    <a
-                        href="{{ route('dashboard', array_filter(['period' => $optionValue, 'sector_id' => $selectedSectorId])) }}"
-                        class="{{ (int) $period === (int) $optionValue ? 'ui-action-primary text-white' : 'ui-action-secondary' }} ui-action rounded-2xl px-4 py-2 text-sm font-medium"
-                    >
-                        {{ $optionLabel }}
-                    </a>
-                @endforeach
             </x-slot:actions>
+
+            <x-slot:meta>
+                <span class="portal-chip">Periodo: {{ $dateRange['range_label'] }}</span>
+                <span class="portal-chip">Setor: {{ $selectedSector?->name ?? 'Todos' }}</span>
+            </x-slot:meta>
         </x-portal.page-intro>
 
-        @if ($availableSectors->count() > 1)
-            <x-portal.filter-bar title="Recorte do painel" description="Use o setor para afinar os indicadores antes de mergulhar nas tabelas e graficos.">
-                <form method="GET" action="{{ route('dashboard') }}" class="flex max-w-xl gap-2">
-                    <input type="hidden" name="period" value="{{ $period }}">
-                    <select name="sector_id" class="ui-native-select min-w-0 flex-1 rounded-2xl text-sm">
-                        <option value="">Todos os setores</option>
-                        @foreach ($availableSectors as $sector)
-                            <option value="{{ $sector->id }}" @selected((int) $selectedSectorId === (int) $sector->id)>
-                                {{ $sector->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <button type="submit" class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm font-semibold">
-                        Filtrar
+        <x-portal.filter-bar title="Recorte executivo" description="Escolha um intervalo customizado ou use atalhos para responder rapido a cobranca.">
+            <div class="space-y-4">
+                <div class="flex flex-wrap gap-2">
+                    @foreach ($periodOptions as $optionValue => $optionLabel)
+                        @php
+                            $isActivePreset = (int) ($dateRange['preset'] ?? 0) === (int) $optionValue;
+                        @endphp
+                        <a
+                            href="{{ route('dashboard', array_filter(['period' => $optionValue, 'sector_id' => $selectedSectorId])) }}"
+                            class="{{ $isActivePreset ? 'ui-action-primary text-white' : 'ui-action-secondary' }} ui-action rounded-2xl px-4 py-2 text-sm font-medium"
+                        >
+                            {{ $optionLabel }}
+                        </a>
+                    @endforeach
+                </div>
+
+                <form method="GET" action="{{ route('dashboard') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-[180px_180px_minmax(220px,1fr)_auto_auto] xl:items-end">
+                    <label class="block text-sm text-slate-600">
+                        <span class="mb-1 block font-medium">De</span>
+                        <input type="date" name="date_from" value="{{ $dateRange['date_from'] }}" class="ui-input w-full">
+                    </label>
+
+                    <label class="block text-sm text-slate-600">
+                        <span class="mb-1 block font-medium">Ate</span>
+                        <input type="date" name="date_to" value="{{ $dateRange['date_to'] }}" class="ui-input w-full">
+                    </label>
+
+                    @if ($availableSectors->count() > 1)
+                        <label class="block text-sm text-slate-600">
+                            <span class="mb-1 block font-medium">Setor</span>
+                            <select name="sector_id" class="ui-native-select w-full text-sm">
+                                <option value="">Todos os setores</option>
+                                @foreach ($availableSectors as $sector)
+                                    <option value="{{ $sector->id }}" @selected((int) $selectedSectorId === (int) $sector->id)>
+                                        {{ $sector->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </label>
+                    @endif
+
+                    <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm font-semibold">
+                        Aplicar
                     </button>
+
+                    <a href="{{ route('dashboard') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-semibold">
+                        Limpar
+                    </a>
                 </form>
-            </x-portal.filter-bar>
-        @endif
+            </div>
+        </x-portal.filter-bar>
 
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            @foreach ($alerts as $alert)
-                @continue($alert['hidden'] ?? false)
-                <article class="rounded-3xl border p-5 shadow-sm {{ $alertToneClasses[$alert['tone']] ?? $alertToneClasses['slate'] }}">
-                    <p class="text-sm font-semibold">{{ $alert['label'] }}</p>
-                    <p class="mt-3 text-4xl font-semibold">{{ $alert['value'] }}</p>
-                    <p class="mt-2 text-sm opacity-80">{{ $alert['hint'] }}</p>
+            @foreach ($executiveCards as $card)
+                <article class="rounded-3xl border p-5 shadow-sm {{ $alertToneClasses[$card['tone']] ?? $alertToneClasses['slate'] }}">
+                    <p class="text-sm font-semibold">{{ $card['label'] }}</p>
+                    <p class="mt-3 text-4xl font-semibold">{{ $card['value'] }}</p>
+                    <p class="mt-2 text-sm opacity-80">{{ $card['hint'] }}</p>
                 </article>
             @endforeach
         </div>
@@ -112,7 +154,7 @@
                         <h3 class="text-lg font-semibold text-slate-900">Volume no periodo</h3>
                         <p class="mt-1 text-sm text-slate-500">Comparativo diario entre chamados criados e resolvidos.</p>
                     </div>
-                    <span class="portal-chip dark:bg-slate-800 dark:text-slate-300">{{ $periodOptions[$period] }}</span>
+                    <span class="portal-chip dark:bg-slate-800 dark:text-slate-300">{{ $dateRange['range_label'] }}</span>
                 </div>
 
                 <div class="mt-6 h-80">

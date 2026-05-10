@@ -40,7 +40,7 @@ class DashboardExport
             'Resumo',
             ['Indicador', 'Valor'],
             collect([
-                ['Periodo', $this->data['period'].' dias'],
+                ['Periodo', $this->data['dateRange']['range_label']],
                 ['Setor filtrado', $this->selectedSectorLabel()],
                 ['Total de chamados', $this->data['stats']['tickets_total']],
                 ['Chamados abertos', $this->data['stats']['open_tickets']],
