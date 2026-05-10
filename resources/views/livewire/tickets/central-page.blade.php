@@ -114,12 +114,12 @@
                                         @endif
                                     </div>
 
-                                    <div class="mt-auto flex items-center justify-between gap-3 pt-3">
+                                    <div class="mt-auto flex flex-col items-stretch gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
                                         <p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
                                             Setor {{ $selectedSector->name }}
                                         </p>
 
-                                        <a href="{{ route('tickets.create', ['sector' => $selectedSector->id, 'board' => $formBoard?->id, 'form' => $form->id]) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm" style="border-color: {{ $selectedSector->borderColor() }}; color: {{ $selectedSector->displayColor() }};">
+                                        <a href="{{ route('tickets.create', ['sector' => $selectedSector->id, 'board' => $formBoard?->id, 'form' => $form->id]) }}" class="ui-action ui-action-secondary w-full rounded-2xl px-4 py-3 text-sm sm:w-auto" style="border-color: {{ $selectedSector->borderColor() }}; color: {{ $selectedSector->displayColor() }};">
                                             Usar formulario
                                         </a>
                                     </div>

@@ -69,7 +69,78 @@
         </div>
     </x-portal.filter-bar>
 
-    <div class="portal-table-surface">
+    <div class="ticket-mobile-list lg:hidden">
+        @forelse ($tickets as $ticket)
+            @php
+                $slaMeta = $this->slaMeta($ticket);
+                $needsRating = $ticket->canBeRatedBy(auth()->user());
+            @endphp
+
+            <article class="ticket-mobile-card">
+                <div class="ticket-mobile-card-header">
+                    <div class="min-w-0">
+                        <p class="ticket-mobile-reference">{{ $ticket->fullReference() }}</p>
+                        <h2 class="ticket-mobile-title">{{ $ticket->title }}</h2>
+                        <p class="ticket-mobile-subtitle">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
+                    </div>
+
+                    <a href="{{ route('tickets.show', $ticket) }}" class="ui-action {{ $needsRating ? 'ui-action-primary' : 'ui-action-secondary' }} ticket-mobile-open-button">
+                        {{ $needsRating ? 'Avaliar' : 'Abrir' }}
+                    </a>
+                </div>
+
+                <div class="ticket-mobile-chip-row">
+                    <span class="ticket-mobile-chip" style="--ticket-mobile-chip-color: {{ $ticket->group?->color ?? $ticket->status?->color ?? '#64748b' }}">
+                        {{ $ticket->group?->name ?? $ticket->status?->name ?? 'Sem etapa' }}
+                    </span>
+                    <span class="ticket-mobile-chip ticket-mobile-chip-soft">
+                        {{ $ticket->priority?->label() }}
+                    </span>
+                    @if ($ticket->isClosed())
+                        <span class="ticket-mobile-chip ticket-mobile-chip-success">Finalizado</span>
+                    @else
+                        <span class="ticket-mobile-chip ticket-mobile-chip-info">Aberto</span>
+                    @endif
+                    <span class="ticket-mobile-chip" style="--ticket-mobile-chip-color: {{ $slaMeta['color'] }}">
+                        {{ $slaMeta['label'] }}
+                    </span>
+                </div>
+
+                @if ($needsRating)
+                    <div class="ticket-mobile-alert">Chamado encerrado. Avalie o atendimento.</div>
+                @endif
+
+                <dl class="ticket-mobile-meta-grid">
+                    <div>
+                        <dt>Setor</dt>
+                        <dd>
+                            <x-sector-badge :sector="$ticket->sector" mode="dot" />
+                            <span>{{ $ticket->sector?->company?->name }}</span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Responsavel</dt>
+                        <dd><x-person-reference :user="$ticket->assignee" empty-label="Nao atribuido" /></dd>
+                    </div>
+                    <div>
+                        <dt>Atualizado</dt>
+                        <dd>{{ $ticket->updated_at?->diffForHumans() }}</dd>
+                    </div>
+                </dl>
+
+                <div class="ticket-mobile-deadlines">
+                    <span>1a resposta: {{ $ticket->first_response_due_at?->format('d/m/Y H:i') ?? 'sem prazo' }}</span>
+                    <span>Resolucao: {{ $ticket->resolution_due_at?->format('d/m/Y H:i') ?? 'sem prazo' }}</span>
+                </div>
+            </article>
+        @empty
+            <div class="ticket-mobile-empty">
+                Nenhum chamado encontrado nos filtros atuais.
+            </div>
+        @endforelse
+    </div>
+
+    <div class="portal-table-surface hidden lg:block">
         <table class="min-w-full divide-y divide-slate-200 text-sm">
             <thead class="portal-table-head text-left text-slate-500">
                 <tr>

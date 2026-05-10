@@ -6,6 +6,8 @@
 @php($headerVariant = $headerVariant ?? ($showHeader ? 'quiet' : 'none'))
 @php($headerVariant = in_array($headerVariant, ['hero', 'quiet', 'none'], true) ? $headerVariant : 'quiet')
 @php($focusedHeaderActionClass = 'ui-action portal-focused-header-action')
+@php($user = auth()->user())
+@php($unreadNotificationsCount = $user?->unreadNotifications()->count() ?? 0)
 
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -15,10 +17,7 @@
     <body class="portal-shell {{ $isFocusedForm ? 'portal-shell-focused' : '' }} min-h-screen bg-[#e7edf7] text-slate-900 dark:bg-[#07101f] dark:text-slate-100">
         <div class="min-h-screen {{ $isFocusedForm ? 'block' : 'lg:grid lg:grid-cols-[290px_1fr]' }}">
             @unless ($isFocusedForm)
-            <aside class="portal-sidebar">
-                @php($user = auth()->user())
-                @php($unreadNotificationsCount = $user->unreadNotifications()->count())
-
+            <aside class="portal-sidebar hidden lg:block">
                 <a href="{{ route('dashboard') }}" class="portal-brand-link">
                     <div class="portal-brand-mark">
                         <x-app-logo-icon class="h-full w-full" />
@@ -126,7 +125,36 @@
                             @endif
                         </div>
                     </header>
-                @elseif ($headerVariant !== 'none')
+                @else
+                    <header class="portal-mobile-header lg:hidden">
+                        <a href="{{ route('dashboard') }}" class="portal-mobile-brand">
+                            <span class="portal-mobile-brand-mark" aria-hidden="true">
+                                <x-app-logo-icon class="h-full w-full" />
+                            </span>
+                            <span class="portal-mobile-brand-copy">
+                                <span>AIA Service</span>
+                                <small>{{ $user?->global_role?->label() ?? 'Portal interno' }}</small>
+                            </span>
+                        </a>
+
+                        <a
+                            href="{{ route('notifications.index') }}"
+                            class="portal-mobile-icon-link {{ request()->routeIs('notifications.*') ? 'portal-mobile-icon-link-active' : '' }}"
+                            aria-label="Notificacoes"
+                        >
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                                <path d="M10 20a2 2 0 0 0 4 0" />
+                            </svg>
+
+                            @if ($unreadNotificationsCount > 0)
+                                <span class="portal-mobile-badge">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
+                            @endif
+                        </a>
+                    </header>
+                @endif
+
+                @if (! $isFocusedForm && $headerVariant !== 'none')
                     <header class="px-6 pt-6">
                         <div class="portal-layout-header {{ $headerVariant === 'hero' ? 'portal-layout-header-hero' : 'portal-layout-header-quiet' }}">
                             <div class="flex flex-col gap-4">
@@ -142,7 +170,7 @@
                     </header>
                 @endif
 
-                <main class="{{ $isFocusedForm ? 'px-4 pb-10 pt-6 sm:px-6 lg:px-8' : 'p-6' }}">
+                <main class="portal-content {{ $isFocusedForm ? 'px-4 pb-10 pt-6 sm:px-6 lg:px-8' : 'p-6' }}">
                     @if (session('status'))
                         <div class="ui-panel mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                             {{ session('status') }}
@@ -151,6 +179,81 @@
 
                     {{ $slot }}
                 </main>
+
+                @unless ($isFocusedForm)
+                    <nav class="portal-mobile-bottom-nav lg:hidden" aria-label="Navegacao principal mobile">
+                        <a href="{{ route('tickets.central') }}" class="portal-mobile-nav-item {{ request()->routeIs('tickets.central', 'tickets.create') ? 'portal-mobile-nav-item-active' : '' }}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z" />
+                                <path d="M8 9h8M8 13h5" />
+                            </svg>
+                            <span>Central</span>
+                        </a>
+
+                        <a href="{{ route('tickets.mine') }}" class="portal-mobile-nav-item {{ request()->routeIs('tickets.mine') ? 'portal-mobile-nav-item-active' : '' }}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M8 7h8M8 12h8M8 17h5" />
+                                <path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+                            </svg>
+                            <span>Chamados</span>
+                        </a>
+
+                        <a href="{{ route('notifications.index') }}" class="portal-mobile-nav-item {{ request()->routeIs('notifications.*') ? 'portal-mobile-nav-item-active' : '' }}">
+                            <span class="portal-mobile-nav-icon-wrap">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+                                    <path d="M10 20a2 2 0 0 0 4 0" />
+                                </svg>
+                                @if ($unreadNotificationsCount > 0)
+                                    <span class="portal-mobile-nav-badge">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
+                                @endif
+                            </span>
+                            <span>Alertas</span>
+                        </a>
+
+                        <details class="portal-mobile-menu">
+                            <summary class="portal-mobile-nav-item">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 7h16M4 12h16M4 17h16" />
+                                </svg>
+                                <span>Menu</span>
+                            </summary>
+
+                            <div class="portal-mobile-menu-panel">
+                                <div class="portal-mobile-menu-user">
+                                    <x-user-avatar :user="$user" size="md" />
+                                    <div class="min-w-0">
+                                        <p>{{ $user?->name }}</p>
+                                        <small>{{ $user?->email }}</small>
+                                    </div>
+                                </div>
+
+                                <div class="portal-mobile-menu-links">
+                                    <a href="{{ route('dashboard') }}">Dashboard</a>
+                                    @if ($user?->isGlobalAdmin())
+                                        <a href="{{ route('search') }}">Busca global</a>
+                                    @endif
+                                    @if ($user?->hasOperationalAccess())
+                                        <a href="{{ route('tickets.index') }}">Quadros</a>
+                                    @endif
+                                    <a href="{{ route('knowledge-base.index') }}">Base de conhecimento</a>
+                                    @if ($user?->isGlobalAdmin())
+                                        <a href="{{ route('companies.index') }}">Empresas</a>
+                                        <a href="{{ route('users.index') }}">Usuarios</a>
+                                        <a href="{{ route('assets.index') }}">Patrimonios</a>
+                                    @endif
+                                    <a href="{{ route('appearance.edit') }}">Aparencia</a>
+                                    <a href="{{ route('profile.edit') }}">Meu perfil</a>
+                                </div>
+
+                                <form method="POST" action="{{ route('logout') }}">
+                                    @csrf
+                                    <button type="submit" class="portal-mobile-menu-logout">Sair</button>
+                                </form>
+                            </div>
+                        </details>
+                    </nav>
+                @endunless
             </div>
         </div>
 

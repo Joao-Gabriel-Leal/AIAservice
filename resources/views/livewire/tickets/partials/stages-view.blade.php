@@ -51,7 +51,7 @@
             </button>
 
             @if (! ($collapsedGroups[$group->id] ?? false))
-                <div class="overflow-x-auto">
+                <div class="hidden overflow-x-auto lg:block">
                     <table class="ui-board-table min-w-full divide-y divide-slate-200 text-sm">
                         <thead class="bg-slate-50/80 text-left text-slate-500">
                             <tr>
@@ -243,6 +243,153 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="ticket-mobile-stage-list lg:hidden">
+                    @forelse ($ticketsByGroup->get($group->id, collect()) as $ticket)
+                        @php
+                            $slaMeta = $this->slaMeta($ticket);
+                        @endphp
+
+                        <article class="ticket-mobile-card ticket-mobile-card-editable" wire:key="ticket-card-stages-mobile-{{ $ticket->id }}">
+                            <div class="ticket-mobile-card-header">
+                                <div class="min-w-0 flex-1">
+                                    <p class="ticket-mobile-reference">{{ $ticket->fullReference() }}</p>
+                                    <input type="text" value="{{ $ticket->title }}" wire:change="updateFixedField({{ $ticket->id }}, 'title', $event.target.value)" class="ui-input ticket-mobile-title-input" />
+                                    <p class="ticket-mobile-subtitle">{{ $ticket->catalogItem?->name ?? 'Formulario padrao' }}</p>
+                                </div>
+
+                                <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary ticket-mobile-open-button">
+                                    Ver
+                                </a>
+                            </div>
+
+                            <div class="ticket-mobile-chip-row">
+                                <span class="ticket-mobile-chip" style="--ticket-mobile-chip-color: {{ $ticket->group?->color ?: '#94a3b8' }}">
+                                    {{ $ticket->group?->name ?? 'Sem etapa' }}
+                                </span>
+                                <span class="ticket-mobile-chip" style="--ticket-mobile-chip-color: {{ $slaMeta['color'] }}">
+                                    {{ $slaMeta['label'] }}
+                                </span>
+                                @if ($ticket->is_major_incident)
+                                    <span class="ticket-mobile-chip ticket-mobile-chip-danger">
+                                        Incidente - {{ $ticket->incident_children_count ?? 0 }}
+                                    </span>
+                                @elseif ($ticket->major_incident_ticket_id)
+                                    <span class="ticket-mobile-chip ticket-mobile-chip-info">
+                                        Vinculado
+                                    </span>
+                                @endif
+                            </div>
+
+                            <dl class="ticket-mobile-meta-grid">
+                                <div>
+                                    <dt>Solicitante</dt>
+                                    <dd><x-person-reference :user="$ticket->requester" empty-label="Nao informado" /></dd>
+                                </div>
+                                <div>
+                                    <dt>SLA</dt>
+                                    <dd>
+                                        <span>1a resp.: {{ $ticket->first_response_due_at?->format('d/m H:i') ?? '-' }}</span>
+                                        <span>Resol.: {{ $ticket->resolution_due_at?->format('d/m H:i') ?? '-' }}</span>
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            <div class="ticket-mobile-control-grid">
+                                <label>
+                                    <span>Responsavel</span>
+                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $ticket->assignee_id ? '#3b82f6' : '#94a3b8' }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateFixedField({{ $ticket->id }}, 'assignee_id', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            <option value="">Nao atribuido</option>
+                                            @foreach ($assignees as $assignee)
+                                                <option value="{{ $assignee->id }}" @selected($ticket->assignee_id === $assignee->id)>{{ $assignee->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </label>
+
+                                <label>
+                                    <span>Prioridade</span>
+                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $this->priorityColor($ticket->priority) }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select wire:change="updateFixedField({{ $ticket->id }}, 'priority', $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            @foreach ($priorities as $priority)
+                                                <option value="{{ $priority->value }}" @selected($ticket->priority === $priority)>{{ $priority->label() }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </label>
+
+                                <label>
+                                    <span>Etapa</span>
+                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $ticket->group?->color ?: '#94a3b8' }}">
+                                        <span class="ui-native-pill-dot"></span>
+                                        <select x-on:change="changeGroup({{ $ticket->id }}, $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                            <option value="">Sem etapa</option>
+                                            @foreach ($board->groups as $boardGroup)
+                                                <option value="{{ $boardGroup->id }}" @selected($ticket->ticket_group_id === $boardGroup->id)>{{ $boardGroup->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </label>
+                            </div>
+
+                            @if ($fields->isNotEmpty())
+                                <details class="ticket-mobile-details">
+                                    <summary>Campos do quadro</summary>
+                                    <div class="ticket-mobile-control-grid">
+                                        @foreach ($fields as $field)
+                                            @php
+                                                $value = $this->fieldValue($ticket, $field);
+                                                $selectedOption = $this->fieldOption($field, $value);
+                                            @endphp
+
+                                            <label wire:key="ticket-field-stages-mobile-{{ $ticket->id }}-{{ $field->id }}">
+                                                <span>{{ $field->name }}</span>
+
+                                                @if (in_array($field->type->value, ['select', 'status'], true))
+                                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $selectedOption?->color ?: '#94a3b8' }}">
+                                                        <span class="ui-native-pill-dot"></span>
+                                                        <select wire:change="updateDynamicField({{ $ticket->id }}, {{ $field->id }}, $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                            <option value="">Selecione</option>
+                                                            @foreach ($field->options as $option)
+                                                                <option value="{{ $option->value }}" @selected((string) $value === (string) $option->value)>{{ $option->label }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                @elseif ($field->type->value === 'checkbox')
+                                                    <span class="ticket-mobile-checkbox">
+                                                        <input type="checkbox" @checked((bool) $value) wire:change="updateDynamicField({{ $ticket->id }}, {{ $field->id }}, $event.target.checked)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500" />
+                                                        Ativo
+                                                    </span>
+                                                @elseif ($field->type->value === 'date')
+                                                    <input type="date" value="{{ $value }}" wire:change="updateDynamicField({{ $ticket->id }}, {{ $field->id }}, $event.target.value)" class="ui-input w-full" />
+                                                @elseif ($field->type->value === 'number')
+                                                    <input type="number" value="{{ $value }}" wire:change="updateDynamicField({{ $ticket->id }}, {{ $field->id }}, $event.target.value)" class="ui-input w-full" />
+                                                @elseif ($field->type->value === 'user')
+                                                    <div class="ui-native-pill-select" style="--ui-pill-color: {{ $value ? '#3b82f6' : '#94a3b8' }}">
+                                                        <span class="ui-native-pill-dot"></span>
+                                                        <select wire:change="updateDynamicField({{ $ticket->id }}, {{ $field->id }}, $event.target.value)" class="ui-native-select ui-native-select-pill w-full">
+                                                            <option value="">Selecione</option>
+                                                            @foreach ($sectorUsers as $sectorUser)
+                                                                <option value="{{ $sectorUser->id }}" @selected((string) $value === (string) $sectorUser->id)>{{ $sectorUser->name }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                @else
+                                                    <input type="text" value="{{ $value }}" wire:change="updateDynamicField({{ $ticket->id }}, {{ $field->id }}, $event.target.value)" data-mask="auto" data-mask-label="{{ $field->name }}" data-mask-placeholder="{{ $field->placeholder }}" class="ui-input w-full" />
+                                                @endif
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                </details>
+                            @endif
+                        </article>
+                    @empty
+                        <div class="ticket-mobile-empty">Nenhum chamado neste grupo com os filtros atuais.</div>
+                    @endforelse
+                </div>
                 @if (($ticketsByGroup->get($group->id)?->count() ?? 0) < $groupTicketTotals->get($group->id, 0))
                     <div class="border-t border-slate-100 px-6 py-4 text-center">
                         <button type="button" wire:click="loadMoreColumn('{{ $group->id }}')" class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm">
@@ -280,10 +427,10 @@
                     ></div>
 
                     <div
-                        class="ui-row-interactive ui-row-zebra {{ $loop->even ? 'ui-row-zebra-alt' : '' }} flex items-center justify-between gap-4 px-6 py-4"
+                        class="ui-row-interactive ui-row-zebra {{ $loop->even ? 'ui-row-zebra-alt' : '' }} flex flex-col items-stretch gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between"
                         wire:key="ticket-ungrouped-stages-{{ $ticket->id }}"
                         data-board-ticket-id="{{ $ticket->id }}"
-                        x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, null)"
+                        x-on:pointerdown="if (! window.matchMedia('(max-width: 1023px)').matches) beginPointerDrag($event, {{ $ticket->id }}, null)"
                         x-bind:class="{
                             'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
                             'ui-kanban-card-lifted': isPointerCandidate({{ $ticket->id }})
@@ -295,12 +442,21 @@
                             <p class="text-sm text-slate-500">{{ $ticket->requester?->name ?? 'Nao informado' }}</p>
                         </div>
 
-                        <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center" data-no-drag>
                             <span class="ui-tone-chip ui-tone-chip-neutral">Sem etapa</span>
                             <span class="ui-tone-chip" style="--ui-pill-color: {{ $slaMeta['color'] }}">
                                 <span class="ui-tone-dot"></span>
                                 {{ $slaMeta['label'] }}
                             </span>
+                            <label class="ticket-mobile-inline-select lg:hidden">
+                                <span>Etapa</span>
+                                <select x-on:change="changeGroup({{ $ticket->id }}, $event.target.value)" class="ui-native-select w-full">
+                                    <option value="">Sem etapa</option>
+                                    @foreach ($board->groups as $boardGroup)
+                                        <option value="{{ $boardGroup->id }}">{{ $boardGroup->name }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
                             <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm" data-no-drag>Ver</a>
                         </div>
                     </div>

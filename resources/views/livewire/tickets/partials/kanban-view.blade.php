@@ -75,7 +75,7 @@
                             class="ui-panel ui-kanban-card rounded-[1.6rem] border border-slate-200 bg-white p-4 shadow-sm"
                             wire:key="ticket-card-kanban-{{ $ticket->id }}"
                             data-board-ticket-id="{{ $ticket->id }}"
-                            x-on:pointerdown="beginPointerDrag($event, {{ $ticket->id }}, {{ $ticket->ticket_group_id ?? 'null' }})"
+                            x-on:pointerdown="if (! window.matchMedia('(max-width: 1023px)').matches) beginPointerDrag($event, {{ $ticket->id }}, {{ $ticket->ticket_group_id ?? 'null' }})"
                             x-bind:class="{
                                 'ui-kanban-card-dragging': isDraggingTicket({{ $ticket->id }}),
                                 'ui-kanban-card-lifted': isPointerCandidate({{ $ticket->id }})
@@ -199,7 +199,8 @@
                             @endif
 
                             <p class="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                Arraste o card para mover de coluna
+                                <span class="hidden lg:inline">Arraste o card para mover de coluna</span>
+                                <span class="lg:hidden">Use o campo etapa para mover no celular</span>
                             </p>
                         </article>
                     @empty

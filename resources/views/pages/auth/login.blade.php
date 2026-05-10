@@ -125,4 +125,8 @@
         </button>
     </form>
 
+    <a href="{{ route('tickets.central') }}" class="auth-open-ticket-link">
+        Abrir chamado
+    </a>
+
 </x-layouts::auth.split>
