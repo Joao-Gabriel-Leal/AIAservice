@@ -22,21 +22,24 @@ class EmailTemplateController extends Controller
 
     public function index(): View
     {
-        return view('modules.emails.index', [
-            'templates' => $this->emailTemplates->templates()
-                ->map(function (array $template): array {
-                    $preview = $this->emailTemplates->renderPreview(
-                        $template['type'],
-                        $template['subject'],
-                        $template['html_body'],
-                        request()->user(),
-                    );
+        $templates = $this->emailTemplates->templates();
+        $requestedType = request()->string('type')->toString();
+        $activeType = $templates->contains(fn (array $template): bool => $template['type'] === $requestedType)
+            ? $requestedType
+            : $templates->first()['type'];
+        $activeTemplate = $templates->firstWhere('type', $activeType);
+        $activePreview = $this->emailTemplates->renderPreview(
+            $activeTemplate['type'],
+            $activeTemplate['subject'],
+            $activeTemplate['html_body'],
+            request()->user(),
+        );
 
-                    return [
-                        ...$template,
-                        'preview' => $this->withPreviewDocument($preview),
-                    ];
-                }),
+        return view('modules.emails.index', [
+            'templates' => $templates,
+            'activeType' => $activeType,
+            'activeTemplate' => $activeTemplate,
+            'activePreview' => $this->withPreviewDocument($activePreview),
         ]);
     }
 

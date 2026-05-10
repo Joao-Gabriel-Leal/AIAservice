@@ -34,6 +34,39 @@ class EmailTemplateManagementTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_email_template_screen_renders_only_the_active_editor(): void
+    {
+        $admin = User::factory()->developer()->create();
+
+        $response = $this->actingAs($admin)->get(route('admin.emails.index'));
+
+        $response
+            ->assertOk()
+            ->assertSee('Tipos de envio')
+            ->assertSee('Editar HTML avancado')
+            ->assertSee('data-active-email-type="'.EmailTemplateCatalog::ACCOUNT_CREATED.'"', false)
+            ->assertSee('data-preview-url="'.route('admin.emails.preview', EmailTemplateCatalog::ACCOUNT_CREATED).'"', false)
+            ->assertDontSee('data-preview-url="'.route('admin.emails.preview', EmailTemplateCatalog::TICKET_CREATED).'"', false);
+
+        $this->assertSame(1, substr_count($response->getContent(), '<textarea name="html_body"'));
+    }
+
+    public function test_email_template_screen_selects_type_from_query_string(): void
+    {
+        $admin = User::factory()->developer()->create();
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.emails.index', ['type' => EmailTemplateCatalog::TICKET_CREATED]));
+
+        $response
+            ->assertOk()
+            ->assertSee('data-active-email-type="'.EmailTemplateCatalog::TICKET_CREATED.'"', false)
+            ->assertSee('action="'.route('admin.emails.update', EmailTemplateCatalog::TICKET_CREATED).'"', false)
+            ->assertSee('<option value="'.EmailTemplateCatalog::TICKET_CREATED.'" selected>', false);
+
+        $this->assertSame(1, substr_count($response->getContent(), '<textarea name="html_body"'));
+    }
+
     public function test_templates_start_enabled_without_database_overrides(): void
     {
         $this->assertDatabaseCount('email_templates', 0);
@@ -59,7 +92,7 @@ class EmailTemplateManagementTest extends TestCase
                 'html_body' => '<p>Login: {{ login_email }}</p><p>{{ password_note }}</p>',
                 'is_enabled' => '1',
             ])
-            ->assertRedirect();
+            ->assertRedirect(route('admin.emails.index', ['type' => EmailTemplateCatalog::ACCOUNT_CREATED]));
 
         $rendered = app(EmailTemplateService::class)->render(
             EmailTemplateCatalog::ACCOUNT_CREATED,
@@ -73,6 +106,27 @@ class EmailTemplateManagementTest extends TestCase
         $this->assertSame('Bem-vindo Maria Operadora', $rendered['subject']);
         $this->assertStringContainsString('Login: maria@example.com', $rendered['html']);
         $this->assertStringContainsString('Troque a senha no primeiro acesso.', $rendered['html']);
+    }
+
+    public function test_admin_can_restore_template_and_return_to_selected_type(): void
+    {
+        $admin = User::factory()->developer()->create();
+
+        EmailTemplate::query()->create([
+            'type' => EmailTemplateCatalog::TICKET_CREATED,
+            'subject' => 'Custom',
+            'html_body' => '<p>{{ ticket_reference }}</p>',
+            'is_enabled' => true,
+            'updated_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.emails.restore', EmailTemplateCatalog::TICKET_CREATED))
+            ->assertRedirect(route('admin.emails.index', ['type' => EmailTemplateCatalog::TICKET_CREATED]));
+
+        $this->assertDatabaseMissing('email_templates', [
+            'type' => EmailTemplateCatalog::TICKET_CREATED,
+        ]);
     }
 
     public function test_disabling_email_type_keeps_database_notification_only(): void
