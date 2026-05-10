@@ -85,12 +85,11 @@
                         <div>
                             <p class="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400/72">Administracao</p>
                             <div class="space-y-2">
-                                <a href="{{ route('companies.index') }}" class="portal-nav-link {{ request()->routeIs('companies.*') ? 'portal-nav-link-active' : '' }}">Empresas</a>
-                                <a href="{{ route('sectors.index') }}" class="portal-nav-link {{ request()->routeIs('sectors.*') ? 'portal-nav-link-active' : '' }}">Setores</a>
+                                <a href="{{ route('companies.index') }}" class="portal-nav-link {{ request()->routeIs('companies.*', 'sectors.*', 'rooms.*') ? 'portal-nav-link-active' : '' }}">Empresas</a>
                                 <a href="{{ route('sector-templates.index') }}" class="portal-nav-link {{ request()->routeIs('sector-templates.*') ? 'portal-nav-link-active' : '' }}">Templates de setor</a>
                                 <a href="{{ route('users.index') }}" class="portal-nav-link {{ request()->routeIs('users.*') ? 'portal-nav-link-active' : '' }}">Usuarios</a>
+                                <a href="{{ route('admin.emails.index') }}" class="portal-nav-link {{ request()->routeIs('admin.emails.*') ? 'portal-nav-link-active' : '' }}">E-mails</a>
                                 <a href="{{ route('assets.index') }}" class="portal-nav-link {{ request()->routeIs('assets.*') ? 'portal-nav-link-active' : '' }}">Patrimonios</a>
-                                <a href="{{ route('rooms.index') }}" class="portal-nav-link {{ request()->routeIs('rooms.*') ? 'portal-nav-link-active' : '' }}">Salas</a>
                             </div>
                         </div>
                     @endif

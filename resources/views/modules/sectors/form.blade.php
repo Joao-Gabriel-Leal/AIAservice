@@ -1,3 +1,9 @@
+@php($returnToCompanyIdValue = old('return_to_company_id', $returnToCompanyId ?? null))
+
+@if ($returnToCompanyIdValue)
+    <input type="hidden" name="return_to_company_id" value="{{ $returnToCompanyIdValue }}">
+@endif
+
 <div class="grid gap-6 md:grid-cols-2">
     <label class="block">
         <span class="mb-2 block text-sm font-medium text-slate-700">Empresa</span>

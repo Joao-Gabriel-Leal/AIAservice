@@ -203,7 +203,7 @@ class DashboardTest extends TestCase
                 && $dateRange['preset'] === null);
     }
 
-    public function test_dashboard_shows_rooms_menu_only_for_dev_and_super_admin_profiles(): void
+    public function test_dashboard_uses_companies_menu_for_global_admin_structure_navigation(): void
     {
         ['sector' => $sector, 'room' => $room] = $this->ticketContext();
 
@@ -223,21 +223,29 @@ class DashboardTest extends TestCase
         $this->actingAs($superAdmin)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee(route('rooms.index', absolute: false), false);
+            ->assertSee(route('companies.index', absolute: false), false)
+            ->assertDontSee(route('sectors.index', absolute: false), false)
+            ->assertDontSee(route('rooms.index', absolute: false), false);
 
         $this->actingAs($developer)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee(route('rooms.index', absolute: false), false);
+            ->assertSee(route('companies.index', absolute: false), false)
+            ->assertDontSee(route('sectors.index', absolute: false), false)
+            ->assertDontSee(route('rooms.index', absolute: false), false);
 
         $this->actingAs($sectorAdmin)
             ->get(route('dashboard'))
             ->assertOk()
+            ->assertDontSee(route('companies.index', absolute: false), false)
+            ->assertDontSee(route('sectors.index', absolute: false), false)
             ->assertDontSee(route('rooms.index', absolute: false), false);
 
         $this->actingAs($collaborator)
             ->get(route('dashboard'))
             ->assertOk()
+            ->assertDontSee(route('companies.index', absolute: false), false)
+            ->assertDontSee(route('sectors.index', absolute: false), false)
             ->assertDontSee(route('rooms.index', absolute: false), false);
 
         $this->actingAs($sectorAdmin)
@@ -246,6 +254,10 @@ class DashboardTest extends TestCase
 
         $this->actingAs($developer)
             ->get(route('rooms.index'))
+            ->assertOk();
+
+        $this->actingAs($developer)
+            ->get(route('sectors.index'))
             ->assertOk();
     }
 

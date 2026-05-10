@@ -5,5 +5,5 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'role:dev'])->group(function () {
     Route::get('companies/export', [CompanyController::class, 'export'])->name('companies.export');
-    Route::resource('companies', CompanyController::class)->except(['show']);
+    Route::resource('companies', CompanyController::class);
 });

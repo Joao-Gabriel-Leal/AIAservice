@@ -29,6 +29,7 @@ class SectorRequest extends FormRequest
             }],
             'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
+            'return_to_company_id' => ['nullable', 'integer', 'exists:companies,id'],
         ];
     }
 }

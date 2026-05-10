@@ -18,8 +18,7 @@ class CompanyController extends Controller
     public function __construct(
         private readonly CompanyIndexQuery $companyIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -45,26 +44,42 @@ class CompanyController extends Controller
     {
         $this->authorize('create', Company::class);
 
-        return view('modules.companies.create', ['company' => new Company()]);
+        return view('modules.companies.create', ['company' => new Company]);
     }
 
     public function store(CompanyRequest $request): RedirectResponse
     {
         $this->authorize('create', Company::class);
 
-        Company::query()->create([
+        $company = Company::query()->create([
             ...$request->validated(),
             'is_active' => $request->boolean('is_active', true),
         ]);
 
-        return redirect()->route('companies.index')->with('status', 'Empresa criada com sucesso.');
+        return redirect()->route('companies.show', $company)->with('status', 'Empresa criada com sucesso.');
     }
 
-    public function edit(Company $company): View
+    public function show(Company $company): View
+    {
+        $this->authorize('view', $company);
+
+        $company->load([
+            'sectors' => fn ($query) => $query
+                ->with(['rooms' => fn ($roomsQuery) => $roomsQuery->orderBy('name')])
+                ->orderBy('name'),
+        ]);
+
+        return view('modules.companies.show', compact('company'));
+    }
+
+    public function edit(Request $request, Company $company): View
     {
         $this->authorize('update', $company);
 
-        return view('modules.companies.edit', compact('company'));
+        return view('modules.companies.edit', [
+            'company' => $company,
+            'returnToCompanyId' => $request->integer('return_to_company_id') ?: null,
+        ]);
     }
 
     public function update(CompanyRequest $request, Company $company): RedirectResponse
@@ -75,6 +90,10 @@ class CompanyController extends Controller
             ...$request->validated(),
             'is_active' => $request->boolean('is_active', false),
         ]);
+
+        if ($request->integer('return_to_company_id') === $company->id) {
+            return redirect()->route('companies.show', $company)->with('status', 'Empresa atualizada com sucesso.');
+        }
 
         return redirect()->route('companies.index')->with('status', 'Empresa atualizada com sucesso.');
     }

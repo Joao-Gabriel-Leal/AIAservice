@@ -40,7 +40,7 @@
                     @forelse ($companies as $company)
                         <tr>
                             <td class="px-6 py-4">
-                                <p class="font-medium text-slate-900">{{ $company->name }}</p>
+                                <a href="{{ route('companies.show', $company) }}" class="font-medium text-slate-900 hover:text-[#3468b7]">{{ $company->name }}</a>
                                 <p class="text-xs text-slate-500">{{ $company->legal_name }}</p>
                             </td>
                             <td class="px-6 py-4 text-slate-600">{{ $company->document ?: 'N/A' }}</td>
@@ -55,6 +55,7 @@
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex justify-end gap-2">
+                                    <a href="{{ route('companies.show', $company) }}" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white">Abrir</a>
                                     <a href="{{ route('companies.edit', $company) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
                                     <form method="POST" action="{{ route('companies.destroy', $company) }}" onsubmit="return confirm('Remover empresa?');">
                                         @csrf

@@ -3,6 +3,7 @@
 namespace App\Modules\Rooms\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Companies\Models\Company;
 use App\Modules\Rooms\Exports\RoomsExport;
 use App\Modules\Rooms\Http\Requests\RoomRequest;
 use App\Modules\Rooms\Models\Room;
@@ -19,8 +20,7 @@ class RoomController extends Controller
     public function __construct(
         private readonly RoomIndexQuery $roomIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -46,13 +46,19 @@ class RoomController extends Controller
         return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
         $this->authorize('create', Room::class);
 
+        $sectors = $this->availableSectors();
+        $sectorId = $request->integer('sector_id') ?: null;
+        $sectorId = $sectorId && $sectors->contains('id', $sectorId) ? $sectorId : null;
+        $selectedSector = $sectorId ? $sectors->firstWhere('id', $sectorId) : null;
+
         return view('modules.rooms.create', [
-            'room' => new Room(),
-            'sectors' => $this->availableSectors(),
+            'room' => new Room(['sector_id' => $sectorId]),
+            'sectors' => $sectors,
+            'returnToCompanyId' => $this->returnToCompanyId($request, $selectedSector?->company_id),
         ]);
     }
 
@@ -61,6 +67,8 @@ class RoomController extends Controller
         $this->authorize('create', Room::class);
 
         $payload = $request->validated();
+        $returnToCompanyId = $payload['return_to_company_id'] ?? null;
+        unset($payload['return_to_company_id']);
 
         if (! auth()->user()->canManageRooms()) {
             abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
@@ -71,16 +79,17 @@ class RoomController extends Controller
             'is_active' => $request->boolean('is_active', true),
         ]);
 
-        return redirect()->route('rooms.index')->with('status', 'Sala criada com sucesso.');
+        return $this->redirectAfterMutation($returnToCompanyId, 'Sala criada com sucesso.');
     }
 
-    public function edit(Room $room): View
+    public function edit(Request $request, Room $room): View
     {
         $this->authorize('update', $room);
 
         return view('modules.rooms.edit', [
             'room' => $room,
             'sectors' => $this->availableSectors(),
+            'returnToCompanyId' => $this->returnToCompanyId($request),
         ]);
     }
 
@@ -89,6 +98,8 @@ class RoomController extends Controller
         $this->authorize('update', $room);
 
         $payload = $request->validated();
+        $returnToCompanyId = $payload['return_to_company_id'] ?? null;
+        unset($payload['return_to_company_id']);
 
         if (! auth()->user()->canManageRooms()) {
             abort_unless(in_array((int) $payload['sector_id'], auth()->user()->adminSectorIds(), true), 403);
@@ -99,16 +110,16 @@ class RoomController extends Controller
             'is_active' => $request->boolean('is_active', false),
         ]);
 
-        return redirect()->route('rooms.index')->with('status', 'Sala atualizada com sucesso.');
+        return $this->redirectAfterMutation($returnToCompanyId, 'Sala atualizada com sucesso.');
     }
 
-    public function destroy(Room $room): RedirectResponse
+    public function destroy(Request $request, Room $room): RedirectResponse
     {
         $this->authorize('delete', $room);
 
         $room->delete();
 
-        return redirect()->route('rooms.index')->with('status', 'Sala removida com sucesso.');
+        return $this->redirectAfterMutation($this->returnToCompanyId($request), 'Sala removida com sucesso.');
     }
 
     private function availableSectors()
@@ -120,5 +131,21 @@ class RoomController extends Controller
         }
 
         return $query->get();
+    }
+
+    private function returnToCompanyId(Request $request, ?int $fallbackCompanyId = null): ?int
+    {
+        $companyId = $request->integer('return_to_company_id') ?: $fallbackCompanyId;
+
+        return $companyId && Company::query()->whereKey($companyId)->exists() ? $companyId : null;
+    }
+
+    private function redirectAfterMutation(?int $companyId, string $status): RedirectResponse
+    {
+        if ($companyId) {
+            return redirect()->route('companies.show', $companyId)->with('status', $status);
+        }
+
+        return redirect()->route('rooms.index')->with('status', $status);
     }
 }

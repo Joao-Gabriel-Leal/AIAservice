@@ -25,16 +25,29 @@ class AdministrationFlowTest extends TestCase
         $admin = User::factory()->developer()->create();
         $this->actingAs($admin);
 
-        $this->post(route('companies.store'), [
+        $companyResponse = $this->post(route('companies.store'), [
             'name' => 'Empresa Base',
             'legal_name' => 'Empresa Base LTDA',
             'document' => '00.000.000/0001-00',
             'email' => 'contato@empresa.test',
             'phone' => '11999990000',
             'is_active' => '1',
-        ])->assertRedirect(route('companies.index', absolute: false));
+        ]);
 
         $company = Company::query()->firstOrFail();
+        $companyResponse->assertRedirect(route('companies.show', $company, absolute: false));
+
+        $this->get(route('companies.show', $company))
+            ->assertOk()
+            ->assertSee('Empresa Base')
+            ->assertSee('Nenhum setor cadastrado para esta empresa.');
+
+        $this->get(route('sectors.create', [
+            'company_id' => $company->id,
+            'return_to_company_id' => $company->id,
+        ]))
+            ->assertOk()
+            ->assertSee('Empresa Base');
 
         $this->post(route('sectors.store'), [
             'company_id' => $company->id,
@@ -42,18 +55,32 @@ class AdministrationFlowTest extends TestCase
             'color' => '#1D4ED8',
             'description' => 'Setor de TI',
             'is_active' => '1',
-        ])->assertRedirect(route('sectors.index', absolute: false));
+            'return_to_company_id' => $company->id,
+        ])->assertRedirect(route('companies.show', $company, absolute: false));
 
         $sector = Sector::query()->firstOrFail();
         $this->assertNotNull($sector->board()->first());
         $this->assertSame('#1D4ED8', $sector->displayColor());
+
+        $this->get(route('rooms.create', [
+            'sector_id' => $sector->id,
+            'return_to_company_id' => $company->id,
+        ]))
+            ->assertOk()
+            ->assertSee('Tecnologia');
 
         $this->post(route('rooms.store'), [
             'sector_id' => $sector->id,
             'name' => 'Sala 01',
             'description' => 'Sala principal',
             'is_active' => '1',
-        ])->assertRedirect(route('rooms.index', absolute: false));
+            'return_to_company_id' => $company->id,
+        ])->assertRedirect(route('companies.show', $company, absolute: false));
+
+        $this->get(route('companies.show', $company))
+            ->assertOk()
+            ->assertSee('Tecnologia')
+            ->assertSee('Sala 01');
 
         $temporaryPassword = null;
 
@@ -124,6 +151,8 @@ class AdministrationFlowTest extends TestCase
             ->get(route('rooms.index'))
             ->assertOk();
 
+        $this->get(route('sectors.index'))->assertOk();
+
         $this->post(route('rooms.store'), [
             'sector_id' => $sector->id,
             'name' => 'Sala Dev',
@@ -138,6 +167,55 @@ class AdministrationFlowTest extends TestCase
 
         $this->get(route('users.index'))->assertOk();
         $this->get(route('companies.index'))->assertOk();
+    }
+
+    public function test_company_context_redirects_after_sector_and_room_changes(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Contexto',
+            'is_active' => true,
+        ]);
+
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Infra',
+            'slug' => 'infra',
+            'is_active' => true,
+        ]);
+
+        $room = Room::query()->create([
+            'sector_id' => $sector->id,
+            'name' => 'Sala Antiga',
+            'is_active' => true,
+        ]);
+
+        $developer = User::factory()->developer()->create();
+        $this->actingAs($developer);
+
+        $this->patch(route('sectors.update', $sector), [
+            'company_id' => $company->id,
+            'name' => 'Infraestrutura',
+            'color' => '#1D4ED8',
+            'description' => 'Setor atualizado',
+            'is_active' => '1',
+            'return_to_company_id' => $company->id,
+        ])->assertRedirect(route('companies.show', $company, absolute: false));
+
+        $this->patch(route('rooms.update', $room), [
+            'sector_id' => $sector->id,
+            'name' => 'Sala 02',
+            'description' => 'Sala atualizada',
+            'is_active' => '1',
+            'return_to_company_id' => $company->id,
+        ])->assertRedirect(route('companies.show', $company, absolute: false));
+
+        $this->delete(route('rooms.destroy', $room), [
+            'return_to_company_id' => $company->id,
+        ])->assertRedirect(route('companies.show', $company, absolute: false));
+
+        $this->delete(route('sectors.destroy', $sector), [
+            'return_to_company_id' => $company->id,
+        ])->assertRedirect(route('companies.show', $company, absolute: false));
     }
 
     public function test_sector_admin_cannot_access_other_sector_records(): void
