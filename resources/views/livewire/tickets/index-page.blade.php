@@ -86,10 +86,6 @@
                 <x-sector-badge :sector="$board->sector" mode="chip">{{ $board->sector->company?->name }}</x-sector-badge>
                 <span class="portal-chip">{{ $groups->count() }} etapa(s)</span>
                 <span class="portal-chip">{{ $savedViews->count() }} view(s) salva(s)</span>
-                @if ($board->isDevelopment())
-                    <span class="portal-chip">Dev</span>
-                    <span class="portal-chip">{{ $activeSprint?->name ?? 'Backlog sem sprint ativa' }}</span>
-                @endif
             @endif
         </x-slot:meta>
     </x-portal.page-intro>
@@ -177,79 +173,6 @@
                     </form>
                 </section>
             </div>
-
-            @if ($board->isDevelopment())
-                <section class="portal-filter-block mt-4">
-                    <div class="portal-filter-block-header">
-                        <div>
-                            <p class="portal-filter-block-title">Fluxo de desenvolvimento</p>
-                            <p class="portal-filter-block-copy">Backlog, sprint atual, bugs e historico da sprint.</p>
-                        </div>
-
-                        <span class="portal-filter-summary-chip">{{ $activeSprint?->name ?? 'Sem sprint ativa' }}</span>
-                    </div>
-
-                    <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
-                        <div class="flex flex-wrap gap-2">
-                            @foreach (['all' => 'Todos', 'backlog' => 'Backlog', 'current_sprint' => 'Sprint atual', 'past_sprints' => 'Sprints passadas', 'bugs' => 'Bugs'] as $devViewKey => $devViewLabel)
-                                <button type="button" wire:click="$set('developmentView', '{{ $devViewKey }}')" class="ui-action rounded-xl px-3 py-2 text-xs {{ $developmentView === $devViewKey ? 'ui-action-primary' : 'ui-action-secondary' }}">
-                                    {{ $devViewLabel }}
-                                </button>
-                            @endforeach
-                        </div>
-
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <label class="text-xs text-slate-600">
-                                <span class="mb-1 block font-medium">Tipo</span>
-                                <select wire:model.live="workItemTypeFilter" class="ui-native-select w-full">
-                                    <option value="">Todos</option>
-                                    @foreach ($workItemTypes as $workItemType)
-                                        <option value="{{ $workItemType->value }}">{{ $workItemType->label() }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-
-                            <label class="text-xs text-slate-600">
-                                <span class="mb-1 block font-medium">Sprint passada</span>
-                                <select wire:model.live="selectedSprintId" class="ui-native-select w-full" @disabled($closedSprints->isEmpty())>
-                                    <option value="">Mais recente</option>
-                                    @foreach ($closedSprints as $closedSprint)
-                                        <option value="{{ $closedSprint->id }}">{{ $closedSprint->name }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                        </div>
-
-                        @if ($canManageSprints)
-                            <form wire:submit.prevent="movePlanningTicketToSprint" class="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                                <label class="text-xs text-slate-600">
-                                    <span class="mb-1 block font-medium">Backlog</span>
-                                    <select wire:model="planningForm.ticket_id" class="ui-native-select w-full">
-                                        <option value="">Selecionar item</option>
-                                        @foreach ($planningTickets as $planningTicket)
-                                            <option value="{{ $planningTicket->id }}">{{ $planningTicket->publicReference() }} - {{ $planningTicket->title }}</option>
-                                        @endforeach
-                                    </select>
-                                    @error('planningForm.ticket_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                                </label>
-                                <label class="text-xs text-slate-600">
-                                    <span class="mb-1 block font-medium">Sprint</span>
-                                    <select wire:model="planningForm.sprint_id" class="ui-native-select w-full">
-                                        <option value="">Selecionar sprint</option>
-                                        @foreach ($planningSprints as $planningSprint)
-                                            <option value="{{ $planningSprint->id }}">{{ $planningSprint->name }} ({{ $planningSprint->status?->label() }})</option>
-                                        @endforeach
-                                    </select>
-                                    @error('planningForm.sprint_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                                </label>
-                                <div class="flex items-end">
-                                    <button type="submit" class="ui-action ui-action-primary rounded-xl px-3 py-2 text-xs">Mover</button>
-                                </div>
-                            </form>
-                        @endif
-                    </div>
-                </section>
-            @endif
         @endif
 
         <div class="{{ $board ? 'portal-filter-section' : '' }}">
@@ -454,14 +377,6 @@
                         <span class="ticket-mobile-chip ticket-mobile-chip-soft">
                             {{ $ticket->priority?->label() }}
                         </span>
-                        @if ($board?->isDevelopment())
-                            <span class="ticket-mobile-chip ticket-mobile-chip-soft">
-                                {{ $ticket->work_item_type?->label() ?? 'Solicitacao' }}
-                            </span>
-                            <span class="ticket-mobile-chip ticket-mobile-chip-soft">
-                                {{ $ticket->sprint?->name ?? 'Backlog' }}
-                            </span>
-                        @endif
                         <span class="ticket-mobile-chip" style="--ticket-mobile-chip-color: {{ $slaMeta['color'] }}">
                             {{ $slaMeta['label'] }}
                         </span>
@@ -621,14 +536,6 @@
                                             {{ $ticket->sub_tickets_count }} subelemento(s), {{ $ticket->open_sub_tickets_count ?? 0 }} aberto(s)
                                         </span>
                                     @endif
-                                    @if ($board?->isDevelopment())
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset ring-slate-200 {{ $ticket->work_item_type?->badgeColor() ?? 'bg-slate-100 text-slate-700' }}">
-                                            {{ $ticket->work_item_type?->label() ?? 'Solicitacao' }}
-                                        </span>
-                                        <span class="inline-flex rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200">
-                                            {{ $ticket->sprint?->name ?? 'Backlog' }}
-                                        </span>
-                                    @endif
                                 </div>
                                 <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
                                 <p class="text-xs text-slate-500">{{ $ticket->catalogItem?->name ?? 'Formulario nao identificado' }}</p>
@@ -675,9 +582,6 @@
                             <td class="px-6 py-4">
                                 <div class="flex items-center justify-end gap-2">
                                     <a href="{{ route('tickets.show', $ticket) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Abrir</a>
-                                    @if ($canManageSprints && $ticket->ticket_sprint_id)
-                                        <button type="button" wire:click="moveTicketToBacklog({{ $ticket->id }})" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">Backlog</button>
-                                    @endif
                                     <button
                                         type="button"
                                         wire:click="deleteTicket({{ $ticket->id }})"
@@ -801,24 +705,6 @@
                             </select>
                             @error('manualTicketForm.assignee_id') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
                         </label>
-
-                        @if ($manualBoard->isDevelopment())
-                            <label class="text-sm text-slate-600">
-                                <span class="mb-1 block font-medium">Tipo</span>
-                                <select wire:model="manualTicketForm.work_item_type" class="ui-native-select w-full">
-                                    @foreach ($workItemTypes as $workItemType)
-                                        <option value="{{ $workItemType->value }}">{{ $workItemType->label() }}</option>
-                                    @endforeach
-                                </select>
-                                @error('manualTicketForm.work_item_type') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                            </label>
-
-                            <label class="text-sm text-slate-600">
-                                <span class="mb-1 block font-medium">Pontos</span>
-                                <input wire:model="manualTicketForm.estimate_points" type="number" min="0" max="255" class="ui-input w-full" placeholder="Sem estimativa">
-                                @error('manualTicketForm.estimate_points') <span class="mt-1 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                            </label>
-                        @endif
 
                         @if ($manualFields->isNotEmpty())
                             <div class="md:col-span-2 grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">

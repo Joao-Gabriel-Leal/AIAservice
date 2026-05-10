@@ -148,16 +148,6 @@
                                             </div>
 
                                             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">{{ $ticket->fullReference() }}</p>
-                                            @if ($board->isDevelopment())
-                                                <div class="mt-1 flex flex-wrap gap-1">
-                                                    <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium {{ $ticket->work_item_type?->badgeColor() ?? 'bg-slate-100 text-slate-700' }}">
-                                                        {{ $ticket->work_item_type?->label() ?? 'Solicitacao' }}
-                                                    </span>
-                                                    <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                                        {{ $ticket->sprint?->name ?? 'Backlog' }}
-                                                    </span>
-                                                </div>
-                                            @endif
                                             @if ($ticket->is_major_incident)
                                                 <span class="mt-1 inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 ring-1 ring-inset ring-rose-200">
                                                     Incidente massivo - {{ $ticket->incident_children_count ?? 0 }}

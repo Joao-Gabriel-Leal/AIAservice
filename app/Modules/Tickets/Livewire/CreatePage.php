@@ -3,7 +3,6 @@
 namespace App\Modules\Tickets\Livewire;
 
 use App\Enums\TicketPriority;
-use App\Enums\TicketWorkItemType;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Support\CurrentCompanyContext;
@@ -192,7 +191,6 @@ class CreatePage extends Component
             'description' => $validated['description'] ?? null,
             'requester_id' => auth()->id(),
             'priority' => $validated['priority'],
-            'work_item_type' => $form?->default_work_item_type?->value ?? TicketWorkItemType::REQUEST->value,
         ], $this->visibleDynamicValues($visibleFields), $attachments);
 
         return redirect()

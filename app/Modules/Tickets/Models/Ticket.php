@@ -3,7 +3,6 @@
 namespace App\Modules\Tickets\Models;
 
 use App\Enums\TicketPriority;
-use App\Enums\TicketWorkItemType;
 use App\Models\User;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleTicketUsage;
@@ -40,10 +39,6 @@ class Ticket extends Model
         'requester_id',
         'assignee_id',
         'priority',
-        'work_item_type',
-        'ticket_sprint_id',
-        'estimate_points',
-        'sprint_sort_order',
         'board_sort_order',
         'subticket_sort_order',
         'first_response_sla_minutes',
@@ -65,11 +60,7 @@ class Ticket extends Model
     {
         return [
             'priority' => TicketPriority::class,
-            'work_item_type' => TicketWorkItemType::class,
             'parent_ticket_id' => 'integer',
-            'ticket_sprint_id' => 'integer',
-            'estimate_points' => 'integer',
-            'sprint_sort_order' => 'integer',
             'board_sort_order' => 'integer',
             'subticket_sort_order' => 'integer',
             'first_response_sla_minutes' => 'integer',
@@ -275,11 +266,6 @@ class Ticket extends Model
         return $this->belongsTo(ServiceCatalogItem::class, 'service_catalog_item_id');
     }
 
-    public function sprint(): BelongsTo
-    {
-        return $this->belongsTo(TicketSprint::class, 'ticket_sprint_id');
-    }
-
     public function room(): BelongsTo
     {
         return $this->belongsTo(Room::class);
@@ -353,11 +339,6 @@ class Ticket extends Model
     public function automationExecutions(): HasMany
     {
         return $this->hasMany(TicketAutomationExecution::class)->latest();
-    }
-
-    public function sprintItems(): HasMany
-    {
-        return $this->hasMany(TicketSprintItem::class);
     }
 
     public function activityLogs(): MorphMany

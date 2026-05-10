@@ -58,8 +58,6 @@ class TicketBoardAccessTest extends TestCase
             'is_active' => true,
         ]);
 
-        app(SectorProvisioningService::class)->provision($sector);
-
         $operator = User::factory()->create([
             'role' => UserRole::TECHNICIAN,
             'sector_id' => $sector->id,
@@ -143,7 +141,7 @@ class TicketBoardAccessTest extends TestCase
         $this->actingAs($operator)
             ->get(route('tickets.index'))
             ->assertOk()
-            ->assertDontSeeText($supportBoard->name)
+            ->assertSeeText($supportBoard->name)
             ->assertSeeText($devBoard->name)
             ->assertDontSeeText($outsideBoard->name);
 
@@ -210,7 +208,7 @@ class TicketBoardAccessTest extends TestCase
         $this->assertGreaterThanOrEqual(1, substr_count($response->getContent(), 'Central de formularios'));
     }
 
-    public function test_operator_with_board_access_can_open_manual_creation_without_configure_access(): void
+    public function test_operator_with_sector_access_can_open_manual_creation_without_configure_access(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Operador Manual',
@@ -228,6 +226,9 @@ class TicketBoardAccessTest extends TestCase
             'sector_id' => $sector->id,
         ]);
 
+        $board->operators()->detach($operator->id);
+
+        $this->assertFalse($board->operators()->whereKey($operator->id)->exists());
         $this->assertTrue($operator->canOperateBoard($board));
 
         $this->actingAs($operator)
@@ -238,7 +239,7 @@ class TicketBoardAccessTest extends TestCase
             ->assertDontSee(route('tickets.settings', $board, absolute: false), false);
     }
 
-    public function test_user_can_open_manager_sector_boards_and_assigned_operator_boards(): void
+    public function test_user_can_open_manager_and_operator_sector_boards_without_board_operator_row(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Acesso Misto',
@@ -275,9 +276,9 @@ class TicketBoardAccessTest extends TestCase
             ['sector_id' => $operatorSector->id],
             ['access_level' => 'technician'],
         );
-        $operatorBoard->operators()->syncWithoutDetaching([$user->id]);
+        $operatorBoard->operators()->detach($user->id);
 
-        $this->assertTrue($operatorBoard->operators()->whereKey($user->id)->exists());
+        $this->assertFalse($operatorBoard->operators()->whereKey($user->id)->exists());
         $this->assertTrue($user->canOperateBoard($managerBoard));
         $this->assertTrue($user->canOperateBoard($operatorBoard));
         $this->assertFalse($user->canOperateBoard($outsideBoard));
@@ -480,7 +481,7 @@ class TicketBoardAccessTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_operator_access_is_limited_by_board_operator_assignment(): void
+    public function test_operator_access_is_limited_by_sector_not_board_operator_assignment(): void
     {
         $company = Company::query()->create([
             'name' => 'Empresa Multi Quadro',
@@ -526,10 +527,10 @@ class TicketBoardAccessTest extends TestCase
             'sector_id' => $sector->id,
         ]);
 
-        $supportBoard->operators()->sync([$supportOperator->id]);
+        $supportBoard->operators()->detach([$devOperator->id, $supportOperator->id]);
 
         $devBoard = app(SectorProvisioningService::class)->createAdditionalBoard($sector, 'Desenvolvimento', null, [$devOperator->id]);
-        $devBoard->operators()->detach($supportOperator->id);
+        $devBoard->operators()->detach([$devOperator->id, $supportOperator->id]);
         $requester = User::factory()->create();
 
         $supportTicket = Ticket::query()->create([
@@ -571,9 +572,8 @@ class TicketBoardAccessTest extends TestCase
         ]);
 
         $this->assertTrue($devOperator->canOperateBoard($devBoard));
-        $this->assertFalse($devOperator->canOperateBoard($supportBoard));
-        $this->assertTrue($supportOperator->canOperateBoard($supportBoard));
-        $this->assertFalse($supportOperator->canOperateBoard($devBoard));
+        $this->assertTrue($devOperator->canOperateBoard($supportBoard));
+        $this->assertTrue($supportOperator->canOperateBoard($devBoard));
         $this->assertFalse($devOperator->canOperateBoard($outsideBoard));
         $this->assertTrue($manager->canOperateBoard($devBoard));
 
@@ -584,7 +584,8 @@ class TicketBoardAccessTest extends TestCase
 
         $this->actingAs($devOperator)
             ->get(route('tickets.show', $supportTicket))
-            ->assertForbidden();
+            ->assertOk()
+            ->assertSeeText('Chamado de suporte');
 
         $this->actingAs($devOperator)
             ->get(route('tickets.show', $outsideTicket))

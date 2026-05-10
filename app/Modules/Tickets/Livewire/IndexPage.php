@@ -3,8 +3,6 @@
 namespace App\Modules\Tickets\Livewire;
 
 use App\Enums\TicketPriority;
-use App\Enums\TicketSprintStatus;
-use App\Enums\TicketWorkItemType;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Support\CurrentCompanyContext;
@@ -15,10 +13,8 @@ use App\Modules\Tickets\Models\TicketBoardUserPreference;
 use App\Modules\Tickets\Models\TicketField;
 use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketGroup;
-use App\Modules\Tickets\Models\TicketSprint;
 use App\Modules\Tickets\Services\SectorProvisioningService;
 use App\Modules\Tickets\Services\TicketBoardOrderService;
-use App\Modules\Tickets\Services\TicketSprintService;
 use App\Modules\Tickets\Services\TicketWorkflowService;
 use App\Modules\Tickets\Support\TicketIndexQuery;
 use Illuminate\Contracts\View\View;
@@ -71,15 +67,6 @@ class IndexPage extends Component
     #[Url(as: 'sla')]
     public string $slaFilter = 'all';
 
-    #[Url(as: 'work_type')]
-    public string $workItemTypeFilter = '';
-
-    #[Url(as: 'dev_view')]
-    public string $developmentView = 'all';
-
-    #[Url(as: 'sprint')]
-    public ?int $selectedSprintId = null;
-
     public array $fieldFilters = [];
 
     public array $collapsedGroups = [];
@@ -107,14 +94,7 @@ class IndexPage extends Component
         'ticket_group_id' => '',
         'assignee_id' => '',
         'requester_id' => '',
-        'work_item_type' => 'request',
-        'estimate_points' => '',
         'dynamic_values' => [],
-    ];
-
-    public array $planningForm = [
-        'ticket_id' => '',
-        'sprint_id' => '',
     ];
 
     public function mount(?TicketBoard $board = null): void
@@ -139,8 +119,6 @@ class IndexPage extends Component
         $this->assigneeStateFilter = $this->normalizeAssigneeStateFilter($this->assigneeStateFilter);
         $this->priorityFilter = $this->normalizePriorityFilter($this->priorityFilter);
         $this->slaFilter = $this->normalizeSlaFilter($this->slaFilter);
-        $this->workItemTypeFilter = $this->normalizeWorkItemTypeFilter($this->workItemTypeFilter);
-        $this->developmentView = $this->normalizeDevelopmentView($this->developmentView);
 
         if (! $this->selectedBoardId) {
             $this->ensureBoardSelected();
@@ -159,9 +137,6 @@ class IndexPage extends Component
         if (! $this->selectedSectorId) {
             $this->selectedGroupId = null;
             $this->fieldFilters = [];
-            $this->workItemTypeFilter = '';
-            $this->developmentView = 'all';
-            $this->selectedSprintId = null;
             $this->resetSavedViewDraft();
 
             $this->selectedBoardId = null;
@@ -180,9 +155,6 @@ class IndexPage extends Component
 
         $this->selectedGroupId = null;
         $this->fieldFilters = [];
-        $this->workItemTypeFilter = '';
-        $this->developmentView = 'all';
-        $this->selectedSprintId = null;
         $this->resetSavedViewDraft();
 
         if ($this->selectedBoardId && ! $this->boardOptions()->pluck('id')->contains($this->selectedBoardId)) {
@@ -211,9 +183,6 @@ class IndexPage extends Component
 
         $this->selectedGroupId = null;
         $this->fieldFilters = [];
-        $this->workItemTypeFilter = '';
-        $this->developmentView = 'all';
-        $this->selectedSprintId = null;
         $this->resetSavedViewDraft();
         $this->syncCollapsedGroups();
         $this->resetBoardColumnLimits();
@@ -256,10 +225,6 @@ class IndexPage extends Component
             'unassigned' => $this->applyFilterState(['assignee_state' => 'unassigned'], 'stages'),
             'sla_critical' => $this->applyFilterState(['sla_state' => 'critical'], 'list'),
             'high_priority' => $this->applyFilterState(['priority' => 'high_or_urgent'], 'list'),
-            'dev_backlog' => $this->applyFilterState(['development_view' => 'backlog'], 'list'),
-            'dev_current_sprint' => $this->applyFilterState(['development_view' => 'current_sprint'], 'stages'),
-            'dev_past_sprints' => $this->applyFilterState(['development_view' => 'past_sprints'], 'list'),
-            'dev_bugs' => $this->applyFilterState(['development_view' => 'bugs'], 'list'),
             default => null,
         };
     }
@@ -379,50 +344,6 @@ class IndexPage extends Component
         ], [
             'source' => 'board_select',
         ]);
-    }
-
-    public function movePlanningTicketToSprint(TicketSprintService $ticketSprintService): void
-    {
-        $board = $this->board();
-        abort_unless($board && $board->isDevelopment(), 404);
-        $this->authorize('update', $board);
-
-        $validated = $this->validate([
-            'planningForm.ticket_id' => ['required', 'integer'],
-            'planningForm.sprint_id' => ['required', 'integer'],
-        ]);
-
-        $ticket = Ticket::query()
-            ->where('ticket_board_id', $board->id)
-            ->findOrFail((int) $validated['planningForm']['ticket_id']);
-
-        $sprint = TicketSprint::query()
-            ->where('ticket_board_id', $board->id)
-            ->findOrFail((int) $validated['planningForm']['sprint_id']);
-
-        $ticketSprintService->assignTicket(auth()->user(), $ticket, $sprint);
-
-        $this->planningForm = ['ticket_id' => '', 'sprint_id' => ''];
-        $this->resetBoardColumnLimits();
-        $this->resetPage();
-        session()->flash('status', 'Item movido para a sprint.');
-    }
-
-    public function moveTicketToBacklog(TicketSprintService $ticketSprintService, int $ticketId): void
-    {
-        $board = $this->board();
-        abort_unless($board && $board->isDevelopment(), 404);
-        $this->authorize('update', $board);
-
-        $ticket = Ticket::query()
-            ->where('ticket_board_id', $board->id)
-            ->findOrFail($ticketId);
-
-        $ticketSprintService->assignTicket(auth()->user(), $ticket, null);
-
-        $this->resetBoardColumnLimits();
-        $this->resetPage();
-        session()->flash('status', 'Item voltou para o backlog.');
     }
 
     public function moveTicketByDrag(
@@ -582,8 +503,6 @@ class IndexPage extends Component
             'ticket_group_id' => (string) ($board->defaultGroup()?->id ?? ''),
             'assignee_id' => '',
             'requester_id' => (string) auth()->id(),
-            'work_item_type' => TicketWorkItemType::REQUEST->value,
-            'estimate_points' => '',
             'dynamic_values' => $this->manualFields($board)
                 ->mapWithKeys(fn (TicketField $field) => [$field->id => $field->type->value === 'checkbox' ? false : ''])
                 ->all(),
@@ -651,10 +570,6 @@ class IndexPage extends Component
             'requester_id' => $requesterId,
             'assignee_id' => $assigneeId,
             'priority' => $form['priority'],
-            'work_item_type' => $board->isDevelopment()
-                ? ($form['work_item_type'] ?? TicketWorkItemType::REQUEST->value)
-                : TicketWorkItemType::REQUEST->value,
-            'estimate_points' => $board->isDevelopment() ? $this->normalizeNullableId($form['estimate_points'] ?? null) : null,
         ], $dynamicValues, [], [
             'source' => 'manual_board',
         ]);
@@ -687,12 +602,6 @@ class IndexPage extends Component
         $manualFields = $manualBoard ? $this->manualFields($manualBoard) : collect();
         $manualAssignees = $manualBoard ? $this->boardAssignees($manualBoard) : collect();
         $manualRequesters = $manualBoard ? $this->manualRequesterOptions($manualBoard) : collect();
-        $board = $this->board();
-        $activeSprint = $board?->activeSprint;
-        $plannedSprints = $board?->sprints?->filter(fn (TicketSprint $sprint) => $sprint->status === TicketSprintStatus::PLANNED)->values() ?? collect();
-        $closedSprints = $board?->sprints?->filter(fn (TicketSprint $sprint) => $sprint->status === TicketSprintStatus::CLOSED)->values() ?? collect();
-        $selectedSprint = $closedSprints->firstWhere('id', $this->selectedSprintId);
-        $canManageSprints = (bool) ($board?->isDevelopment() && $user->can('update', $board));
 
         $normalizedFieldFilters = collect($this->fieldFilters)
             ->mapWithKeys(fn ($value, $fieldId) => [(int) $fieldId => is_string($value) ? trim($value) : $value])
@@ -708,7 +617,6 @@ class IndexPage extends Component
             'assignee' => trim($this->assigneeFilter),
             'assignee_state' => $this->normalizeAssigneeStateFilter($this->assigneeStateFilter),
             'priority' => $this->normalizePriorityFilter($this->priorityFilter),
-            'work_item_type' => $this->normalizeWorkItemTypeFilter($this->workItemTypeFilter),
             'sla_state' => $this->normalizeSlaFilter($this->slaFilter),
             'updated_from' => $this->updatedFrom,
             'updated_to' => $this->updatedTo,
@@ -722,16 +630,11 @@ class IndexPage extends Component
             $ticketQuery->whereIn('ticket_board_id', $allowedBoardIds);
         }
 
-        $ticketQuery->with(['sprint', 'sprintItems.sprint']);
-
-        if ($board?->isDevelopment()) {
-            $this->applyDevelopmentFilters($ticketQuery, $board, $activeSprint, $selectedSprint, $closedSprints);
-        }
-
         $tickets = $this->viewMode === 'list'
             ? (clone $ticketQuery)->paginate(12)
             : null;
 
+        $board = $this->board();
         $groups = $board?->groups ?? collect();
         $fields = $board?->fields
             ->where('is_active', true)
@@ -786,20 +689,6 @@ class IndexPage extends Component
             }
         }
 
-        $planningTickets = $canManageSprints
-            ? Ticket::query()
-                ->where('ticket_board_id', $board->id)
-                ->whereNull('ticket_sprint_id')
-                ->topLevel()
-                ->open()
-                ->orderBy('created_at')
-                ->limit(100)
-                ->get()
-            : collect();
-        $planningSprints = $canManageSprints
-            ? $board->sprints->filter(fn (TicketSprint $sprint) => in_array($sprint->status, [TicketSprintStatus::PLANNED, TicketSprintStatus::ACTIVE], true))->values()
-            : collect();
-
         $activeFilterCount = $this->activeFilterCount();
 
         return view('livewire.tickets.index-page', [
@@ -824,14 +713,6 @@ class IndexPage extends Component
             'manualAssignees' => $manualAssignees,
             'manualRequesters' => $manualRequesters,
             'priorities' => TicketPriority::cases(),
-            'workItemTypes' => TicketWorkItemType::cases(),
-            'activeSprint' => $activeSprint,
-            'plannedSprints' => $plannedSprints,
-            'closedSprints' => $closedSprints,
-            'selectedSprint' => $selectedSprint,
-            'canManageSprints' => $canManageSprints,
-            'planningTickets' => $planningTickets,
-            'planningSprints' => $planningSprints,
             'savedViews' => $this->savedViews(),
             'quickViews' => $this->quickViews(),
             'canUpdate' => true,
@@ -846,9 +727,6 @@ class IndexPage extends Component
                 'assignee' => trim($this->assigneeFilter),
                 'assignee_state' => $this->assigneeStateFilter,
                 'priority' => $this->priorityFilter,
-                'work_type' => $this->workItemTypeFilter,
-                'dev_view' => $this->developmentView,
-                'sprint' => $this->selectedSprintId,
                 'sla' => $this->slaFilter,
                 'updated_from' => $this->updatedFrom,
                 'updated_to' => $this->updatedTo,
@@ -918,9 +796,6 @@ class IndexPage extends Component
         $this->assigneeFilter = (string) ($filters['assignee'] ?? '');
         $this->assigneeStateFilter = $this->normalizeAssigneeStateFilter((string) ($filters['assignee_state'] ?? 'all'));
         $this->priorityFilter = $this->normalizePriorityFilter((string) ($filters['priority'] ?? ''));
-        $this->workItemTypeFilter = $this->normalizeWorkItemTypeFilter((string) ($filters['work_item_type'] ?? ''));
-        $this->developmentView = $this->normalizeDevelopmentView((string) ($filters['development_view'] ?? 'all'));
-        $this->selectedSprintId = $this->normalizeNullableId($filters['sprint_id'] ?? null);
         $this->slaFilter = $this->normalizeSlaFilter((string) ($filters['sla_state'] ?? 'all'));
         $this->updatedFrom = (string) ($filters['updated_from'] ?? '');
         $this->updatedTo = (string) ($filters['updated_to'] ?? '');
@@ -939,9 +814,6 @@ class IndexPage extends Component
             'assignee' => trim($this->assigneeFilter),
             'assignee_state' => $this->normalizeAssigneeStateFilter($this->assigneeStateFilter),
             'priority' => $this->normalizePriorityFilter($this->priorityFilter),
-            'work_item_type' => $this->normalizeWorkItemTypeFilter($this->workItemTypeFilter),
-            'development_view' => $this->normalizeDevelopmentView($this->developmentView),
-            'sprint_id' => $this->selectedSprintId,
             'sla_state' => $this->normalizeSlaFilter($this->slaFilter),
             'updated_from' => $this->updatedFrom,
             'updated_to' => $this->updatedTo,
@@ -969,18 +841,6 @@ class IndexPage extends Component
         }
 
         if (($filters['priority'] ?? '') !== '') {
-            $count++;
-        }
-
-        if (($filters['work_item_type'] ?? '') !== '') {
-            $count++;
-        }
-
-        if (($filters['development_view'] ?? 'all') !== 'all') {
-            $count++;
-        }
-
-        if (($filters['sprint_id'] ?? null) !== null) {
             $count++;
         }
 
@@ -1037,9 +897,6 @@ class IndexPage extends Component
             'assignee',
             'assignee_state',
             'priority',
-            'work_type',
-            'dev_view',
-            'sprint',
             'sla',
             'updated_from',
             'updated_to',
@@ -1048,23 +905,12 @@ class IndexPage extends Component
 
     private function quickViews(): array
     {
-        $views = [
+        return [
             'mine' => 'Meus chamados',
             'unassigned' => 'Sem responsavel',
             'sla_critical' => 'SLA critico',
             'high_priority' => 'Alta prioridade',
         ];
-
-        if ($this->board()?->isDevelopment()) {
-            $views += [
-                'dev_backlog' => 'Backlog',
-                'dev_current_sprint' => 'Sprint atual',
-                'dev_past_sprints' => 'Sprints passadas',
-                'dev_bugs' => 'Bugs',
-            ];
-        }
-
-        return $views;
     }
 
     private function resetSavedViewDraft(): void
@@ -1095,7 +941,7 @@ class IndexPage extends Component
         }
 
         $board = TicketBoard::query()
-            ->with(['sector.company', 'groups', 'fields.options', 'activeSprint', 'sprints.sprintItems.ticket.group'])
+            ->with(['sector.company', 'groups', 'fields.options'])
             ->with('statuses')
             ->where('is_active', true)
             ->find($this->selectedBoardId);
@@ -1130,7 +976,7 @@ class IndexPage extends Component
         }
 
         return TicketBoard::query()
-            ->with(['sector.company', 'groups', 'statuses', 'fields.options', 'activeSprint', 'sprints'])
+            ->with(['sector.company', 'groups', 'statuses', 'fields.options'])
             ->where('is_active', true)
             ->find($board->id);
     }
@@ -1154,7 +1000,7 @@ class IndexPage extends Component
         }
 
         return TicketBoard::query()
-            ->with(['sector.company', 'groups', 'statuses', 'fields.options', 'activeSprint', 'sprints'])
+            ->with(['sector.company', 'groups', 'statuses', 'fields.options'])
             ->where('is_active', true)
             ->find($board->id);
     }
@@ -1257,55 +1103,9 @@ class IndexPage extends Component
         return in_array($state, ['all', 'ok', 'warning', 'breached', 'critical'], true) ? $state : 'all';
     }
 
-    private function normalizeWorkItemTypeFilter(string $type): string
-    {
-        $allowed = collect(TicketWorkItemType::cases())
-            ->map(fn (TicketWorkItemType $case) => $case->value)
-            ->push('')
-            ->all();
-
-        return in_array($type, $allowed, true) ? $type : '';
-    }
-
-    private function normalizeDevelopmentView(string $view): string
-    {
-        return in_array($view, ['all', 'backlog', 'current_sprint', 'past_sprints', 'bugs'], true)
-            ? $view
-            : 'all';
-    }
-
     private function isBoardView(): bool
     {
         return in_array($this->viewMode, ['stages', 'kanban'], true);
-    }
-
-    private function applyDevelopmentFilters(
-        Builder $query,
-        TicketBoard $board,
-        ?TicketSprint $activeSprint,
-        ?TicketSprint $selectedSprint,
-        Collection $closedSprints,
-    ): void {
-        match ($this->normalizeDevelopmentView($this->developmentView)) {
-            'backlog' => $query->whereNull('ticket_sprint_id'),
-            'current_sprint' => $activeSprint
-                ? $query->where('ticket_sprint_id', $activeSprint->id)
-                : $query->whereRaw('1 = 0'),
-            'past_sprints' => $this->applyPastSprintFilter($query, $selectedSprint ?? $closedSprints->first()),
-            'bugs' => $query->where('work_item_type', TicketWorkItemType::BUG->value),
-            default => null,
-        };
-    }
-
-    private function applyPastSprintFilter(Builder $query, ?TicketSprint $sprint): void
-    {
-        if (! $sprint) {
-            $query->whereRaw('1 = 0');
-
-            return;
-        }
-
-        $query->whereHas('sprintItems', fn (Builder $sprintItemQuery) => $sprintItemQuery->where('ticket_sprint_id', $sprint->id));
     }
 
     private function columnTicketQuery(Builder $baseQuery, TicketBoard $board, ?int $groupId): Builder
@@ -1330,8 +1130,6 @@ class IndexPage extends Component
                 'subTickets.status',
                 'subTickets.catalogItem',
                 'subTickets.fieldValues.field.options',
-                'sprint',
-                'sprintItems.sprint',
             ])
             ->withCount([
                 'subTickets',
@@ -1461,11 +1259,7 @@ class IndexPage extends Component
     {
         return User::query()
             ->where('is_active', true)
-            ->where(function (Builder $query) use ($board): void {
-                $query
-                    ->withSectorAccess($board->sector_id, ['sector_admin'])
-                    ->orWhereHas('ticketBoardAccesses', fn (Builder $accessQuery) => $accessQuery->where('ticket_board_id', $board->id));
-            })
+            ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
     }
@@ -1554,8 +1348,6 @@ class IndexPage extends Component
             ],
             'manualTicketForm.assignee_id' => ['nullable', 'integer', 'exists:users,id'],
             'manualTicketForm.requester_id' => ['required', 'integer', 'exists:users,id'],
-            'manualTicketForm.work_item_type' => ['required', Rule::enum(TicketWorkItemType::class)],
-            'manualTicketForm.estimate_points' => ['nullable', 'integer', 'min:0', 'max:255'],
             'manualTicketForm.dynamic_values' => ['array'],
         ];
 

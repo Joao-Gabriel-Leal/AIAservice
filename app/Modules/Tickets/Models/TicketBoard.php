@@ -2,7 +2,6 @@
 
 namespace App\Modules\Tickets\Models;
 
-use App\Enums\TicketBoardWorkflowMode;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,7 +21,6 @@ class TicketBoard extends Model
         'name',
         'slug',
         'description',
-        'workflow_mode',
         'is_default',
         'is_active',
     ];
@@ -30,7 +28,6 @@ class TicketBoard extends Model
     protected function casts(): array
     {
         return [
-            'workflow_mode' => TicketBoardWorkflowMode::class,
             'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];
@@ -69,21 +66,6 @@ class TicketBoard extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
-    }
-
-    public function sprints(): HasMany
-    {
-        return $this->hasMany(TicketSprint::class)
-            ->orderByRaw("case when status = 'active' then 0 when status = 'planned' then 1 else 2 end")
-            ->orderByDesc('starts_at')
-            ->orderByDesc('id');
-    }
-
-    public function activeSprint(): HasOne
-    {
-        return $this->hasOne(TicketSprint::class)
-            ->where('status', 'active')
-            ->latestOfMany();
     }
 
     public function userAccesses(): HasMany
@@ -134,10 +116,5 @@ class TicketBoard extends Model
         return $this->groups->firstWhere('is_closed', true)
             ?? $this->groups->filter(fn (TicketGroup $group) => $group->is_active)->last()
             ?? $this->groups->last();
-    }
-
-    public function isDevelopment(): bool
-    {
-        return $this->workflow_mode === TicketBoardWorkflowMode::DEVELOPMENT;
     }
 }

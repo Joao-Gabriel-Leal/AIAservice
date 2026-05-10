@@ -6,12 +6,9 @@ use App\Enums\TicketAutomationActionType;
 use App\Enums\TicketAutomationConditionField;
 use App\Enums\TicketAutomationConditionOperator;
 use App\Enums\TicketAutomationTrigger;
-use App\Enums\TicketBoardWorkflowMode;
 use App\Enums\TicketFieldType;
 use App\Enums\TicketFormOpeningAccessLevel;
 use App\Enums\TicketPriority;
-use App\Enums\TicketSprintStatus;
-use App\Enums\TicketWorkItemType;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Support\CurrentCompanyContext;
@@ -25,10 +22,8 @@ use App\Modules\Tickets\Models\TicketFieldOption;
 use App\Modules\Tickets\Models\TicketForm;
 use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketMessageTemplate;
-use App\Modules\Tickets\Models\TicketSprint;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Services\SectorProvisioningService;
-use App\Modules\Tickets\Services\TicketSprintService;
 use App\Modules\Tickets\Services\TicketSlaService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
@@ -54,13 +49,9 @@ class SettingsPage extends Component
 
     public string $boardDescription = '';
 
-    public string $boardWorkflowMode = 'service';
-
     public string $newBoardName = '';
 
     public string $newBoardDescription = '';
-
-    public string $newBoardWorkflowMode = 'service';
 
     public array $boardOperatorIds = [];
 
@@ -142,20 +133,6 @@ class SettingsPage extends Component
     ];
 
     public ?int $editingCatalogItemId = null;
-
-    public array $sprintForm = [
-        'name' => '',
-        'goal' => '',
-        'starts_at' => '',
-        'ends_at' => '',
-    ];
-
-    public ?int $closingSprintId = null;
-
-    public array $closeSprintForm = [
-        'destination' => 'backlog',
-        'target_sprint_id' => '',
-    ];
 
     public array $templateForm = [
         'channel' => 'public',
@@ -274,12 +251,6 @@ class SettingsPage extends Component
             'templates' => 'Templates',
         ];
 
-        if ($this->board()?->isDevelopment()) {
-            $sections = array_slice($sections, 0, 6, true)
-                + ['sprints' => 'Sprints']
-                + array_slice($sections, 6, null, true);
-        }
-
         if ($this->automationsUiEnabled()) {
             $sections = array_slice($sections, 0, 4, true)
                 + ['automations' => 'Automacoes']
@@ -294,7 +265,6 @@ class SettingsPage extends Component
         $validated = $this->validate([
             'boardName' => ['required', 'string', 'max:120'],
             'boardDescription' => ['nullable', 'string'],
-            'boardWorkflowMode' => ['required', Rule::enum(TicketBoardWorkflowMode::class)],
         ]);
 
         $board = $this->board();
@@ -302,7 +272,6 @@ class SettingsPage extends Component
         $board->update([
             'name' => $validated['boardName'],
             'description' => $validated['boardDescription'] ?: null,
-            'workflow_mode' => $validated['boardWorkflowMode'],
         ]);
 
         $this->keepSectionOpen('board');
@@ -314,7 +283,6 @@ class SettingsPage extends Component
         $validated = $this->validate([
             'newBoardName' => ['required', 'string', 'max:120'],
             'newBoardDescription' => ['nullable', 'string'],
-            'newBoardWorkflowMode' => ['required', Rule::enum(TicketBoardWorkflowMode::class)],
             'newBoardOperatorIds' => ['array'],
             'newBoardOperatorIds.*' => ['integer'],
         ]);
@@ -328,13 +296,11 @@ class SettingsPage extends Component
             $validated['newBoardName'],
             $validated['newBoardDescription'] ?: null,
             $operatorIds,
-            $validated['newBoardWorkflowMode'],
         );
 
         $this->selectedBoardId = $board->id;
         $this->newBoardName = '';
         $this->newBoardDescription = '';
-        $this->newBoardWorkflowMode = TicketBoardWorkflowMode::SERVICE->value;
         $this->newBoardOperatorIds = [];
         $this->loadBoardMeta();
         $this->resetForms();
@@ -888,7 +854,6 @@ class SettingsPage extends Component
             'name' => $form->name,
             'description' => $form->description ?? '',
             'opening_access_level' => ($form->opening_access_level ?? TicketFormOpeningAccessLevel::PUBLIC)->value,
-            'default_work_item_type' => ($form->default_work_item_type ?? TicketWorkItemType::REQUEST)->value,
             'field_ids' => $form->fields->sortBy('pivot.sort_order')->pluck('id')->all(),
             'required_field_ids' => $form->fields->filter(fn (TicketField $field) => (bool) $field->pivot?->is_required)->pluck('id')->all(),
             'visibility_conditions' => $form->fields->mapWithKeys(fn (TicketField $field) => [
@@ -920,7 +885,6 @@ class SettingsPage extends Component
             'formForm.name' => ['required', 'string', 'max:80'],
             'formForm.description' => ['nullable', 'string'],
             'formForm.opening_access_level' => [Rule::enum(TicketFormOpeningAccessLevel::class)],
-            'formForm.default_work_item_type' => [Rule::enum(TicketWorkItemType::class)],
             'formForm.field_ids' => ['array'],
             'formForm.field_ids.*' => ['integer', 'exists:ticket_fields,id'],
             'formForm.required_field_ids' => ['array'],
@@ -947,7 +911,6 @@ class SettingsPage extends Component
             'name' => $validated['formForm']['name'],
             'description' => $validated['formForm']['description'] ?: null,
             'opening_access_level' => $validated['formForm']['opening_access_level'],
-            'default_work_item_type' => $validated['formForm']['default_work_item_type'] ?? TicketWorkItemType::REQUEST->value,
             'is_default' => (bool) $validated['formForm']['is_default'],
             'is_active' => (bool) $validated['formForm']['is_active'],
         ]);
@@ -1075,88 +1038,6 @@ class SettingsPage extends Component
         $this->loadBoardMeta();
         $this->keepSectionOpen('forms');
         session()->flash('status', 'Item do catalogo removido com sucesso.');
-    }
-
-    public function createSprint(TicketSprintService $ticketSprintService): void
-    {
-        $board = $this->board();
-        $this->authorize('update', $board);
-
-        $validated = $this->validate([
-            'sprintForm.name' => ['required', 'string', 'max:120'],
-            'sprintForm.goal' => ['nullable', 'string'],
-            'sprintForm.starts_at' => ['nullable', 'date'],
-            'sprintForm.ends_at' => ['nullable', 'date', 'after_or_equal:sprintForm.starts_at'],
-        ]);
-
-        $ticketSprintService->createSprint(auth()->user(), $board, $validated['sprintForm']);
-
-        $this->sprintForm = $this->emptySprintForm();
-        $this->loadBoardMeta();
-        $this->keepSectionOpen('sprints');
-        session()->flash('status', 'Sprint criada com sucesso.');
-    }
-
-    public function startSprint(TicketSprintService $ticketSprintService, int $sprintId): void
-    {
-        $sprint = $this->sprintForBoard($sprintId);
-        $ticketSprintService->startSprint(auth()->user(), $sprint);
-
-        $this->loadBoardMeta();
-        $this->keepSectionOpen('sprints');
-        session()->flash('status', 'Sprint iniciada com sucesso.');
-    }
-
-    public function prepareCloseSprint(int $sprintId): void
-    {
-        $sprint = $this->sprintForBoard($sprintId);
-        abort_unless($sprint->status === TicketSprintStatus::ACTIVE, 404);
-
-        $this->closingSprintId = $sprint->id;
-        $this->closeSprintForm = [
-            'destination' => 'backlog',
-            'target_sprint_id' => '',
-        ];
-        $this->resetValidation();
-        $this->keepSectionOpen('sprints');
-    }
-
-    public function cancelCloseSprint(): void
-    {
-        $this->closingSprintId = null;
-        $this->closeSprintForm = [
-            'destination' => 'backlog',
-            'target_sprint_id' => '',
-        ];
-        $this->resetValidation([
-            'closeSprintForm.destination',
-            'closeSprintForm.target_sprint_id',
-        ]);
-    }
-
-    public function closeSprint(TicketSprintService $ticketSprintService): void
-    {
-        $sprint = $this->sprintForBoard($this->closingSprintId);
-
-        $validated = $this->validate([
-            'closeSprintForm.destination' => ['required', Rule::in(['backlog', 'sprint'])],
-            'closeSprintForm.target_sprint_id' => ['nullable', 'integer'],
-        ]);
-
-        $targetSprintId = $this->nullableReplacementId($validated['closeSprintForm']['target_sprint_id'] ?? null);
-        $targetSprint = $targetSprintId ? $this->sprintForBoard($targetSprintId) : null;
-
-        $ticketSprintService->closeSprint(
-            auth()->user(),
-            $sprint,
-            $validated['closeSprintForm']['destination'],
-            $targetSprint,
-        );
-
-        $this->cancelCloseSprint();
-        $this->loadBoardMeta();
-        $this->keepSectionOpen('sprints');
-        session()->flash('status', 'Sprint fechada com sucesso.');
     }
 
     public function saveTemplate(): void
@@ -1799,9 +1680,6 @@ class SettingsPage extends Component
             'boardOperatorOptions' => $this->boardOperatorOptions(),
             'fieldTypes' => TicketFieldType::cases(),
             'priorities' => TicketPriority::cases(),
-            'workflowModes' => TicketBoardWorkflowMode::cases(),
-            'workItemTypes' => TicketWorkItemType::cases(),
-            'sprintStatuses' => TicketSprintStatus::cases(),
             'formConditionUsers' => $this->formConditionUsers(),
             'groupImpacts' => $board ? $board->groups->mapWithKeys(fn (TicketGroup $group) => [$group->id => $this->groupImpact($group)])->all() : [],
             'automationTriggers' => TicketAutomationTrigger::cases(),
@@ -1824,7 +1702,6 @@ class SettingsPage extends Component
         $board = $this->board();
         $this->boardName = $board?->name ?? '';
         $this->boardDescription = $board?->description ?? '';
-        $this->boardWorkflowMode = ($board?->workflow_mode ?? TicketBoardWorkflowMode::SERVICE)->value;
         $this->boardOperatorIds = $board?->operators()->pluck('users.id')->map(fn ($id) => (int) $id)->all() ?? [];
 
         if (! $this->editingCatalogItemId) {
@@ -1866,11 +1743,6 @@ class SettingsPage extends Component
             'automationRules.actions',
             'operators',
             'messageTemplates.owner',
-            'activeSprint',
-            'sprints.creator',
-            'sprints.tickets.group',
-            'sprints.sprintItems.ticket.group',
-            'sprints.sprintItems.ticket.sprint',
         ])->find($this->selectedBoardId);
 
         if (! $board) {
@@ -1961,11 +1833,7 @@ class SettingsPage extends Component
 
         return User::query()
             ->where('is_active', true)
-            ->where(function ($query) use ($board): void {
-                $query
-                    ->withSectorAccess($board->sector_id, ['sector_admin'])
-                    ->orWhereHas('ticketBoardAccesses', fn ($accessQuery) => $accessQuery->where('ticket_board_id', $board->id));
-            })
+            ->withSectorAccess($board->sector_id, ['sector_admin', 'technician'])
             ->orderBy('name')
             ->get();
     }
@@ -2035,18 +1903,6 @@ class SettingsPage extends Component
         abort_unless($template->ticket_board_id === $this->board()?->id && $template->user_id === null, 404);
 
         return $template;
-    }
-
-    private function sprintForBoard(?int $sprintId): TicketSprint
-    {
-        $sprint = TicketSprint::query()
-            ->with(['board', 'tickets.group', 'sprintItems.ticket.group'])
-            ->findOrFail($sprintId);
-
-        $this->authorize('update', $sprint->board);
-        abort_unless($sprint->ticket_board_id === $this->board()?->id, 404);
-
-        return $sprint;
     }
 
     private function hasAnyActiveSector(): bool
@@ -2134,8 +1990,6 @@ class SettingsPage extends Component
         $this->catalogForm = $this->emptyCatalogForm($board);
         $this->resetTemplateForm();
         $this->resetAutomationForm();
-        $this->sprintForm = $this->emptySprintForm();
-        $this->cancelCloseSprint();
         $this->cancelDeletion();
     }
 
@@ -2261,7 +2115,6 @@ class SettingsPage extends Component
             'name' => '',
             'description' => '',
             'opening_access_level' => TicketFormOpeningAccessLevel::PUBLIC->value,
-            'default_work_item_type' => TicketWorkItemType::REQUEST->value,
             'field_ids' => [],
             'required_field_ids' => [],
             'visibility_conditions' => [],
@@ -2390,16 +2243,6 @@ class SettingsPage extends Component
             'default_ticket_group_id' => $board?->defaultGroup()?->id,
             'default_priority' => TicketPriority::MEDIUM->value,
             'is_active' => true,
-        ];
-    }
-
-    private function emptySprintForm(): array
-    {
-        return [
-            'name' => '',
-            'goal' => '',
-            'starts_at' => '',
-            'ends_at' => '',
         ];
     }
 

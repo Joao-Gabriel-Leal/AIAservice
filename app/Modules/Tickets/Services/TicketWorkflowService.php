@@ -117,7 +117,6 @@ class TicketWorkflowService
             'requester_id' => $parent->requester_id,
             'assignee_id' => null,
             'priority' => $parent->priority,
-            'work_item_type' => $parent->work_item_type,
         ]);
 
         /** @var Ticket $subelement */
@@ -1029,8 +1028,7 @@ class TicketWorkflowService
             ->where(function (Builder $query) use ($ticket) {
                 $query
                     ->globalAdmins()
-                    ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin']))
-                    ->orWhereHas('ticketBoardAccesses', fn (Builder $accessQuery) => $accessQuery->where('ticket_board_id', $ticket->ticket_board_id));
+                    ->orWhere(fn (Builder $scopedQuery) => $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']));
             })
             ->get();
 
@@ -1105,9 +1103,8 @@ class TicketWorkflowService
                     $query
                         ->globalAdmins()
                         ->orWhere(function ($scopedQuery) use ($ticket) {
-                            $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin']);
-                        })
-                        ->orWhereHas('ticketBoardAccesses', fn (Builder $accessQuery) => $accessQuery->where('ticket_board_id', $ticket->ticket_board_id));
+                            $scopedQuery->withSectorAccess($ticket->sector_id, ['sector_admin', 'technician']);
+                        });
                 })
                 ->get()
                 ->all(),

@@ -129,10 +129,6 @@
                                             </span>
                                         @endif
                                         <span class="ui-tone-chip ui-tone-chip-neutral">{{ $ticket->requester?->name ?? 'Nao informado' }}</span>
-                                        @if ($board->isDevelopment())
-                                            <span class="ui-tone-chip ui-tone-chip-neutral">{{ $ticket->work_item_type?->label() ?? 'Solicitacao' }}</span>
-                                            <span class="ui-tone-chip ui-tone-chip-neutral">{{ $ticket->sprint?->name ?? 'Backlog' }}</span>
-                                        @endif
                                         <span class="ui-tone-chip" style="--ui-pill-color: {{ $slaMeta['color'] }}">
                                             <span class="ui-tone-dot"></span>
                                             {{ $slaMeta['label'] }}

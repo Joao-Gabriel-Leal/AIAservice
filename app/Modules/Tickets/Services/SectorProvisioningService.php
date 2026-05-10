@@ -2,7 +2,6 @@
 
 namespace App\Modules\Tickets\Services;
 
-use App\Enums\TicketBoardWorkflowMode;
 use App\Enums\TicketPriority;
 use App\Models\User;
 use App\Modules\SectorTemplates\Models\SectorTemplate;
@@ -41,7 +40,6 @@ class SectorProvisioningService
                 'name' => "Quadro {$sector->name}",
                 'slug' => $this->uniqueBoardSlug($sector->id, "Quadro {$sector->name}"),
                 'description' => "Quadro padrao do setor {$sector->name}.",
-                'workflow_mode' => TicketBoardWorkflowMode::SERVICE,
                 'is_default' => true,
                 'is_active' => true,
             ]);
@@ -119,24 +117,13 @@ class SectorProvisioningService
         return $board->fresh(['groups', 'statuses', 'forms', 'catalogItems']);
     }
 
-    public function createAdditionalBoard(
-        Sector $sector,
-        string $name,
-        ?string $description = null,
-        array $operatorIds = [],
-        TicketBoardWorkflowMode|string $workflowMode = TicketBoardWorkflowMode::SERVICE,
-    ): TicketBoard
+    public function createAdditionalBoard(Sector $sector, string $name, ?string $description = null, array $operatorIds = []): TicketBoard
     {
-        $workflowMode = $workflowMode instanceof TicketBoardWorkflowMode
-            ? $workflowMode
-            : (TicketBoardWorkflowMode::tryFrom($workflowMode) ?? TicketBoardWorkflowMode::SERVICE);
-
         $board = TicketBoard::query()->create([
             'sector_id' => $sector->id,
             'name' => $name,
             'slug' => $this->uniqueBoardSlug($sector->id, $name),
             'description' => $description,
-            'workflow_mode' => $workflowMode,
             'is_default' => false,
             'is_active' => true,
         ]);

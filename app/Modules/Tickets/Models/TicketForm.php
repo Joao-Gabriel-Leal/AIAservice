@@ -3,7 +3,6 @@
 namespace App\Modules\Tickets\Models;
 
 use App\Enums\TicketFormOpeningAccessLevel;
-use App\Enums\TicketWorkItemType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,7 +21,6 @@ class TicketForm extends Model
         'name',
         'description',
         'opening_access_level',
-        'default_work_item_type',
         'is_default',
         'is_active',
     ];
@@ -31,7 +29,6 @@ class TicketForm extends Model
     {
         return [
             'opening_access_level' => TicketFormOpeningAccessLevel::class,
-            'default_work_item_type' => TicketWorkItemType::class,
             'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];
