@@ -44,9 +44,10 @@ class MajorIncidentTest extends TestCase
             ->test(ShowPage::class, ['ticket' => $incident])
             ->call('toggleMajorIncident')
             ->assertHasNoErrors()
-            ->assertSee('Este chamado e o incidente principal.');
-
-        app(MajorIncidentService::class)->attachChild($operator, $incident->fresh(), $child);
+            ->assertSee('Incidente ativo')
+            ->set('incidentSuggestedTicketIds', [(string) $child->id])
+            ->call('linkSelectedIncidentChildren')
+            ->assertHasNoErrors();
 
         $this->assertDatabaseHas('tickets', [
             'id' => $incident->id,
@@ -59,7 +60,8 @@ class MajorIncidentTest extends TestCase
 
         Livewire::actingAs($operator)
             ->test(ShowPage::class, ['ticket' => $incident->fresh()])
-            ->assertSee('Chamados vinculados')
+            ->assertSee('Vinculados')
+            ->assertSee($child->publicReference())
             ->assertSee($child->title);
     }
 
@@ -240,11 +242,44 @@ class MajorIncidentTest extends TestCase
 
         app(MajorIncidentService::class)->markAsMajorIncident($operator, $incident);
 
+        Livewire::actingAs($operator)
+            ->test(ShowPage::class, ['ticket' => $incident->fresh()])
+            ->assertSee('Incidente ativo')
+            ->assertSee('Selecionar vinculados')
+            ->assertSee('Ver sugestoes')
+            ->assertSee('Comunicar selecionados');
+
         Livewire::actingAs($requester)
             ->test(ShowPage::class, ['ticket' => $incident->fresh()])
             ->assertDontSee('Agrupamento operacional')
             ->assertDontSee('Marcar incidente')
             ->assertDontSee('Fechar chamados selecionados');
+    }
+
+    public function test_child_ticket_shows_compact_linked_state_without_panel_links(): void
+    {
+        ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext('Incidente Filho');
+
+        $operator = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        $requester = User::factory()->create([
+            'role' => UserRole::REQUESTER,
+            'sector_id' => $sector->id,
+        ]);
+        $incident = $this->ticketFor($board, $group, $status, $requester, 'Internet caiu no bloco A');
+        $child = $this->ticketFor($board, $group, $status, $requester, 'Internet caiu na sala 3');
+
+        app(MajorIncidentService::class)->attachChild($operator, $incident, $child);
+
+        Livewire::actingAs($operator)
+            ->test(ShowPage::class, ['ticket' => $child->fresh()])
+            ->assertSee('Vinculado')
+            ->assertSee($incident->publicReference())
+            ->assertSee($incident->title)
+            ->assertSee('Desvincular')
+            ->assertDontSee('Abrir incidente');
     }
 
     private function ticketContext(string $sectorName): array

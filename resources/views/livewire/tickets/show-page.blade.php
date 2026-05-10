@@ -870,193 +870,158 @@
 
             @if ($canManageMajorIncident)
                 <section
-                    class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                    class="ticket-side-card ticket-incident-card"
                     wire:loading.class="ui-loading"
-                    wire:target="toggleMajorIncident,linkIncidentChild,unlinkIncidentChild,sendIncidentBulkMessage,closeIncidentChildren"
+                    wire:target="toggleMajorIncident,linkSelectedIncidentChildren,unlinkIncidentChild,sendIncidentBulkMessage,closeIncidentChildren"
+                    x-data="{ menuOpen: false, linkedOpen: false, suggestionsOpen: false, composer: null, suggestionSearch: '' }"
+                    x-on:click.outside="menuOpen = false; linkedOpen = false; suggestionsOpen = false"
                 >
-                    <div class="ticket-panel-heading">
-                        <p class="ticket-panel-kicker">Incidente massivo</p>
-                        <h3 class="ticket-panel-title text-[1.35rem]">Agrupamento operacional</h3>
-                        <p class="ticket-panel-copy">Use quando varios chamados representam a mesma queda, falha ou indisponibilidade.</p>
+                    @php
+                        $incidentState = $incidentParent ? 'Vinculado' : ($ticket->is_major_incident ? 'Incidente ativo' : 'Sem incidente');
+                        $incidentTone = $incidentParent ? 'sky' : ($ticket->is_major_incident ? 'rose' : 'slate');
+                        $selectedChildrenCount = collect($incidentSelectedChildIds)->count();
+                        $selectedSuggestionsCount = collect($incidentSuggestedTicketIds)->count();
+                    @endphp
+
+                    <div class="ticket-incident-head">
+                        <div class="min-w-0">
+                            <p class="ticket-panel-kicker">Incidente</p>
+                            <h3 class="ticket-incident-title">{{ $incidentState }}</h3>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="ticket-incident-menu-button"
+                            x-on:click="menuOpen = ! menuOpen; linkedOpen = false; suggestionsOpen = false"
+                            aria-label="Acoes de incidente"
+                        >
+                            <span>Acoes</span>
+                            <flux:icon.ellipsis-horizontal class="size-5" />
+                        </button>
                     </div>
 
-                    @error('incident') <span class="mt-3 block text-xs text-rose-600">{{ $message }}</span> @enderror
-                    @error('incidentSelectedChildIds') <span class="mt-3 block text-xs text-rose-600">{{ $message }}</span> @enderror
+                    <div class="ticket-incident-summary">
+                        <span class="ticket-incident-pill ticket-incident-pill-{{ $incidentTone }}">{{ $incidentState }}</span>
+                        @if ($ticket->is_major_incident)
+                            <span class="ticket-incident-pill">{{ $incidentChildren->count() }} vinculados</span>
+                        @elseif ($incidentParent)
+                            <span class="ticket-incident-pill">{{ $incidentParent->publicReference() }}</span>
+                        @else
+                            <span class="ticket-incident-pill">{{ $incidentSuggestions->count() }} sugestoes</span>
+                        @endif
+                    </div>
+
+                    @error('incident') <span class="ticket-incident-error">{{ $message }}</span> @enderror
+                    @error('incidentSelectedChildIds') <span class="ticket-incident-error">{{ $message }}</span> @enderror
+                    @error('incidentSuggestedTicketIds') <span class="ticket-incident-error">{{ $message }}</span> @enderror
+
+                    <div x-cloak x-show="menuOpen" x-transition.opacity.duration.120ms class="ticket-incident-menu">
+                        @if ($incidentParent)
+                            <button type="button" wire:click="unlinkIncidentChild({{ $ticket->id }})" x-on:click="menuOpen = false" class="ticket-incident-menu-item ticket-incident-menu-danger">
+                                Desvincular
+                            </button>
+                        @elseif ($ticket->is_major_incident)
+                            <button type="button" x-on:click="linkedOpen = ! linkedOpen; suggestionsOpen = false; composer = null; menuOpen = false" class="ticket-incident-menu-item">
+                                Selecionar vinculados
+                            </button>
+                            <button type="button" x-on:click="suggestionsOpen = ! suggestionsOpen; linkedOpen = false; composer = null; menuOpen = false" class="ticket-incident-menu-item">
+                                Ver sugestoes
+                            </button>
+                            <button type="button" wire:click="linkSelectedIncidentChildren" x-on:click="menuOpen = false" class="ticket-incident-menu-item">
+                                Adicionar selecionados
+                            </button>
+                            <button type="button" x-on:click="composer = composer === 'message' ? null : 'message'; menuOpen = false; linkedOpen = true; suggestionsOpen = false" class="ticket-incident-menu-item">
+                                Comunicar selecionados
+                            </button>
+                            <button type="button" x-on:click="composer = composer === 'close' ? null : 'close'; menuOpen = false; linkedOpen = true; suggestionsOpen = false" class="ticket-incident-menu-item">
+                                Fechar selecionados
+                            </button>
+                            <button type="button" wire:click="toggleMajorIncident" wire:confirm="Desmarcar incidente?" x-on:click="menuOpen = false" class="ticket-incident-menu-item ticket-incident-menu-danger">
+                                Desmarcar incidente
+                            </button>
+                        @else
+                            <button type="button" wire:click="toggleMajorIncident" x-on:click="menuOpen = false" class="ticket-incident-menu-item">
+                                Marcar como incidente
+                            </button>
+                        @endif
+                    </div>
 
                     @if ($incidentParent)
-                        <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
-                            <p class="text-sm font-semibold text-sky-900">Vinculado ao incidente {{ $incidentParent->publicReference() }}</p>
-                            <p class="mt-1 text-sm text-sky-700">{{ $incidentParent->title }}</p>
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                <a href="{{ route('tickets.show', $incidentParent) }}" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm">
-                                    Abrir incidente
-                                </a>
-                                <button
-                                    type="button"
-                                    wire:click="unlinkIncidentChild({{ $ticket->id }})"
-                                    wire:confirm="Remover este chamado do incidente massivo?"
-                                    class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-sm"
-                                >
-                                    Desvincular
-                                </button>
-                            </div>
+                        <div class="ticket-incident-linked">
+                            <span>{{ $incidentParent->publicReference() }}</span>
+                            <strong>{{ $incidentParent->title }}</strong>
                         </div>
                     @else
-                        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <div>
-                                <p class="text-sm font-semibold text-slate-900">
-                                    {{ $ticket->is_major_incident ? 'Este chamado e o incidente principal.' : 'Este chamado ainda nao e um incidente massivo.' }}
-                                </p>
-                                <p class="mt-1 text-sm text-slate-500">
-                                    {{ $ticket->is_major_incident ? 'Os chamados vinculados podem receber comunicados e fechamento em massa.' : 'Marque como incidente para vincular chamados repetidos.' }}
-                                </p>
+                        @if ($ticket->is_major_incident)
+                            <div class="ticket-incident-controls">
+                                <button type="button" class="ticket-incident-select" x-on:click="linkedOpen = ! linkedOpen; suggestionsOpen = false; composer = null">
+                                    <span>Vinculados</span>
+                                    <strong>{{ $selectedChildrenCount }}/{{ $incidentChildren->count() }}</strong>
+                                </button>
+
+                                <button type="button" class="ticket-incident-select" x-on:click="suggestionsOpen = ! suggestionsOpen; linkedOpen = false; composer = null">
+                                    <span>Sugestoes</span>
+                                    <strong>{{ $selectedSuggestionsCount }}/{{ $incidentSuggestions->count() }}</strong>
+                                </button>
                             </div>
 
-                            <button
-                                type="button"
-                                wire:click="toggleMajorIncident"
-                                wire:confirm="{{ $ticket->is_major_incident ? 'Desmarcar e remover os vinculos deste incidente?' : 'Marcar este chamado como incidente massivo?' }}"
-                                class="ui-action {{ $ticket->is_major_incident ? 'ui-action-secondary' : 'ui-action-primary' }} rounded-2xl px-4 py-3 text-sm font-medium"
-                            >
-                                {{ $ticket->is_major_incident ? 'Desmarcar' : 'Marcar incidente' }}
-                            </button>
-                        </div>
+                            <div x-cloak x-show="linkedOpen" x-transition.opacity.duration.120ms class="ticket-incident-dropdown">
+                                @forelse ($incidentChildren as $childTicket)
+                                    @php
+                                        $childClosed = $childTicket->isClosed();
+                                    @endphp
+                                    <label class="ticket-incident-option">
+                                        <input type="checkbox" value="{{ $childTicket->id }}" wire:model.live="incidentSelectedChildIds" @disabled($childClosed) />
+                                        <span>
+                                            <strong>{{ $childTicket->publicReference() }}</strong>
+                                            <small>{{ $childTicket->title }}</small>
+                                        </span>
+                                        @if ($childClosed)
+                                            <em>Finalizado</em>
+                                        @endif
+                                    </label>
+                                @empty
+                                    <div class="ticket-incident-empty">Nenhum vinculado.</div>
+                                @endforelse
+                            </div>
 
-                        @if ($ticket->is_major_incident)
-                            <div class="mt-4 space-y-3">
-                                <div class="flex flex-wrap items-center justify-between gap-2">
-                                    <p class="text-sm font-semibold text-slate-900">Chamados vinculados</p>
-                                    <span class="portal-chip">{{ $incidentChildren->count() }} filho(s)</span>
-                                </div>
-
-                                <div class="space-y-2">
-                                    @forelse ($incidentChildren as $childTicket)
-                                        @php
-                                            $childClosed = $childTicket->isClosed();
-                                        @endphp
-
-                                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                            <div class="flex items-start gap-3">
-                                                <input
-                                                    type="checkbox"
-                                                    value="{{ $childTicket->id }}"
-                                                    wire:model.live="incidentSelectedChildIds"
-                                                    @disabled($childClosed)
-                                                    class="mt-1 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                                />
-                                                <div class="min-w-0 flex-1">
-                                                    <div class="flex flex-wrap items-center gap-2">
-                                                        <a href="{{ route('tickets.show', $childTicket) }}" class="truncate text-sm font-semibold text-slate-900">
-                                                            {{ $childTicket->publicReference() }} - {{ $childTicket->title }}
-                                                        </a>
-                                                        @if ($childClosed)
-                                                            <span class="inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600">Encerrado</span>
-                                                        @endif
-                                                    </div>
-                                                    <p class="mt-1 text-xs text-slate-500">
-                                                        {{ $childTicket->requester?->name ?? 'Solicitante nao informado' }} - {{ $childTicket->group?->name ?? 'Sem etapa' }}
-                                                    </p>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    wire:click="unlinkIncidentChild({{ $childTicket->id }})"
-                                                    wire:confirm="Remover este chamado do incidente massivo?"
-                                                    class="ticket-mini-action ticket-mini-action-danger"
-                                                >
-                                                    Remover
-                                                </button>
-                                            </div>
-                                        </div>
-                                    @empty
-                                        <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                                            Nenhum chamado vinculado ainda. Use as sugestoes abaixo para agrupar duplicados.
-                                        </div>
-                                    @endforelse
-                                </div>
-
-                                <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                                    <p class="text-sm font-semibold text-slate-900">Atualizacao em massa</p>
-                                    <p class="mt-1 text-xs text-slate-500">A mensagem sempre entra no incidente principal e tambem nos filhos selecionados.</p>
-
-                                    <textarea
-                                        wire:model="incidentBulkMessage"
-                                        rows="3"
-                                        class="ui-input mt-3 w-full"
-                                        placeholder="Ex.: Estamos com instabilidade no link principal e o fornecedor ja foi acionado."
-                                    ></textarea>
-                                    @error('incidentBulkMessage') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-
-                                    <button
-                                        type="button"
-                                        wire:click="sendIncidentBulkMessage"
-                                        wire:loading.attr="disabled"
-                                        wire:target="sendIncidentBulkMessage"
-                                        class="ui-action ui-action-primary mt-3 rounded-2xl px-4 py-3 text-sm font-medium"
+                            <div x-cloak x-show="suggestionsOpen" x-transition.opacity.duration.120ms class="ticket-incident-dropdown">
+                                <input type="search" x-model.debounce.120ms="suggestionSearch" class="ui-input ticket-incident-search" placeholder="Buscar sugestao" />
+                                @forelse ($incidentSuggestions as $suggestedTicket)
+                                    @php
+                                        $suggestionSearchText = str($suggestedTicket->publicReference().' '.$suggestedTicket->title)->ascii()->lower()->toString();
+                                    @endphp
+                                    <label
+                                        class="ticket-incident-option"
+                                        x-show="@js($suggestionSearchText).includes(suggestionSearch.toLowerCase())"
                                     >
-                                        Publicar atualizacao
-                                    </button>
-                                </div>
+                                        <input type="checkbox" value="{{ $suggestedTicket->id }}" wire:model.live="incidentSuggestedTicketIds" />
+                                        <span>
+                                            <strong>{{ $suggestedTicket->publicReference() }}</strong>
+                                            <small>{{ $suggestedTicket->title }}</small>
+                                        </span>
+                                    </label>
+                                @empty
+                                    <div class="ticket-incident-empty">Sem sugestoes.</div>
+                                @endforelse
+                            </div>
 
-                                <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                                    <p class="text-sm font-semibold text-emerald-950">Fechar selecionados</p>
-                                    <p class="mt-1 text-xs text-emerald-800">Somente os filhos marcados acima serao encerrados com a mesma mensagem.</p>
+                            <div x-cloak x-show="composer === 'message'" x-transition.opacity.duration.120ms class="ticket-incident-popover">
+                                <textarea wire:model="incidentBulkMessage" rows="3" class="ui-input w-full" placeholder="Atualizacao"></textarea>
+                                @error('incidentBulkMessage') <span class="ticket-incident-error">{{ $message }}</span> @enderror
+                                <button type="button" wire:click="sendIncidentBulkMessage" class="ui-action ui-action-primary w-full rounded-2xl px-4 py-3 text-sm font-medium">
+                                    Comunicar
+                                </button>
+                            </div>
 
-                                    <textarea
-                                        wire:model="incidentResolutionMessage"
-                                        rows="3"
-                                        class="ui-input mt-3 w-full"
-                                        placeholder="Ex.: Link restabelecido e servicos normalizados."
-                                    ></textarea>
-                                    @error('incidentResolutionMessage') <span class="mt-2 block text-xs text-rose-600">{{ $message }}</span> @enderror
-
-                                    <button
-                                        type="button"
-                                        wire:click="closeIncidentChildren"
-                                        wire:confirm="Fechar os chamados vinculados selecionados com esta mensagem?"
-                                        wire:loading.attr="disabled"
-                                        wire:target="closeIncidentChildren"
-                                        class="ui-action ui-action-primary mt-3 rounded-2xl px-4 py-3 text-sm font-medium"
-                                    >
-                                        Fechar chamados selecionados
-                                    </button>
-                                </div>
+                            <div x-cloak x-show="composer === 'close'" x-transition.opacity.duration.120ms class="ticket-incident-popover">
+                                <textarea wire:model="incidentResolutionMessage" rows="3" class="ui-input w-full" placeholder="Solucao"></textarea>
+                                @error('incidentResolutionMessage') <span class="ticket-incident-error">{{ $message }}</span> @enderror
+                                <button type="button" wire:click="closeIncidentChildren" wire:confirm="Fechar selecionados?" class="ui-action ui-action-primary w-full rounded-2xl px-4 py-3 text-sm font-medium">
+                                    Fechar
+                                </button>
                             </div>
                         @endif
-
-                        <div class="mt-5 space-y-3">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <p class="text-sm font-semibold text-slate-900">Sugestoes de duplicidade</p>
-                                <span class="portal-chip">{{ $incidentSuggestions->count() }} sugestao(oes)</span>
-                            </div>
-
-                            @forelse ($incidentSuggestions as $suggestedTicket)
-                                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                    <div class="flex items-start justify-between gap-3">
-                                        <div class="min-w-0">
-                                            <p class="truncate text-sm font-semibold text-slate-900">
-                                                {{ $suggestedTicket->publicReference() }} - {{ $suggestedTicket->title }}
-                                            </p>
-                                            <p class="mt-1 text-xs text-slate-500">
-                                                {{ $suggestedTicket->requester?->name ?? 'Solicitante nao informado' }} - {{ $suggestedTicket->updated_at?->diffForHumans() }}
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            wire:click="linkIncidentChild({{ $suggestedTicket->id }})"
-                                            class="ui-action ui-action-secondary shrink-0 rounded-xl px-3 py-2 text-sm"
-                                        >
-                                            Vincular
-                                        </button>
-                                    </div>
-                                </div>
-                            @empty
-                                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                                    Nenhum chamado aberto parecido encontrado neste quadro nas ultimas horas.
-                                </div>
-                            @endforelse
-                        </div>
                     @endif
                 </section>
             @endif

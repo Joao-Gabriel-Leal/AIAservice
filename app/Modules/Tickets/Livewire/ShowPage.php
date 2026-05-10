@@ -48,6 +48,8 @@ class ShowPage extends Component
 
     public array $incidentSelectedChildIds = [];
 
+    public array $incidentSuggestedTicketIds = [];
+
     public string $incidentSelectionSignature = '';
 
     public array $personalTemplateForm = [
@@ -202,6 +204,38 @@ class ShowPage extends Component
         $majorIncidentService->attachChild(auth()->user(), $ticket, $child);
         $this->resetIncidentSelections();
         session()->flash('status', 'Chamado vinculado ao incidente massivo.');
+    }
+
+    public function linkSelectedIncidentChildren(MajorIncidentService $majorIncidentService): void
+    {
+        $validated = $this->validate([
+            'incidentSuggestedTicketIds' => ['required', 'array', 'min:1'],
+            'incidentSuggestedTicketIds.*' => ['integer'],
+        ], [
+            'incidentSuggestedTicketIds.required' => 'Selecione ao menos um chamado para vincular.',
+            'incidentSuggestedTicketIds.min' => 'Selecione ao menos um chamado para vincular.',
+        ]);
+
+        $ticket = $this->ticket();
+        $this->authorize('update', $ticket);
+
+        $childIds = collect($validated['incidentSuggestedTicketIds'])
+            ->map(fn (mixed $childId) => (int) $childId)
+            ->filter()
+            ->unique()
+            ->values();
+
+        foreach ($childIds as $childId) {
+            $child = Ticket::query()
+                ->visibleTo(auth()->user())
+                ->findOrFail($childId);
+
+            $majorIncidentService->attachChild(auth()->user(), $ticket->fresh() ?? $ticket, $child);
+        }
+
+        $this->incidentSuggestedTicketIds = [];
+        $this->resetIncidentSelections();
+        session()->flash('status', $childIds->count().' chamado(s) vinculado(s).');
     }
 
     public function unlinkIncidentChild(MajorIncidentService $majorIncidentService, int $childId): void
@@ -895,6 +929,7 @@ class ShowPage extends Component
     private function resetIncidentSelections(): void
     {
         $this->incidentSelectedChildIds = [];
+        $this->incidentSuggestedTicketIds = [];
         $this->incidentSelectionSignature = '';
     }
 
