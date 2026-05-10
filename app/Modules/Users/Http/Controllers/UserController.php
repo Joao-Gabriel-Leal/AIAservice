@@ -19,16 +19,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class UserController extends Controller
 {
     public function __construct(
         private readonly UserIndexQuery $userIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
@@ -80,11 +81,19 @@ class UserController extends Controller
 
         $accessUrl = url('/');
 
-        $user->notify(new AccountCreatedNotification(
-            $user->email,
-            (bool) $user->must_change_password,
-            $accessUrl,
-        ));
+        try {
+            $user->notify(new AccountCreatedNotification(
+                $user->email,
+                (bool) $user->must_change_password,
+                $accessUrl,
+            ));
+        } catch (Throwable $throwable) {
+            Log::warning('Account created notification delivery failed.', [
+                'user_id' => $user->id,
+                'exception' => $throwable::class,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
 
         return redirect()
             ->route('users.index')
@@ -257,6 +266,7 @@ class UserController extends Controller
             'room_id' => null,
         ];
     }
+
     private function issueTemporaryPassword(): string
     {
         return (string) random_int(100000, 999999);

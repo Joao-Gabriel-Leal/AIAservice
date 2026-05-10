@@ -9,14 +9,15 @@ use App\Modules\Tickets\Models\TicketAutomationRuleAction;
 use App\Modules\Tickets\Models\TicketGroup;
 use App\Modules\Tickets\Models\TicketStatus;
 use App\Modules\Tickets\Notifications\TicketActivityNotification;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 class TicketAutomationActionExecutor
 {
     public function __construct(
         private readonly TicketSlaService $ticketSlaService,
-    ) {
-    }
+    ) {}
 
     public function execute(Ticket $ticket, TicketAutomationRuleAction $action): ?array
     {
@@ -172,7 +173,15 @@ class TicketAutomationActionExecutor
             return null;
         }
 
-        Notification::send($recipients, new TicketActivityNotification($ticket, $title, $message));
+        try {
+            Notification::send($recipients, new TicketActivityNotification($ticket, $title, $message));
+        } catch (Throwable $throwable) {
+            Log::warning('Ticket automation notification delivery failed.', [
+                'ticket_id' => $ticket->id,
+                'exception' => $throwable::class,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
 
         return [
             'type' => TicketAutomationActionType::SEND_NOTIFICATION->value,

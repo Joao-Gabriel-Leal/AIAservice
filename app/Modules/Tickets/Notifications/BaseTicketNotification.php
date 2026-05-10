@@ -2,6 +2,8 @@
 
 namespace App\Modules\Tickets\Notifications;
 
+use App\Modules\Emails\Services\EmailTemplateService;
+use App\Modules\Emails\Support\EmailTemplateCatalog;
 use App\Modules\Tickets\Models\Ticket;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -19,15 +21,16 @@ abstract class BaseTicketNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        return app(EmailTemplateService::class)->channelsFor($this->emailType());
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject($this->title.' - '.$this->ticket->publicReference())
-            ->line($this->message)
-            ->action($this->actionLabel(), route('tickets.show', $this->ticket));
+        return app(EmailTemplateService::class)->mailMessage(
+            $this->emailType(),
+            $notifiable,
+            $this->emailContext($notifiable),
+        );
     }
 
     public function toArray(object $notifiable): array
@@ -45,5 +48,39 @@ abstract class BaseTicketNotification extends Notification
     protected function actionLabel(): string
     {
         return 'Abrir chamado';
+    }
+
+    protected function emailType(): string
+    {
+        return match (static::class) {
+            TicketCreatedNotification::class => EmailTemplateCatalog::TICKET_CREATED,
+            TicketUpdateNotification::class => EmailTemplateCatalog::TICKET_UPDATED,
+            TicketMessageNotification::class => EmailTemplateCatalog::TICKET_MESSAGE_CREATED,
+            TicketInternalUpdateNotification::class => EmailTemplateCatalog::TICKET_INTERNAL_MENTION,
+            TicketSlaNotification::class => EmailTemplateCatalog::TICKET_SLA_ALERT,
+            TicketRatingRequestNotification::class => EmailTemplateCatalog::TICKET_RATING_REQUEST,
+            TicketManualTimeEntryPendingApprovalNotification::class => EmailTemplateCatalog::TICKET_MANUAL_TIME_ENTRY_PENDING,
+            TicketTimeEntryReviewedNotification::class => EmailTemplateCatalog::TICKET_TIME_ENTRY_REVIEWED,
+            default => EmailTemplateCatalog::TICKET_ACTIVITY,
+        };
+    }
+
+    protected function emailContext(object $notifiable): array
+    {
+        $ticket = $this->ticket->loadMissing(['assignee', 'group', 'requester', 'sector', 'status']);
+
+        return [
+            'action_url' => route('tickets.show', $ticket),
+            'action_label' => $this->actionLabel(),
+            'notification_title' => $this->title,
+            'notification_message' => $this->message,
+            'ticket_reference' => $ticket->publicReference(),
+            'ticket_title' => $ticket->title,
+            'ticket_priority' => $ticket->priority?->label() ?? 'Sem prioridade',
+            'ticket_status' => $ticket->group?->name ?? $ticket->status?->name ?? 'Sem status',
+            'ticket_sector' => $ticket->sector?->name ?? 'Sem setor',
+            'requester_name' => $ticket->requester?->name ?? 'Sem solicitante',
+            'assignee_name' => $ticket->assignee?->name ?? 'Nao atribuido',
+        ];
     }
 }
