@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Modules\Companies\Models\Company;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Tickets\Livewire\BoardDirectoryPage;
 use App\Modules\Tickets\Livewire\IndexPage;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketBoard;
@@ -63,6 +64,22 @@ class OperationalImprovementsTest extends TestCase
             ->assertSeeText('Quadro Charlie')
             ->assertDontSeeText('Quadro Alfa')
             ->assertDontSeeText('Quadro Bravo');
+
+        $html = Livewire::actingAs($operator)
+            ->test(BoardDirectoryPage::class)
+            ->html();
+        $favoriteButton = $this->htmlFragment($html, "toggleFavorite({$favoriteBoard->id})", '</button>');
+        $regularButton = $this->htmlFragment($html, "toggleFavorite({$defaultBoard->id})", '</button>');
+
+        $this->assertStringContainsString('aria-label="Remover dos favoritos"', $favoriteButton);
+        $this->assertStringContainsString('title="Remover dos favoritos"', $favoriteButton);
+        $this->assertStringContainsString('fill="currentColor"', $favoriteButton);
+        $this->assertStringNotContainsString('>Favorito<', $favoriteButton);
+
+        $this->assertStringContainsString('aria-label="Favoritar quadro"', $regularButton);
+        $this->assertStringContainsString('title="Favoritar quadro"', $regularButton);
+        $this->assertStringContainsString('fill="none"', $regularButton);
+        $this->assertStringNotContainsString('>Favoritar<', $regularButton);
     }
 
     public function test_saved_views_and_quick_views_store_and_restore_filters(): void
@@ -261,5 +278,18 @@ class OperationalImprovementsTest extends TestCase
             'priority' => TicketPriority::HIGH,
             'last_activity_at' => now(),
         ]);
+    }
+
+    private function htmlFragment(string $html, string $startNeedle, string $endNeedle): string
+    {
+        $start = strpos($html, $startNeedle);
+
+        $this->assertNotFalse($start, "Unable to find [{$startNeedle}] in rendered HTML.");
+
+        $end = strpos($html, $endNeedle, $start);
+
+        $this->assertNotFalse($end, "Unable to find [{$endNeedle}] after [{$startNeedle}] in rendered HTML.");
+
+        return substr($html, $start, $end - $start);
     }
 }

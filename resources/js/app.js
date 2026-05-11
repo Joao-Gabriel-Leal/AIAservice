@@ -33,6 +33,323 @@ function initializePortalSidebar() {
     });
 }
 
+let enhancedSelectListenersBound = false;
+
+function enhancedSelectOptions(select) {
+    return Array.from(select.options).map((option, index) => ({
+        index,
+        value: option.value,
+        label: option.label || option.textContent?.trim() || '',
+        disabled: option.disabled,
+        selected: option.selected,
+        hidden: option.hidden,
+    })).filter((option) => ! option.hidden);
+}
+
+function selectedEnhancedSelectOption(select, options = enhancedSelectOptions(select)) {
+    return options.find((option) => option.selected)
+        || options.find((option) => ! option.disabled)
+        || options[0]
+        || { index: -1, label: '' };
+}
+
+function enabledEnhancedSelectOptions(options) {
+    return options.filter((option) => ! option.disabled);
+}
+
+function closeEnhancedSelect(root) {
+    const state = root?._uiEnhancedSelect;
+
+    if (!state) {
+        return;
+    }
+
+    root.dataset.open = 'false';
+    state.button.setAttribute('aria-expanded', 'false');
+}
+
+function closeOtherEnhancedSelects(currentRoot = null) {
+    document.querySelectorAll('.ui-enhanced-select[data-open="true"]').forEach((root) => {
+        if (root !== currentRoot) {
+            closeEnhancedSelect(root);
+        }
+    });
+}
+
+function setEnhancedSelectActiveOption(root, index) {
+    const state = root?._uiEnhancedSelect;
+
+    if (!state) {
+        return;
+    }
+
+    const options = enhancedSelectOptions(state.select);
+    const enabledOptions = enabledEnhancedSelectOptions(options);
+
+    if (enabledOptions.length === 0) {
+        state.activeIndex = -1;
+        state.button.removeAttribute('aria-activedescendant');
+        return;
+    }
+
+    const option = options.find((item) => item.index === index && ! item.disabled) ?? enabledOptions[0];
+    state.activeIndex = option.index;
+    state.button.setAttribute('aria-activedescendant', `${state.id}-option-${option.index}`);
+
+    state.menu.querySelectorAll('[role="option"]').forEach((optionButton) => {
+        optionButton.dataset.active = optionButton.id === `${state.id}-option-${option.index}` ? 'true' : 'false';
+    });
+}
+
+function moveEnhancedSelectActiveOption(root, direction) {
+    const state = root?._uiEnhancedSelect;
+
+    if (!state) {
+        return;
+    }
+
+    const options = enabledEnhancedSelectOptions(enhancedSelectOptions(state.select));
+
+    if (options.length === 0) {
+        return;
+    }
+
+    const currentIndex = options.findIndex((option) => option.index === state.activeIndex);
+    const nextIndex = currentIndex === -1
+        ? 0
+        : (currentIndex + direction + options.length) % options.length;
+
+    setEnhancedSelectActiveOption(root, options[nextIndex].index);
+}
+
+function chooseEnhancedSelectOption(root, optionIndex) {
+    const state = root?._uiEnhancedSelect;
+    const option = state?.select.options[optionIndex];
+
+    if (!state || !option || option.disabled) {
+        return;
+    }
+
+    state.select.value = option.value;
+    option.selected = true;
+    state.select.dispatchEvent(new Event('input', { bubbles: true }));
+    state.select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    syncEnhancedSelect(root);
+    closeEnhancedSelect(root);
+    state.button.focus();
+}
+
+function openEnhancedSelect(root) {
+    const state = root?._uiEnhancedSelect;
+
+    if (!state || state.select.disabled) {
+        return;
+    }
+
+    closeOtherEnhancedSelects(root);
+    syncEnhancedSelect(root);
+
+    root.dataset.open = 'true';
+    state.button.setAttribute('aria-expanded', 'true');
+    setEnhancedSelectActiveOption(root, selectedEnhancedSelectOption(state.select).index);
+}
+
+function syncEnhancedSelect(root) {
+    const state = root?._uiEnhancedSelect;
+
+    if (!state) {
+        return;
+    }
+
+    const options = enhancedSelectOptions(state.select);
+    const selectedOption = selectedEnhancedSelectOption(state.select, options);
+    const isDisabled = state.select.disabled || enabledEnhancedSelectOptions(options).length === 0;
+
+    root.classList.toggle('ui-enhanced-select-disabled', isDisabled);
+    root.classList.toggle('ui-enhanced-select-pill', state.select.classList.contains('ui-native-select-pill'));
+    state.button.disabled = isDisabled;
+    state.value.textContent = selectedOption.label;
+    state.menu.innerHTML = '';
+
+    options.forEach((option) => {
+        const optionButton = document.createElement('button');
+        optionButton.type = 'button';
+        optionButton.id = `${state.id}-option-${option.index}`;
+        optionButton.className = 'ui-enhanced-select-option';
+        optionButton.dataset.value = option.value;
+        optionButton.dataset.active = option.index === state.activeIndex ? 'true' : 'false';
+        optionButton.disabled = option.disabled;
+        optionButton.setAttribute('role', 'option');
+        optionButton.setAttribute('aria-selected', option.selected ? 'true' : 'false');
+        optionButton.textContent = option.label;
+        optionButton.addEventListener('click', () => chooseEnhancedSelectOption(root, option.index));
+        optionButton.addEventListener('mouseenter', () => {
+            if (!option.disabled) {
+                setEnhancedSelectActiveOption(root, option.index);
+            }
+        });
+
+        state.menu.append(optionButton);
+    });
+
+    setEnhancedSelectActiveOption(root, selectedOption.index);
+}
+
+function createEnhancedSelect(select) {
+    if (select.dataset.uiSelectEnhanced === 'true' && select.nextElementSibling?.classList.contains('ui-enhanced-select')) {
+        syncEnhancedSelect(select.nextElementSibling);
+        return;
+    }
+
+    if (select.dataset.uiSelectEnhanced === 'true') {
+        select.classList.remove('ui-enhanced-select-native');
+        delete select.dataset.uiSelectEnhanced;
+    }
+
+    if (select.multiple || select.size > 1 || select.hasAttribute('data-flux-select-native') || select.hasAttribute('data-ui-native-select')) {
+        return;
+    }
+
+    const id = select.id || `ui-enhanced-select-${Math.random().toString(36).slice(2)}`;
+    const root = document.createElement('div');
+    const button = document.createElement('button');
+    const value = document.createElement('span');
+    const chevron = document.createElement('span');
+    const menu = document.createElement('div');
+    const widthClasses = Array.from(select.classList).filter((className) => /^(w-|min-w-|max-w-|basis-|flex-)/.test(className));
+    const nativePillDot = select.previousElementSibling?.classList.contains('ui-native-pill-dot')
+        ? select.previousElementSibling
+        : null;
+
+    root.className = 'ui-enhanced-select';
+    if (widthClasses.length > 0) {
+        root.classList.add(...widthClasses);
+    }
+    root.dataset.open = 'false';
+    root.dataset.uiEnhancedSelect = id;
+
+    button.type = 'button';
+    button.className = 'ui-enhanced-select-button';
+    button.setAttribute('aria-haspopup', 'listbox');
+    button.setAttribute('aria-expanded', 'false');
+
+    if (select.getAttribute('aria-label')) {
+        button.setAttribute('aria-label', select.getAttribute('aria-label'));
+    } else if (select.name) {
+        button.setAttribute('aria-label', select.name);
+    }
+
+    value.className = 'ui-enhanced-select-value';
+    chevron.className = 'ui-enhanced-select-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.innerHTML = '<svg viewBox="0 0 20 20" fill="none"><path d="M5.5 7.5 10 12l4.5-4.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg>';
+
+    if (select.classList.contains('ui-native-select-pill')) {
+        const dot = document.createElement('span');
+        dot.className = 'ui-enhanced-select-dot';
+        button.append(dot);
+
+        if (nativePillDot) {
+            nativePillDot.dataset.uiHiddenByEnhancer = 'true';
+        }
+    }
+
+    button.append(value, chevron);
+
+    menu.className = 'ui-enhanced-select-menu';
+    menu.setAttribute('role', 'listbox');
+
+    root.append(button, menu);
+    select.after(root);
+    select.classList.add('ui-enhanced-select-native');
+    select.dataset.uiSelectEnhanced = 'true';
+
+    if (! select.hasAttribute('data-ui-original-tabindex')) {
+        select.dataset.uiOriginalTabindex = select.getAttribute('tabindex') ?? '';
+    }
+
+    select.tabIndex = -1;
+
+    root._uiEnhancedSelect = {
+        id,
+        select,
+        button,
+        value,
+        menu,
+        activeIndex: selectedEnhancedSelectOption(select).index,
+    };
+
+    button.addEventListener('click', () => {
+        if (root.dataset.open === 'true') {
+            closeEnhancedSelect(root);
+            return;
+        }
+
+        openEnhancedSelect(root);
+    });
+
+    button.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeEnhancedSelect(root);
+            return;
+        }
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+
+            if (root.dataset.open !== 'true') {
+                openEnhancedSelect(root);
+            }
+
+            moveEnhancedSelectActiveOption(root, event.key === 'ArrowDown' ? 1 : -1);
+            return;
+        }
+
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+
+            if (root.dataset.open !== 'true') {
+                openEnhancedSelect(root);
+                return;
+            }
+
+            chooseEnhancedSelectOption(root, root._uiEnhancedSelect.activeIndex);
+        }
+    });
+
+    select.addEventListener('change', () => syncEnhancedSelect(root));
+    select.addEventListener('input', () => syncEnhancedSelect(root));
+
+    root._uiEnhancedSelect.observer = new MutationObserver(() => syncEnhancedSelect(root));
+    root._uiEnhancedSelect.observer.observe(select, {
+        attributes: true,
+        attributeFilter: ['class', 'disabled', 'label', 'selected', 'style', 'value'],
+        childList: true,
+        subtree: true,
+    });
+
+    syncEnhancedSelect(root);
+}
+
+function initializeEnhancedSelects() {
+    document.querySelectorAll('.portal-shell select').forEach((select) => createEnhancedSelect(select));
+
+    if (enhancedSelectListenersBound) {
+        return;
+    }
+
+    enhancedSelectListenersBound = true;
+
+    document.addEventListener('click', (event) => {
+        if (! event.target.closest?.('.ui-enhanced-select')) {
+            closeOtherEnhancedSelects();
+        }
+    });
+
+    window.addEventListener('resize', () => closeOtherEnhancedSelects());
+}
+
 if (! window.ticketInlineTitle) {
     window.ticketInlineTitle = function (config) {
         return {
@@ -703,9 +1020,11 @@ window.appConfirm = showConfirmation;
 document.addEventListener('DOMContentLoaded', initializeCharts);
 document.addEventListener('DOMContentLoaded', applyInputMasks);
 document.addEventListener('DOMContentLoaded', initializePortalSidebar);
+document.addEventListener('DOMContentLoaded', initializeEnhancedSelects);
 document.addEventListener('livewire:navigated', () => {
     requestAnimationFrame(initializeCharts);
     requestAnimationFrame(applyInputMasks);
     requestAnimationFrame(initializePortalSidebar);
+    requestAnimationFrame(initializeEnhancedSelects);
 });
 window.addEventListener('theme-preference-changed', () => requestAnimationFrame(initializeCharts));

@@ -512,6 +512,184 @@
         box-shadow: none;
     }
 
+    .ui-enhanced-select-native {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: -1px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border-width: 0 !important;
+    }
+
+    .ui-enhanced-select {
+        position: relative;
+        display: inline-block;
+        min-width: min(100%, 12rem);
+        vertical-align: top;
+    }
+
+    .ui-enhanced-select.w-full {
+        display: block;
+        width: 100%;
+    }
+
+    .ui-enhanced-select-button {
+        position: relative;
+        display: flex;
+        min-height: 3rem;
+        width: 100%;
+        align-items: center;
+        gap: 0.65rem;
+        border: 1px solid rgba(226, 232, 240, 1);
+        border-radius: 1rem;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+        color: #334155;
+        cursor: pointer;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        outline: none;
+        padding: 0.72rem 2.75rem 0.72rem 1rem;
+        text-align: left;
+        transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease, color 160ms ease;
+    }
+
+    .ui-enhanced-select-button:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .ui-enhanced-select-button:focus-visible,
+    .ui-enhanced-select[data-open="true"] .ui-enhanced-select-button {
+        border-color: rgba(49, 76, 140, 0.45);
+        box-shadow: 0 18px 35px -28px rgba(15, 23, 42, 0.32), 0 0 0 4px rgba(49, 76, 140, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.84);
+    }
+
+    .ui-enhanced-select-value {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ui-enhanced-select-chevron {
+        position: absolute;
+        right: 0.9rem;
+        top: 50%;
+        display: inline-flex;
+        height: 1rem;
+        width: 1rem;
+        transform: translateY(-50%);
+        color: #64748b;
+        transition: transform 160ms ease;
+    }
+
+    .ui-enhanced-select-chevron svg {
+        height: 1rem;
+        width: 1rem;
+    }
+
+    .ui-enhanced-select[data-open="true"] .ui-enhanced-select-chevron {
+        transform: translateY(-50%) rotate(180deg);
+    }
+
+    .ui-enhanced-select-menu {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 0.38rem);
+        z-index: 70;
+        max-height: min(16rem, 50vh);
+        overflow: auto;
+        border: 1px solid rgba(203, 213, 225, 0.88);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 22px 60px -30px rgba(15, 23, 42, 0.38), 0 10px 28px -24px rgba(15, 23, 42, 0.35);
+        opacity: 0;
+        padding: 0.35rem;
+        pointer-events: none;
+        transform: translateY(-0.25rem) scale(0.98);
+        transform-origin: top center;
+        transition: opacity 140ms ease, transform 140ms ease;
+    }
+
+    .ui-enhanced-select[data-open="true"] .ui-enhanced-select-menu {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0) scale(1);
+    }
+
+    .ui-enhanced-select-option {
+        display: block;
+        width: 100%;
+        border-radius: 0.72rem;
+        color: #475569;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 650;
+        line-height: 1.25rem;
+        overflow: hidden;
+        padding: 0.62rem 0.72rem;
+        text-align: left;
+        text-overflow: ellipsis;
+        transition: background 120ms ease, color 120ms ease;
+        white-space: nowrap;
+    }
+
+    .ui-enhanced-select-option:hover,
+    .ui-enhanced-select-option[data-active="true"] {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+
+    .ui-enhanced-select-option[aria-selected="true"] {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .ui-enhanced-select-option:disabled {
+        color: #94a3b8;
+        cursor: not-allowed;
+        opacity: 0.72;
+    }
+
+    .ui-enhanced-select-disabled .ui-enhanced-select-button {
+        border-color: #e2e8f0;
+        background: #f1f5f9;
+        box-shadow: none;
+        color: #94a3b8;
+        cursor: not-allowed;
+    }
+
+    .ui-enhanced-select-pill .ui-enhanced-select-button {
+        border-color: color-mix(in srgb, var(--ui-pill-color, #64748b) 20%, white 80%);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--ui-pill-color, #64748b) 10%, white), color-mix(in srgb, var(--ui-pill-color, #64748b) 6%, white));
+        color: color-mix(in srgb, var(--ui-pill-color, #64748b) 72%, black 28%);
+        font-weight: 700;
+        padding-left: 2.6rem;
+    }
+
+    .ui-enhanced-select-dot {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        height: 0.625rem;
+        width: 0.625rem;
+        transform: translateY(-50%);
+        border-radius: 999px;
+        background-color: var(--ui-pill-color, #64748b);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-pill-color, #64748b) 14%, white);
+    }
+
+    [data-ui-hidden-by-enhancer="true"] {
+        display: none !important;
+    }
+
     .ui-confirmation {
         position: fixed;
         inset: 0;
@@ -5053,6 +5231,68 @@
         border-color: var(--portal-dark-accent);
         --tw-ring-color: var(--portal-dark-focus);
         box-shadow: 0 18px 35px -28px rgba(34, 170, 255, 0.72), 0 0 0 4px var(--portal-dark-focus), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-button {
+        border-color: var(--portal-dark-border);
+        background: linear-gradient(180deg, rgba(14, 28, 54, 0.99), rgba(9, 20, 40, 0.99));
+        box-shadow: 0 10px 24px -22px rgba(3, 8, 28, 0.92), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        color: var(--portal-dark-text-body);
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-button:hover {
+        border-color: var(--portal-dark-border-strong);
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-button:focus-visible,
+    html.dark .portal-shell .ui-enhanced-select[data-open="true"] .ui-enhanced-select-button {
+        border-color: var(--portal-dark-accent);
+        box-shadow: 0 18px 35px -28px rgba(34, 170, 255, 0.72), 0 0 0 4px var(--portal-dark-focus), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-chevron {
+        color: #a8bade;
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-menu {
+        border-color: var(--portal-dark-border);
+        background: rgba(9, 20, 40, 0.98);
+        box-shadow: 0 22px 60px -30px rgba(3, 8, 28, 0.92), 0 10px 28px -24px rgba(34, 170, 255, 0.4);
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-option {
+        color: #c7d7f5;
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-option:hover,
+    html.dark .portal-shell .ui-enhanced-select-option[data-active="true"] {
+        background: rgba(34, 170, 255, 0.14);
+        color: #f6f9ff;
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-option[aria-selected="true"] {
+        background: rgba(34, 170, 255, 0.2);
+        color: #bfdbfe;
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-option:disabled {
+        color: #7890bd;
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-disabled .ui-enhanced-select-button {
+        border-color: rgba(120, 144, 189, 0.18);
+        background: rgba(9, 20, 40, 0.72);
+        color: #7890bd;
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-pill .ui-enhanced-select-button {
+        border-color: color-mix(in srgb, var(--ui-pill-color, #94a3b8) 34%, rgba(120, 144, 189, 0.42));
+        background: linear-gradient(180deg, color-mix(in srgb, var(--ui-pill-color, #94a3b8) 20%, rgba(14, 28, 54, 0.99)), rgba(9, 20, 40, 0.99));
+        color: color-mix(in srgb, var(--ui-pill-color, #94a3b8) 42%, white 58%);
+    }
+
+    html.dark .portal-shell .ui-enhanced-select-dot {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-pill-color, #64748b) 24%, rgba(9, 20, 40, 0.96));
     }
 
     html.dark .portal-shell .ui-inline-title-display {

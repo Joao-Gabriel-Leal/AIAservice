@@ -174,18 +174,24 @@ class TicketMessageTemplateTest extends TestCase
         $html = $component->html();
         $publicComposer = $this->htmlFragment($html, 'wire:submit="sendMessage"', '</form>');
         $internalComposer = $this->htmlFragment($html, 'wire:submit="sendInternalUpdate"', '</form>');
+        $personalTemplateCard = $this->htmlFragment($html, 'Templates pessoais', '</section>');
 
         $this->assertStringContainsString('Resposta rapida', $publicComposer);
         $this->assertStringContainsString('Meu publico', $publicComposer);
         $this->assertStringNotContainsString('users:', $publicComposer);
         $this->assertStringNotContainsString('Tecnico Marcavel', $publicComposer);
         $this->assertStringNotContainsString('Nota interna', $publicComposer);
+        $this->assertStringNotContainsString('Salvar template', $publicComposer);
 
         $this->assertStringContainsString('users:', $internalComposer);
         $this->assertStringContainsString('Tecnico Marcavel', $internalComposer);
         $this->assertStringContainsString('Nota interna', $internalComposer);
         $this->assertStringContainsString('Minha nota interna', $internalComposer);
         $this->assertStringNotContainsString('Resposta rapida', $internalComposer);
+        $this->assertStringNotContainsString('Salvar template', $internalComposer);
+
+        $this->assertStringContainsString('Salvar template', $personalTemplateCard);
+        $this->assertStringContainsString("openPersonalTemplateForm('public')", $personalTemplateCard);
     }
 
     public function test_operator_can_create_edit_and_delete_personal_template(): void
@@ -210,6 +216,11 @@ class TicketMessageTemplateTest extends TestCase
 
         Livewire::actingAs($operator)
             ->test(ShowPage::class, ['ticket' => $ticket])
+            ->set('message', 'Texto temporario do chat.')
+            ->set('internalMessage', 'Texto temporario interno.')
+            ->call('openPersonalTemplateForm', TicketMessageTemplate::CHANNEL_INTERNAL)
+            ->assertSet('personalTemplateForm.channel', TicketMessageTemplate::CHANNEL_INTERNAL)
+            ->assertSet('personalTemplateForm.body', '')
             ->set('personalTemplateForm.channel', TicketMessageTemplate::CHANNEL_INTERNAL)
             ->set('personalTemplateForm.name', 'Escalar dev')
             ->set('personalTemplateForm.body', 'Validar com desenvolvimento.')

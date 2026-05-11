@@ -69,10 +69,19 @@
                         <button
                             type="button"
                             wire:click="toggleFavorite({{ $board->id }})"
-                            class="rounded-full border px-3 py-1.5 text-xs font-semibold transition {{ $board->userPreferences->first()?->is_favorite ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-900' }}"
+                            class="inline-flex size-9 items-center justify-center rounded-full border transition {{ $board->userPreferences->first()?->is_favorite ? 'border-rose-200 bg-rose-50 text-rose-600' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600' }}"
                             title="{{ $board->userPreferences->first()?->is_favorite ? 'Remover dos favoritos' : 'Favoritar quadro' }}"
+                            aria-label="{{ $board->userPreferences->first()?->is_favorite ? 'Remover dos favoritos' : 'Favoritar quadro' }}"
                         >
-                            {{ $board->userPreferences->first()?->is_favorite ? 'Favorito' : 'Favoritar' }}
+                            @if ($board->userPreferences->first()?->is_favorite)
+                                <svg viewBox="0 0 24 24" class="size-4.5" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 21.2 10.7 20C5.4 15.2 2 12.1 2 8.2 2 5.1 4.4 2.8 7.5 2.8c1.7 0 3.4.8 4.5 2.1 1.1-1.3 2.8-2.1 4.5-2.1 3.1 0 5.5 2.3 5.5 5.4 0 3.9-3.4 7-8.7 11.8L12 21.2Z" />
+                                </svg>
+                            @else
+                                <svg viewBox="0 0 24 24" class="size-4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                                </svg>
+                            @endif
                         </button>
 
                         <a href="{{ route('tickets.board.show', $board) }}" class="ui-action ui-action-primary rounded-2xl px-4 py-2.5 text-sm">

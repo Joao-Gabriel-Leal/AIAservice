@@ -323,12 +323,6 @@
 
                                 <div class="ticket-chat-composer-footer">
                                     <div class="ticket-composer-actions">
-                                        @if ($canUseMessageTemplates)
-                                            <button type="button" wire:click="openPersonalTemplateForm('public')" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
-                                                Salvar template
-                                            </button>
-                                        @endif
-
                                         <label class="ticket-attach-button" title="Anexar arquivos" aria-label="Anexar arquivos">
                                             <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
                                                 <path d="m21.4 11.1-8.7 8.7a5.2 5.2 0 0 1-7.4-7.4l9.4-9.4a3.5 3.5 0 0 1 5 5l-9.4 9.4a1.8 1.8 0 0 1-2.5-2.5l8.7-8.7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
@@ -554,12 +548,6 @@
 
                                     <div class="ticket-chat-composer-footer">
                                         <div class="ticket-composer-actions">
-                                            @if ($canUseMessageTemplates)
-                                                <button type="button" wire:click="openPersonalTemplateForm('internal')" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">
-                                                    Salvar template
-                                                </button>
-                                            @endif
-
                                             <label class="ticket-attach-button" title="Anexar arquivos" aria-label="Anexar arquivos">
                                                 <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
                                                     <path d="m21.4 11.1-8.7 8.7a5.2 5.2 0 0 1-7.4-7.4l9.4-9.4a3.5 3.5 0 0 1 5 5l-9.4 9.4a1.8 1.8 0 0 1-2.5-2.5l8.7-8.7" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
@@ -847,7 +835,7 @@
                         </div>
 
                         <button type="button" wire:click="openPersonalTemplateForm('public')" class="ui-action ui-action-secondary rounded-xl px-3 py-2 text-xs font-medium">
-                            Novo
+                            Salvar template
                         </button>
                     </div>
 
@@ -866,7 +854,7 @@
                             </div>
                         @empty
                             <div class="ticket-side-empty">
-                                Nenhum template pessoal ainda. Salve uma resposta frequente direto do composer.
+                                Nenhum template pessoal ainda. Crie uma resposta frequente para reutilizar neste quadro.
                             </div>
                         @endforelse
                     </div>
@@ -1809,7 +1797,7 @@
                     </label>
 
                     <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-                        <p class="text-xs text-slate-500">O texto entra no composer atual.</p>
+                        <p class="text-xs text-slate-500">Escolha o canal em que este template ficara disponivel.</p>
 
                         <div class="flex flex-wrap gap-3">
                             <button type="button" wire:click="cancelPersonalTemplateForm" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm font-medium">

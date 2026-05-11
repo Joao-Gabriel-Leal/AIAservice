@@ -387,7 +387,7 @@ class ShowPage extends Component
         $this->personalTemplateForm = [
             'channel' => $channel,
             'name' => '',
-            'body' => $channel === TicketMessageTemplate::CHANNEL_INTERNAL ? $this->internalMessage : $this->message,
+            'body' => '',
         ];
         $this->showPersonalTemplateForm = true;
     }
