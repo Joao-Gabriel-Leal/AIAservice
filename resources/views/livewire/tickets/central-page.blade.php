@@ -147,11 +147,6 @@
                                 <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Empresa</p>
                                 <p class="mt-3 text-base font-semibold text-slate-900">{{ $selectedSector->company?->name ?? 'Sem empresa vinculada' }}</p>
                             </div>
-
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Abertura pelo formulario</p>
-                                <p class="mt-3 text-sm text-slate-600">Use um dos formularios abaixo para cair na fila certa.</p>
-                            </div>
                         </div>
                     </section>
                 </aside>
