@@ -131,10 +131,15 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($users as $listedUser)
-                        <tr>
+                        <tr class="transition hover:bg-slate-50">
                             <td class="px-6 py-4">
-                                <p class="font-medium text-slate-900">{{ $listedUser->name }}</p>
-                                <p class="text-xs text-slate-500">{{ $listedUser->email }}</p>
+                                <a href="{{ route('users.show', $listedUser) }}" class="flex items-center gap-3 rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2">
+                                    <x-user-avatar :user="$listedUser" size="sm" class="rounded-full" />
+                                    <span class="min-w-0">
+                                        <span class="block truncate font-medium text-slate-900">{{ $listedUser->name }}</span>
+                                        <span class="block truncate text-xs text-slate-500">{{ $listedUser->email }}</span>
+                                    </span>
+                                </a>
                             </td>
                             <td class="px-6 py-4 text-slate-600">{{ $listedUser->global_role->label() }}</td>
                             <td class="px-6 py-4 text-slate-600">

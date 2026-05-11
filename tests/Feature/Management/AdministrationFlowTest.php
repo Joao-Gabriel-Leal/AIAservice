@@ -169,6 +169,48 @@ class AdministrationFlowTest extends TestCase
         $this->get(route('companies.index'))->assertOk();
     }
 
+    public function test_global_admin_can_open_user_profile_from_users_index(): void
+    {
+        $company = Company::query()->create([
+            'name' => 'Empresa Perfil',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Tecnologia',
+            'slug' => 'tecnologia',
+            'is_active' => true,
+        ]);
+
+        $admin = User::factory()->developer()->create();
+        $profileUser = User::factory()->create([
+            'name' => 'Super Admin',
+            'email' => 'admin@aiaservice.local',
+            'job_title' => 'TESTE',
+            'location' => 'Guara -DF',
+            'birth_date' => '2002-06-09',
+            'work_status' => 'medical_leave',
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $this->actingAs($admin);
+
+        $this->get(route('users.index'))
+            ->assertOk()
+            ->assertSee(route('users.show', $profileUser, absolute: false));
+
+        $this->get(route('users.show', $profileUser))
+            ->assertOk()
+            ->assertSeeText('Super Admin')
+            ->assertSeeText('TESTE')
+            ->assertSeeText('admin@aiaservice.local')
+            ->assertSeeText('Guara -DF')
+            ->assertSeeText('09/06/2002')
+            ->assertSeeText('Licenca medica')
+            ->assertSee(route('users.edit', $profileUser, absolute: false));
+    }
+
     public function test_company_context_redirects_after_sector_and_room_changes(): void
     {
         $company = Company::query()->create([
@@ -266,6 +308,7 @@ class AdministrationFlowTest extends TestCase
         $this->actingAs($sectorAdmin);
 
         $this->get(route('companies.index'))->assertForbidden();
+        $this->get(route('users.show', $foreignUser))->assertForbidden();
         $this->get(route('users.edit', $foreignUser))->assertForbidden();
         $this->get(route('rooms.index'))->assertForbidden();
     }

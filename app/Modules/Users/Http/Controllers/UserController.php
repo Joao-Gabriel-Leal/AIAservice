@@ -64,6 +64,23 @@ class UserController extends Controller
         return view('modules.users.create', $this->formData(new User));
     }
 
+    public function show(User $user): View
+    {
+        $this->authorize('view', $user);
+
+        $workStatusOptions = $this->workStatusOptions();
+
+        return view('modules.users.show', [
+            'profileUser' => $user->load([
+                'sectorAccesses.sector.company',
+                'currentAssets.currentSector',
+                'currentAssets.currentRoom',
+                'licenseAssignments.license',
+            ]),
+            'workStatus' => $workStatusOptions[(string) $user->work_status] ?? $workStatusOptions['office'],
+        ]);
+    }
+
     public function store(UserRequest $request): RedirectResponse
     {
         $this->authorize('create', User::class);
@@ -242,6 +259,19 @@ class UserController extends Controller
         $query->whereIn('id', AccessScope::currentCompanySectorIds(auth()->user()));
 
         return $query->get();
+    }
+
+    private function workStatusOptions(): array
+    {
+        return [
+            'office' => ['label' => 'No escritorio', 'classes' => 'border-sky-300 bg-sky-50 text-sky-700'],
+            'home' => ['label' => 'Trabalhando de casa', 'classes' => 'border-indigo-300 bg-indigo-50 text-indigo-700'],
+            'external' => ['label' => 'Trabalhando externamente', 'classes' => 'border-cyan-300 bg-cyan-50 text-cyan-700'],
+            'away' => ['label' => 'Ausente', 'classes' => 'border-slate-300 bg-slate-100 text-slate-700'],
+            'do_not_disturb' => ['label' => 'Nao perturbe', 'classes' => 'border-rose-300 bg-rose-50 text-rose-700'],
+            'vacation' => ['label' => 'Ferias', 'classes' => 'border-amber-300 bg-amber-50 text-amber-700'],
+            'medical_leave' => ['label' => 'Licenca medica', 'classes' => 'border-violet-300 bg-violet-50 text-violet-700'],
+        ];
     }
 
     private function legacySnapshot(GlobalUserRole $globalRole, Collection $sectorAccesses): array
