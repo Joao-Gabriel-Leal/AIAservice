@@ -73,7 +73,7 @@
             <section id="central-sector-results" class="space-y-4">
                 <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition" data-central-results-frame>
                     <div class="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div data-central-results-header>
+                        <div>
                             <div class="central-sector-pill inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]" style="--central-sector-color: {{ $selectedSector->displayColor() }}; --central-sector-soft: {{ $selectedSector->softColor() }}; --central-sector-border: {{ $selectedSector->borderColor() }};">
                                 <span class="size-2.5 rounded-full" style="background-color: {{ $selectedSector->displayColor() }}"></span>
                                 {{ $selectedSector->company?->name }}
@@ -164,7 +164,6 @@
             window.addEventListener('central-sector-selected', () => {
                 const results = document.getElementById('central-sector-results');
                 const resultsFrame = document.querySelector('[data-central-results-frame]');
-                const resultsHeader = document.querySelector('[data-central-results-header]');
                 const selectedChip = document.querySelector('[data-central-selected-chip]');
 
                 if (!results) {
@@ -186,9 +185,6 @@
                 highlightElement(resultsFrame, {
                     boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18)',
                     transform: 'translateY(-2px)',
-                });
-                highlightElement(resultsHeader, {
-                    boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.14)',
                 });
                 highlightElement(selectedChip, {
                     boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.18)',
