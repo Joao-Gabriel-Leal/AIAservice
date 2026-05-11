@@ -124,20 +124,30 @@
                         <div class="portal-company-switcher-expanded">
                             <p class="portal-company-switcher-label">Empresa atual</p>
                             @if ($availableCompanies->count() > 1)
-                                <form method="POST" action="{{ route('context.company.store') }}">
-                                    @csrf
-                                    <select
-                                        name="company_id"
-                                        class="portal-company-select"
-                                        style="appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; border-radius: 0.65rem; border: 1px solid rgba(200, 214, 244, 0.86); background-color: #111b33; background-image: url(data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2718%27 height=%2718%27 viewBox=%270 0 20 20%27 fill=%27none%27 stroke=%27%23ffffff%27 stroke-width=%271.9%27%3E%3Cpath d=%27M5.5 7.5 10 12l4.5-4.5%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.05rem; padding: 0.56rem 2rem 0.56rem 0.65rem; color: #ffffff; color-scheme: dark; outline: none;"
-                                        onchange="this.form.submit()"
-                                        aria-label="Trocar empresa atual"
-                                    >
+                                <details class="portal-company-expanded-menu">
+                                    <summary class="portal-company-expanded-trigger" aria-label="Trocar empresa atual: {{ $currentCompany->name }}">
+                                        <span>{{ $currentCompany->name }}</span>
+                                        <svg aria-hidden="true" viewBox="0 0 20 20" class="portal-company-expanded-chevron" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M5.5 7.5 10 12l4.5-4.5" />
+                                        </svg>
+                                    </summary>
+
+                                    <div class="portal-company-expanded-panel">
                                         @foreach ($availableCompanies as $companyOption)
-                                            <option value="{{ $companyOption->id }}" @selected($currentCompany->id === $companyOption->id)>{{ $companyOption->name }}</option>
+                                            <form method="POST" action="{{ route('context.company.store') }}">
+                                                @csrf
+                                                <input type="hidden" name="company_id" value="{{ $companyOption->id }}">
+                                                <button
+                                                    type="submit"
+                                                    class="portal-company-expanded-option {{ $currentCompany->id === $companyOption->id ? 'portal-company-expanded-option-active' : '' }}"
+                                                    @disabled($currentCompany->id === $companyOption->id)
+                                                >
+                                                    <span>{{ $companyOption->name }}</span>
+                                                </button>
+                                            </form>
                                         @endforeach
-                                    </select>
-                                </form>
+                                    </div>
+                                </details>
                             @else
                                 <p class="portal-company-current">{{ $currentCompany->name }}</p>
                             @endif
