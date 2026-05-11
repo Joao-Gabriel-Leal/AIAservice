@@ -1,79 +1,41 @@
 <?php
 
-namespace App\Modules\Tickets\Livewire;
+namespace App\Modules\Tickets\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Support\CurrentCompanyContext;
+use App\Modules\Tickets\Exports\TicketsExport;
 use App\Modules\Tickets\Models\Ticket;
+use App\Modules\Tickets\Support\TicketIndexOptions;
 use App\Modules\Tickets\Support\TicketReferenceCode;
-use Illuminate\Contracts\View\View;
+use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
-use Livewire\Attributes\Url;
-use Livewire\Component;
-use Livewire\WithPagination;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
-class MinePage extends Component
+class MineTicketExportController extends Controller
 {
-    use WithPagination;
-
-    #[Url(as: 'title')]
-    public string $titleFilter = '';
-
-    #[Url(as: 'sector')]
-    public ?int $selectedSectorId = null;
-
-    #[Url(as: 'status')]
-    public string $statusFilter = 'all';
-
-    #[Url(as: 'sla')]
-    public string $slaFilter = 'all';
-
-    #[Url(as: 'updated_from')]
-    public string $updatedFrom = '';
-
-    #[Url(as: 'updated_to')]
-    public string $updatedTo = '';
-
-    public function mount(): void
-    {
-        $this->statusFilter = in_array($this->statusFilter, ['all', 'open', 'closed'], true)
-            ? $this->statusFilter
-            : 'all';
-        $this->slaFilter = in_array($this->slaFilter, ['all', 'ok', 'warning', 'breached'], true)
-            ? $this->slaFilter
-            : 'all';
-
-        if ($this->selectedSectorId && ! $this->sectorOptions()->pluck('id')->contains($this->selectedSectorId)) {
-            $this->selectedSectorId = null;
-        }
+    public function __construct(
+        private readonly TicketIndexOptions $ticketIndexOptions,
+        private readonly SpreadsheetExporter $spreadsheetExporter,
+    ) {
     }
 
-    public function updated(): void
-    {
-        $this->resetPage();
-    }
-
-    public function render(): View
+    public function __invoke(Request $request): BinaryFileResponse
     {
         /** @var User $user */
-        $user = auth()->user();
+        $user = $request->user();
+        $sectorId = $request->integer('sector') ?: null;
 
-        $ticketsQuery = Ticket::query()
+        $query = Ticket::query()
             ->topLevel()
             ->where('requester_id', $user->id)
             ->whereHas('sector', fn (Builder $query) => $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId($user) ?: 0))
-            ->with([
-                'sector.company',
-                'group',
-                'status',
-                'assignee',
-                'catalogItem',
-                'rating',
-            ])
-            ->when(trim($this->titleFilter) !== '', function (Builder $query): void {
-                $term = trim($this->titleFilter);
+            ->with(['sector.company', 'group', 'requester', 'assignee', 'rating', 'catalogItem', 'parentTicket', 'fieldValues.field.options'])
+            ->when($sectorId, fn (Builder $query, int $selectedSectorId) => $query->where('sector_id', $selectedSectorId))
+            ->when(trim((string) $request->string('title')) !== '', function (Builder $query) use ($request): void {
+                $term = trim((string) $request->string('title'));
                 $normalizedReference = TicketReferenceCode::normalizeLookup($term);
 
                 $query->where(function (Builder $searchQuery) use ($term, $normalizedReference): void {
@@ -88,87 +50,23 @@ class MinePage extends Component
                     }
                 });
             })
-            ->when($this->selectedSectorId, function (Builder $query): void {
-                $query->where('sector_id', $this->selectedSectorId);
-            })
-            ->when($this->updatedFrom !== '', function (Builder $query): void {
-                $query->whereDate('updated_at', '>=', $this->updatedFrom);
-            })
-            ->when($this->updatedTo !== '', function (Builder $query): void {
-                $query->whereDate('updated_at', '<=', $this->updatedTo);
-            });
+            ->when(trim((string) $request->string('updated_from')) !== '', fn (Builder $query) => $query->whereDate('updated_at', '>=', trim((string) $request->string('updated_from'))))
+            ->when(trim((string) $request->string('updated_to')) !== '', fn (Builder $query) => $query->whereDate('updated_at', '<=', trim((string) $request->string('updated_to'))));
 
-        $this->applyStatusFilter($ticketsQuery);
-        $this->applySlaFilter($ticketsQuery);
+        $this->applyStatusFilter($query, trim((string) $request->string('status', 'all')));
+        $this->applySlaFilter($query, trim((string) $request->string('sla', 'all')));
 
-        $exportParams = array_filter([
-            'title' => trim($this->titleFilter),
-            'sector' => $this->selectedSectorId,
-            'status' => $this->statusFilter !== 'all' ? $this->statusFilter : null,
-            'sla' => $this->slaFilter !== 'all' ? $this->slaFilter : null,
-            'updated_from' => $this->updatedFrom,
-            'updated_to' => $this->updatedTo,
-        ], fn ($value) => ! is_null($value) && $value !== '');
+        $export = new TicketsExport(
+            $query->latest('last_activity_at')->latest('updated_at')->get(),
+            $this->ticketIndexOptions->fieldOptions($user, $sectorId),
+        );
 
-        return view('livewire.tickets.mine-page', [
-            'tickets' => $ticketsQuery
-                ->latest('last_activity_at')
-                ->latest('updated_at')
-                ->paginate(12),
-            'sectorOptions' => $this->sectorOptions(),
-            'exportParams' => $exportParams,
-        ])->layout('layouts.portal', [
-            'title' => 'Meus chamados',
-            'subtitle' => 'Acompanhe somente as demandas abertas por voce.',
-            'headerVariant' => 'none',
-        ]);
+        return $this->spreadsheetExporter->download($export->fileName(), $export->sheets());
     }
 
-    public function slaMeta(Ticket $ticket): array
+    private function applyStatusFilter(Builder $query, string $status): void
     {
-        $state = $ticket->overallSlaState();
-
-        return [
-            'state' => $state,
-            'color' => match ($state) {
-                'breached' => '#ef4444',
-                'warning' => '#f59e0b',
-                default => '#22c55e',
-            },
-            'label' => match ($state) {
-                'breached' => 'Estourado',
-                'warning' => 'A vencer',
-                'na' => 'Nao configurado',
-                default => 'Em dia',
-            },
-        ];
-    }
-
-    private function sectorOptions(): Collection
-    {
-        $sectorIds = Ticket::query()
-            ->topLevel()
-            ->where('requester_id', auth()->id())
-            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0))
-            ->whereNotNull('sector_id')
-            ->distinct()
-            ->pluck('sector_id');
-
-        if ($sectorIds->isEmpty()) {
-            return collect();
-        }
-
-        return Sector::query()
-            ->with('company')
-            ->whereIn('id', $sectorIds->all())
-            ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0)
-            ->orderBy('name')
-            ->get();
-    }
-
-    private function applyStatusFilter(Builder $query): void
-    {
-        if ($this->statusFilter === 'open') {
+        if ($status === 'open') {
             $query
                 ->whereNull('resolved_at')
                 ->where(function (Builder $statusQuery): void {
@@ -183,7 +81,7 @@ class MinePage extends Component
                 });
         }
 
-        if ($this->statusFilter === 'closed') {
+        if ($status === 'closed') {
             $query->where(function (Builder $statusQuery): void {
                 $statusQuery
                     ->whereNotNull('resolved_at')
@@ -193,9 +91,9 @@ class MinePage extends Component
         }
     }
 
-    private function applySlaFilter(Builder $query): void
+    private function applySlaFilter(Builder $query, string $sla): void
     {
-        match ($this->slaFilter) {
+        match ($sla) {
             'ok' => $this->applyOkSlaFilter($query),
             'warning' => $this->applyWarningSlaFilter($query),
             'breached' => $this->applyBreachedSlaFilter($query),

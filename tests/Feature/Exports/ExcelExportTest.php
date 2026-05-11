@@ -216,6 +216,64 @@ class ExcelExportTest extends TestCase
         $this->assertStringNotContainsString('Chamado Financeiro', $content);
     }
 
+    public function test_my_tickets_export_is_limited_to_the_authenticated_requester_and_filters(): void
+    {
+        ['sector' => $sector, 'room' => $room, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketScope('Solicitacoes');
+        $requester = User::factory()->create(['sector_id' => $sector->id, 'room_id' => $room->id]);
+        $otherRequester = User::factory()->create(['sector_id' => $sector->id, 'room_id' => $room->id]);
+
+        $ownVisibleTicket = Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Minha solicitacao exportavel',
+            'description' => 'Visible',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now(),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Minha solicitacao fora do filtro',
+            'description' => 'Filtered out',
+            'requester_id' => $requester->id,
+            'priority' => TicketPriority::LOW,
+            'last_activity_at' => now(),
+        ]);
+
+        Ticket::query()->create([
+            'sector_id' => $sector->id,
+            'ticket_board_id' => $board->id,
+            'ticket_group_id' => $group->id,
+            'ticket_status_id' => $status->id,
+            'room_id' => $room->id,
+            'title' => 'Solicitacao de outra pessoa',
+            'description' => 'Hidden',
+            'requester_id' => $otherRequester->id,
+            'priority' => TicketPriority::HIGH,
+            'last_activity_at' => now(),
+        ]);
+
+        $spreadsheet = $this->spreadsheetFromResponse(
+            $this->actingAs($requester)->get(route('tickets.mine.export', ['title' => 'exportavel'])),
+        );
+
+        $rows = $this->sheetValues($spreadsheet->getSheet(0));
+        $content = implode("\n", $rows);
+
+        $this->assertStringContainsString($ownVisibleTicket->reference_code, $content);
+        $this->assertStringContainsString('Minha solicitacao exportavel', $content);
+        $this->assertStringNotContainsString('Minha solicitacao fora do filtro', $content);
+        $this->assertStringNotContainsString('Solicitacao de outra pessoa', $content);
+    }
+
     public function test_knowledge_base_export_respects_search(): void
     {
         $sector = $this->knowledgeSector();

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Tickets\Http\Controllers\MineTicketExportController;
 use App\Modules\Tickets\Http\Controllers\TicketAttachmentController;
 use App\Modules\Tickets\Http\Controllers\TicketExportController;
 use App\Modules\Tickets\Livewire\BoardDirectoryPage;
@@ -21,6 +22,7 @@ Route::middleware('auth')->prefix('tickets')->name('tickets.')->group(function (
     Route::get('/export', TicketExportController::class)->name('export');
     Route::get('/central', CentralPage::class)->name('central');
     Route::get('/my', MinePage::class)->name('mine');
+    Route::get('/my/export', MineTicketExportController::class)->name('mine.export');
     Route::get('/queue', OperationalQueuePage::class)->name('queue');
     Route::get('/trash', TrashPage::class)->name('trash');
     Route::get('/boards/{board}', IndexPage::class)->name('board.show');

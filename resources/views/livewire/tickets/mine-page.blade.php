@@ -8,6 +8,7 @@
             <a href="{{ route('tickets.central') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">
                 Abrir novo chamado
             </a>
+            <x-excel-export-action :href="route('tickets.mine.export', $exportParams)" />
 
             @if (auth()->user()->hasOperationalAccess())
                 <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
