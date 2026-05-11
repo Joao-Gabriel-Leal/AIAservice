@@ -46,6 +46,7 @@ class LicenseAssignmentService
                     'assignment_id' => $assignment->id,
                     'sector_id' => $license->sector_id,
                     'assignment' => $this->assignmentPayload($assignment),
+                    'changes' => $this->activityLogService->changes([], $this->assignmentPayload($assignment)),
                 ],
             );
 
@@ -53,7 +54,7 @@ class LicenseAssignmentService
         });
     }
 
-    public function updateAssignment(License $license, LicenseAssignment $assignment, array $validated): LicenseAssignment
+    public function updateAssignment(License $license, LicenseAssignment $assignment, array $validated, ?User $actor = null): LicenseAssignment
     {
         $this->assertBelongsToLicense($license, $assignment);
 
@@ -68,11 +69,29 @@ class LicenseAssignmentService
             $this->ensureUniqueActiveAssignment($license, $payload['user_id'], $payload['assigned_email'], $assignment->id);
         }
 
-        return DB::transaction(function () use ($assignment, $payload) {
+        return DB::transaction(function () use ($license, $assignment, $payload, $actor) {
+            $before = $this->assignmentPayload($assignment->fresh(['user']));
+
             $assignment->fill(Arr::except($payload, ['created_by']));
             $assignment->save();
 
-            return $assignment->fresh(['user', 'creator']);
+            $assignment = $assignment->fresh(['user', 'creator']);
+
+            $this->activityLogService->logChanges(
+                $actor,
+                $license,
+                'license.assignment.updated',
+                'Atribuicao de licenca atualizada.',
+                $before,
+                $this->assignmentPayload($assignment),
+                [
+                    'license_id' => $license->id,
+                    'assignment_id' => $assignment->id,
+                    'sector_id' => $license->sector_id,
+                ],
+            );
+
+            return $assignment;
         });
     }
 
@@ -123,6 +142,7 @@ class LicenseAssignmentService
                     'sector_id' => $license->sector_id,
                     'from' => $before,
                     'to' => $this->assignmentPayload($assignment),
+                    'changes' => $this->activityLogService->changes($before, $this->assignmentPayload($assignment)),
                 ],
             );
 
@@ -158,6 +178,7 @@ class LicenseAssignmentService
                     'assignment_id' => $assignment->id,
                     'sector_id' => $license->sector_id,
                     'assignment' => $before,
+                    'changes' => $this->activityLogService->changes($before, $this->assignmentPayload($assignment)),
                 ],
             );
 

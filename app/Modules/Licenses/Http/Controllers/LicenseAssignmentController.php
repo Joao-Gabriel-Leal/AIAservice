@@ -32,7 +32,7 @@ class LicenseAssignmentController extends Controller
     {
         $this->authorize('update', $license);
 
-        $this->licenseAssignmentService->updateAssignment($license, $assignment, $request->validated());
+        $this->licenseAssignmentService->updateAssignment($license, $assignment, $request->validated(), $request->user());
 
         return redirect()
             ->route('licenses.show', $license)

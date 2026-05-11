@@ -2,6 +2,7 @@
 
 namespace App\Concerns;
 
+use App\Modules\Shared\Services\ActivityLogService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
@@ -29,10 +30,29 @@ trait UpdatesUserPassword
             throw $exception;
         }
 
+        $mustChangePasswordBefore = (bool) $user->must_change_password;
+
         $user->update([
             'password' => $validated['password'],
             'must_change_password' => false,
         ]);
+
+        app(ActivityLogService::class)->log(
+            $user,
+            $user,
+            'user.password.changed',
+            'Senha alterada pelo usuario.',
+            [
+                'target_user_id' => $user->id,
+                'changes' => [
+                    'password' => app(ActivityLogService::class)->protectedChange(),
+                    'must_change_password' => [
+                        'before' => $mustChangePasswordBefore,
+                        'after' => false,
+                    ],
+                ],
+            ],
+        );
 
         $this->resetPasswordFormFields();
     }

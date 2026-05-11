@@ -8,11 +8,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\KnowledgeBase\Exports\KnowledgeBaseArticlesExport;
 use App\Modules\KnowledgeBase\Http\Requests\KnowledgeBaseArticleRequest;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticle;
-use App\Modules\KnowledgeBase\Models\KnowledgeBaseAttachment;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleFeedback;
 use App\Modules\KnowledgeBase\Models\KnowledgeBaseArticleTicketUsage;
+use App\Modules\KnowledgeBase\Models\KnowledgeBaseAttachment;
 use App\Modules\KnowledgeBase\Services\KnowledgeBaseArticleSearchService;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Services\ActivityLogService;
 use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\Ticket;
 use App\Support\Exports\SpreadsheetExporter;
@@ -30,6 +31,7 @@ class KnowledgeBaseArticleController extends Controller
     public function __construct(
         private readonly KnowledgeBaseArticleSearchService $searchService,
         private readonly SpreadsheetExporter $spreadsheetExporter,
+        private readonly ActivityLogService $activityLogService,
     ) {}
 
     public function manage(Request $request): View
@@ -167,6 +169,19 @@ class KnowledgeBaseArticleController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        $this->activityLogService->logChanges(
+            $request->user(),
+            $article,
+            'knowledge_base.article.created',
+            'Artigo criado.',
+            [],
+            $this->articleAuditSnapshot($article),
+            [
+                'sector_id' => $article->sector_id,
+                'article_id' => $article->id,
+            ],
+        );
+
         $this->storeAttachments($article, $request->file('attachments', []), $request->user()->id);
 
         return redirect()->route('knowledge-base.manage')->with('status', 'Artigo criado com sucesso.');
@@ -201,6 +216,20 @@ class KnowledgeBaseArticleController extends Controller
             ...$this->normalizedPayload($payload, $ticket, $canPublish),
             'created_by' => $request->user()->id,
         ]);
+
+        $this->activityLogService->logChanges(
+            $request->user(),
+            $article,
+            'knowledge_base.article.created_from_ticket',
+            'Artigo criado a partir de chamado.',
+            [],
+            $this->articleAuditSnapshot($article),
+            [
+                'sector_id' => $article->sector_id,
+                'article_id' => $article->id,
+                'ticket_id' => $ticket->id,
+            ],
+        );
 
         $this->storeAttachments($article, $request->file('attachments', []), $request->user()->id);
         $this->recordTicketUsage($article, $ticket, $request->user()->id);
@@ -239,6 +268,7 @@ class KnowledgeBaseArticleController extends Controller
         abort_unless($this->availableSectors()->pluck('id')->contains((int) $payload['sector_id']), 403);
 
         $coverImagePathToDelete = null;
+        $before = $this->articleAuditSnapshot($article);
 
         if ($coverImagePath = $this->storeCoverImage($request->file('cover_image'))) {
             $coverImagePathToDelete = $article->cover_image_path;
@@ -252,6 +282,19 @@ class KnowledgeBaseArticleController extends Controller
             ...$this->normalizedPayload($payload, null, true, false),
         ]);
 
+        $this->activityLogService->logChanges(
+            $request->user(),
+            $article,
+            'knowledge_base.article.updated',
+            'Artigo atualizado.',
+            $before,
+            $this->articleAuditSnapshot($article->fresh()),
+            [
+                'sector_id' => $article->sector_id,
+                'article_id' => $article->id,
+            ],
+        );
+
         $this->deleteCoverImagePath($coverImagePathToDelete);
 
         $this->removeAttachments($article, $request->input('remove_attachments', []));
@@ -263,6 +306,21 @@ class KnowledgeBaseArticleController extends Controller
     public function destroy(KnowledgeBaseArticle $article): RedirectResponse
     {
         $this->authorize('delete', $article);
+
+        $before = $this->articleAuditSnapshot($article);
+
+        $this->activityLogService->log(
+            auth()->user(),
+            $article,
+            'knowledge_base.article.deleted',
+            'Artigo removido.',
+            [
+                'sector_id' => $article->sector_id,
+                'article_id' => $article->id,
+                'before' => $before,
+                'changes' => $this->activityLogService->changes($before, array_fill_keys(array_keys($before), null)),
+            ],
+        );
 
         $article->delete();
 
@@ -448,5 +506,21 @@ class KnowledgeBaseArticleController extends Controller
         }
 
         $article->attachments()->whereIn('id', $normalizedIds)->delete();
+    }
+
+    private function articleAuditSnapshot(KnowledgeBaseArticle $article): array
+    {
+        return $this->activityLogService->snapshot($article, [
+            'sector_id',
+            'created_by',
+            'generated_from_ticket_id',
+            'title',
+            'summary',
+            'cover_image_path',
+            'content',
+            'visibility',
+            'editorial_status',
+            'is_active',
+        ]);
     }
 }

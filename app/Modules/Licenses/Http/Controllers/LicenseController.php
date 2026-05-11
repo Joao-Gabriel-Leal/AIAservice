@@ -12,6 +12,7 @@ use App\Modules\Licenses\Http\Requests\LicenseRequest;
 use App\Modules\Licenses\Models\License;
 use App\Modules\Licenses\Support\LicenseIndexQuery;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Services\ActivityLogService;
 use App\Modules\Shared\Support\AccessScope;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
@@ -24,6 +25,7 @@ class LicenseController extends Controller
     public function __construct(
         private readonly LicenseIndexQuery $licenseIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
+        private readonly ActivityLogService $activityLogService,
     ) {}
 
     public function index(Request $request): View
@@ -76,6 +78,19 @@ class LicenseController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
+        $this->activityLogService->logChanges(
+            $request->user(),
+            $license,
+            'license.created',
+            'Licenca cadastrada.',
+            [],
+            $this->licenseAuditSnapshot($license),
+            [
+                'sector_id' => $license->sector_id,
+                'license_id' => $license->id,
+            ],
+        );
+
         return redirect()
             ->route('licenses.show', $license)
             ->with('status', 'Licenca cadastrada com sucesso.');
@@ -127,7 +142,22 @@ class LicenseController extends Controller
         $this->authorize('update', $license);
         abort_unless(in_array((int) $request->validated('sector_id'), AccessScope::currentCompanySectorIds($request->user()), true), 403);
 
+        $before = $this->licenseAuditSnapshot($license);
+
         $license->update($request->validated());
+
+        $this->activityLogService->logChanges(
+            $request->user(),
+            $license,
+            'license.updated',
+            'Licenca atualizada.',
+            $before,
+            $this->licenseAuditSnapshot($license->fresh()),
+            [
+                'sector_id' => $license->sector_id,
+                'license_id' => $license->id,
+            ],
+        );
 
         return redirect()
             ->route('licenses.show', $license)
@@ -164,5 +194,27 @@ class LicenseController extends Controller
             ->orderBy('name')
             ->orderBy('email')
             ->get();
+    }
+
+    private function licenseAuditSnapshot(License $license): array
+    {
+        return $this->activityLogService->snapshot($license, [
+            'sector_id',
+            'vendor_name',
+            'product_name',
+            'plan_name',
+            'license_reference',
+            'supplier_name',
+            'seats_total',
+            'status',
+            'billing_cycle',
+            'cost_amount',
+            'cost_currency',
+            'purchased_at',
+            'renewal_date',
+            'expires_at',
+            'auto_renew',
+            'notes',
+        ]);
     }
 }

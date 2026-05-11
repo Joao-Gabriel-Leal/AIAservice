@@ -161,6 +161,7 @@ class TicketWorkflowService
     public function updateTicket(User $actor, Ticket $ticket, array $attributes, array $context = []): Ticket
     {
         $wasClosed = $ticket->isClosed();
+        $before = $this->ticketAuditSnapshot($ticket);
         $original = [
             'assignee_id' => $ticket->assignee_id,
             'ticket_group_id' => $ticket->ticket_group_id,
@@ -213,8 +214,8 @@ class TicketWorkflowService
         $this->ticketSlaService->captureFirstResponse($actor, $ticket);
         $this->ticketSlaService->evaluateTicket($ticket);
 
-        $this->activityLogService->log($actor, $ticket, 'ticket.updated', 'Chamado atualizado.', [
-            'changes' => $attributes,
+        $this->activityLogService->logChanges($actor, $ticket, 'ticket.updated', 'Chamado atualizado.', $before, $this->ticketAuditSnapshot($ticket), [
+            'requested_changes' => $attributes,
             'sector_id' => $ticket->sector_id,
         ]);
 
@@ -544,6 +545,7 @@ class TicketWorkflowService
             'ticket_field_id' => $field->id,
         ]);
 
+        $beforeValue = $fieldValue->exists ? $fieldValue->primitive_value : null;
         $normalizedValue = $field->normalizeMaskedValue($value);
 
         $fieldValue->storePrimitiveValue($normalizedValue);
@@ -551,8 +553,13 @@ class TicketWorkflowService
 
         $ticket->updateQuietly(['last_activity_at' => now()]);
 
-        $this->activityLogService->log($actor, $ticket, 'ticket.field.updated', "Campo {$field->name} atualizado.", [
+        $this->activityLogService->logChanges($actor, $ticket, 'ticket.field.updated', "Campo {$field->name} atualizado.", [
+            $field->name => $beforeValue,
+        ], [
+            $field->name => $normalizedValue,
+        ], [
             'field_id' => $field->id,
+            'field_name' => $field->name,
             'value' => $normalizedValue,
             'sector_id' => $ticket->sector_id,
         ]);
@@ -1292,6 +1299,25 @@ class TicketWorkflowService
     private function sameGroupId(?int $left, ?int $right): bool
     {
         return $left === $right;
+    }
+
+    private function ticketAuditSnapshot(Ticket $ticket): array
+    {
+        return $this->activityLogService->snapshot($ticket, [
+            'title',
+            'description',
+            'requester_id',
+            'assignee_id',
+            'ticket_board_id',
+            'ticket_group_id',
+            'ticket_status_id',
+            'service_catalog_item_id',
+            'room_id',
+            'priority',
+            'resolved_at',
+            'is_major_incident',
+            'major_incident_ticket_id',
+        ]);
     }
 
     private function createSystemMessage(Ticket $ticket, string $message): TicketMessage

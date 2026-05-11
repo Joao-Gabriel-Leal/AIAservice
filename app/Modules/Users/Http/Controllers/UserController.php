@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Shared\Services\ActivityLogService;
 use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Users\Exports\UsersExport;
 use App\Modules\Users\Http\Requests\UserRequest;
@@ -33,6 +34,7 @@ class UserController extends Controller
     public function __construct(
         private readonly UserIndexQuery $userIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
+        private readonly ActivityLogService $activityLogService,
     ) {}
 
     public function index(Request $request): View
@@ -99,6 +101,18 @@ class UserController extends Controller
 
             $this->syncSectorAccesses($user, $resolved['sector_accesses']);
 
+            $this->activityLogService->logChanges(
+                auth()->user(),
+                $user,
+                'user.created',
+                'Usuario criado.',
+                [],
+                $this->userAuditSnapshot($user->fresh(['sectorAccesses'])),
+                [
+                    'target_user_id' => $user->id,
+                ],
+            );
+
             return $user;
         });
 
@@ -141,13 +155,44 @@ class UserController extends Controller
         $this->authorize('update', $user);
 
         $wasActive = (bool) $user->is_active;
+        $before = $this->userAuditSnapshot($user->fresh(['sectorAccesses']));
+        $passwordChanged = filled($request->input('password'));
 
-        DB::transaction(function () use ($request, $user) {
+        DB::transaction(function () use ($request, $user, $before, $passwordChanged) {
             $resolved = $this->resolvedData($request, $user);
 
             $user->update($resolved['payload']);
 
             $this->syncSectorAccesses($user, $resolved['sector_accesses']);
+
+            $updatedUser = $user->fresh(['sectorAccesses']);
+
+            $this->activityLogService->logChanges(
+                auth()->user(),
+                $updatedUser,
+                'user.updated',
+                'Usuario atualizado.',
+                $before,
+                $this->userAuditSnapshot($updatedUser),
+                [
+                    'target_user_id' => $updatedUser->id,
+                ],
+            );
+
+            if ($passwordChanged) {
+                $this->activityLogService->log(
+                    auth()->user(),
+                    $updatedUser,
+                    'user.password.changed_by_admin',
+                    'Senha alterada por administrador.',
+                    [
+                        'target_user_id' => $updatedUser->id,
+                        'changes' => [
+                            'password' => $this->activityLogService->protectedChange(),
+                        ],
+                    ],
+                );
+            }
         });
 
         if ($wasActive && ! $user->fresh()->is_active) {
@@ -161,6 +206,8 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
+        $mustChangePasswordBefore = (bool) $user->must_change_password;
+
         $user->forceFill([
             'password' => Hash::make(self::DEFAULT_PASSWORD),
             'must_change_password' => true,
@@ -168,6 +215,24 @@ class UserController extends Controller
         ])->save();
 
         $this->invalidateUserAccess($user);
+        $user->refresh();
+
+        $this->activityLogService->log(
+            auth()->user(),
+            $user,
+            'user.password.reset_by_admin',
+            'Senha redefinida por administrador.',
+            [
+                'target_user_id' => $user->id,
+                'changes' => [
+                    'password' => $this->activityLogService->protectedChange(),
+                    'must_change_password' => [
+                        'before' => $mustChangePasswordBefore,
+                        'after' => (bool) $user->must_change_password,
+                    ],
+                ],
+            ],
+        );
 
         try {
             $user->notify(new DefaultPasswordResetNotification(
@@ -191,6 +256,20 @@ class UserController extends Controller
     public function destroy(User $user): RedirectResponse
     {
         $this->authorize('delete', $user);
+
+        $before = $this->userAuditSnapshot($user->fresh(['sectorAccesses']));
+
+        $this->activityLogService->log(
+            auth()->user(),
+            $user,
+            'user.deleted',
+            'Usuario removido.',
+            [
+                'target_user_id' => $user->id,
+                'before' => $before,
+                'changes' => $this->activityLogService->changes($before, array_fill_keys(array_keys($before), null)),
+            ],
+        );
 
         $user->delete();
 
@@ -350,5 +429,27 @@ class UserController extends Controller
         $user->forceFill([
             'remember_token' => Str::random(60),
         ])->saveQuietly();
+    }
+
+    private function userAuditSnapshot(User $user): array
+    {
+        return [
+            'name' => $user->name,
+            'email' => $user->email,
+            'global_role' => $user->global_role?->value,
+            'role' => $user->role?->value,
+            'sector_id' => $user->sector_id,
+            'room_id' => $user->room_id,
+            'must_change_password' => (bool) $user->must_change_password,
+            'is_active' => (bool) $user->is_active,
+            'sector_accesses' => $user->sectorAccesses
+                ->sortBy('sector_id')
+                ->map(fn ($sectorAccess): array => [
+                    'sector_id' => $sectorAccess->sector_id,
+                    'access_level' => $sectorAccess->access_level?->value,
+                ])
+                ->values()
+                ->all(),
+        ];
     }
 }

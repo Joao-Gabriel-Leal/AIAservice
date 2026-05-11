@@ -29,6 +29,7 @@
             'users' => '<svg '.$attrs.'><path d="M16 19v-1.2a3.8 3.8 0 0 0-3.8-3.8H7.8A3.8 3.8 0 0 0 4 17.8V19" /><circle cx="10" cy="8" r="3" /><path d="M20 19v-1a3 3 0 0 0-2.4-2.9" /><path d="M16.5 5.3a3 3 0 0 1 0 5.4" /></svg>',
             'emails' => '<svg '.$attrs.'><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><path d="m5 8 7 5 7-5" /></svg>',
             'assets' => '<svg '.$attrs.'><path d="M12 3.5 20 8l-8 4.5L4 8l8-4.5Z" /><path d="M20 12.5 12 17 4 12.5" /><path d="M20 17 12 21.5 4 17" /></svg>',
+            'logs' => '<svg '.$attrs.'><path d="M6.5 4.5h11A1.5 1.5 0 0 1 19 6v12a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18V6a1.5 1.5 0 0 1 1.5-1.5Z" /><path d="M8.5 8h7M8.5 12h7M8.5 16h4" /></svg>',
             'appearance' => '<svg '.$attrs.'><path d="M12 3.5a8.5 8.5 0 0 0 0 17h1.2a1.9 1.9 0 0 0 1.3-3.3 1.55 1.55 0 0 1 1.1-2.7H17a4 4 0 0 0 4-4c0-3.8-3.8-7-9-7Z" /><circle cx="8.5" cy="10" r=".7" /><circle cx="11" cy="7.7" r=".7" /><circle cx="14.2" cy="8.2" r=".7" /><circle cx="16" cy="11" r=".7" /></svg>',
             'profile' => '<svg '.$attrs.'><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>',
             'logout' => '<svg '.$attrs.'><path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H9" /><path d="M14 8l4 4-4 4" /><path d="M18 12H9" /></svg>',
@@ -63,6 +64,7 @@
             ['label' => 'Usuários', 'href' => route('users.index'), 'active' => request()->routeIs('users.*'), 'icon' => 'users'],
             ['label' => 'E-mails', 'href' => route('admin.emails.index'), 'active' => request()->routeIs('admin.emails.*'), 'icon' => 'emails'],
             ['label' => 'Patrimônios', 'href' => route('assets.index'), 'active' => request()->routeIs('assets.*'), 'icon' => 'assets'],
+            ['label' => 'Logs', 'href' => route('admin.logs.index'), 'active' => request()->routeIs('admin.logs.*'), 'icon' => 'logs'],
         ];
     }
 @endphp
@@ -380,6 +382,7 @@
                                         <a href="{{ route('companies.index') }}">Empresas</a>
                                         <a href="{{ route('users.index') }}">Usuarios</a>
                                         <a href="{{ route('assets.index') }}">Patrimonios</a>
+                                        <a href="{{ route('admin.logs.index') }}">Logs</a>
                                     @endif
                                     <a href="{{ route('profile.edit') }}">Meu perfil</a>
                                 </div>
