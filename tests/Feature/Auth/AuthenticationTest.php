@@ -3,7 +3,11 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Illuminate\Testing\TestResponse;
 use Laravel\Fortify\Features;
 use Tests\TestCase;
 
@@ -165,5 +169,30 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect(route('home'));
 
         $this->assertGuest();
+    }
+
+    public function test_expired_guest_logout_request_redirects_to_login(): void
+    {
+        $request = Request::create('/logout', 'POST');
+
+        $response = TestResponse::fromBaseResponse(
+            app(ExceptionHandler::class)->render($request, new TokenMismatchException('CSRF token mismatch.'))
+        );
+
+        $response->assertRedirect(route('login', absolute: false));
+    }
+
+    public function test_authenticated_logout_request_with_invalid_token_keeps_default_token_mismatch_response(): void
+    {
+        $user = User::factory()->create();
+        $request = Request::create('/logout', 'POST');
+
+        $request->setUserResolver(fn () => $user);
+
+        $response = TestResponse::fromBaseResponse(
+            app(ExceptionHandler::class)->render($request, new TokenMismatchException('CSRF token mismatch.'))
+        );
+
+        $response->assertStatus(419);
     }
 }

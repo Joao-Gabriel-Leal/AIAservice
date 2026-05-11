@@ -6,6 +6,9 @@ use App\Modules\Shared\Http\Middleware\EnsureRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -27,5 +30,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
+            if (
+                $response->getStatusCode() === 419
+                && $exception->getPrevious() instanceof TokenMismatchException
+                && $request->isMethod('POST')
+                && $request->is('logout')
+                && ! $request->user()
+            ) {
+                return redirect()->route('login');
+            }
+
+            return $response;
+        });
     })->create();
