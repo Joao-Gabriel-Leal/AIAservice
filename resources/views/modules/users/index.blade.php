@@ -80,7 +80,7 @@
         >
             <x-slot:actions>
                 <a href="{{ route('users.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo usuario</a>
-                <a href="{{ route('users.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+                <x-excel-export-action :href="route('users.export', request()->query())" />
             </x-slot:actions>
         </x-portal.page-intro>
 

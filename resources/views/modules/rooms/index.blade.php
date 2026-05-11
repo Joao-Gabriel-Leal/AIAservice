@@ -8,7 +8,7 @@
         >
             <x-slot:actions>
                 <a href="{{ route('rooms.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Nova sala</a>
-                <a href="{{ route('rooms.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+                <x-excel-export-action :href="route('rooms.export', request()->query())" />
             </x-slot:actions>
         </x-portal.page-intro>
 

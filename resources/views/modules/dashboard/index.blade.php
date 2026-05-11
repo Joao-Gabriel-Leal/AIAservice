@@ -44,12 +44,7 @@
             description="Tickets, SLA, produtividade, licencas, ativos e conhecimento no mesmo recorte de periodo e setor."
         >
             <x-slot:actions>
-                <a
-                    href="{{ route('dashboard.export', $dateQuery) }}"
-                    class="ui-action ui-action-secondary rounded-2xl px-4 py-2 text-sm font-medium"
-                >
-                    Exportar Excel
-                </a>
+                <x-excel-export-action :href="route('dashboard.export', $dateQuery)" />
             </x-slot:actions>
 
             <x-slot:meta>

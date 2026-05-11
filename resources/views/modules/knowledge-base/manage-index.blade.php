@@ -8,7 +8,7 @@
         >
             <x-slot:actions>
                 <a href="{{ route('knowledge-base.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo artigo</a>
-                <a href="{{ route('knowledge-base.manage.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+                <x-excel-export-action :href="route('knowledge-base.manage.export', request()->query())" />
             </x-slot:actions>
         </x-portal.page-intro>
 

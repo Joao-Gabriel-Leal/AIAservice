@@ -12,7 +12,7 @@
                 @if ($canCreateSector)
                     <a href="{{ route('sectors.create') }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Novo setor</a>
                 @endif
-                <a href="{{ route('sectors.export', request()->query()) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Exportar Excel</a>
+                <x-excel-export-action :href="route('sectors.export', request()->query())" />
             </x-slot:actions>
         </x-portal.page-intro>
 
