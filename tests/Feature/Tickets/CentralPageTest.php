@@ -85,6 +85,37 @@ class CentralPageTest extends TestCase
             ->assertSee('TI');
     }
 
+    public function test_central_page_allows_favoriting_forms(): void
+    {
+        ['firstSector' => $firstSector] = $this->centralContext();
+        $user = $this->centralUser($firstSector);
+        $form = $firstSector->board->forms()->firstOrFail();
+
+        Livewire::actingAs($user)
+            ->test(CentralPage::class)
+            ->assertSee('Favoritar formulario')
+            ->call('toggleFavorite', $form->id)
+            ->assertHasNoErrors()
+            ->assertSee('Remover dos favoritos');
+
+        $this->assertDatabaseHas('ticket_form_user_preferences', [
+            'user_id' => $user->id,
+            'ticket_form_id' => $form->id,
+            'is_favorite' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(CentralPage::class)
+            ->call('toggleFavorite', $form->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('ticket_form_user_preferences', [
+            'user_id' => $user->id,
+            'ticket_form_id' => $form->id,
+            'is_favorite' => false,
+        ]);
+    }
+
     private function centralContext(): array
     {
         $company = Company::query()->create([

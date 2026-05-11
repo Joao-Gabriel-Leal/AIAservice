@@ -5,6 +5,7 @@ namespace App\Modules\Tickets\Livewire;
 use App\Modules\Sectors\Models\Sector;
 use App\Modules\Shared\Support\CurrentCompanyContext;
 use App\Modules\Tickets\Models\TicketForm;
+use App\Modules\Tickets\Models\TicketFormUserPreference;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -35,6 +36,29 @@ class CentralPage extends Component
         $this->sectorSearch = trim($this->sectorSearch);
     }
 
+    public function toggleFavorite(int $formId): void
+    {
+        $form = TicketForm::query()
+            ->with('board.sector')
+            ->accessibleTo(auth()->user())
+            ->where('is_active', true)
+            ->whereHas('board', function ($boardQuery): void {
+                $boardQuery
+                    ->where('is_active', true)
+                    ->whereHas('sector', fn ($sectorQuery) => $sectorQuery
+                        ->where('is_active', true)
+                        ->where('company_id', app(CurrentCompanyContext::class)->currentCompanyId(auth()->user()) ?: 0));
+            })
+            ->findOrFail($formId);
+
+        $preference = TicketFormUserPreference::query()->firstOrCreate([
+            'user_id' => auth()->id(),
+            'ticket_form_id' => $form->id,
+        ]);
+
+        $preference->update(['is_favorite' => ! $preference->is_favorite]);
+    }
+
     public function render(): View
     {
         $sectors = $this->sectors();
@@ -46,6 +70,7 @@ class CentralPage extends Component
 
                 return $form;
             }))
+            ->sortByDesc(fn (TicketForm $form) => $this->formPreference($form)?->is_favorite ? 1 : 0)
             ->values() ?? collect();
 
         return view('livewire.tickets.central-page', [
@@ -53,6 +78,7 @@ class CentralPage extends Component
             'filteredSectors' => $filteredSectors,
             'selectedSector' => $selectedSector,
             'forms' => $forms,
+            'favoriteCount' => $forms->filter(fn (TicketForm $form) => $this->formPreference($form)?->is_favorite)->count(),
         ])->layout('layouts.portal', [
             'title' => 'Central de formularios',
             'subtitle' => 'Escolha o setor, veja os formularios disponiveis e abra o chamado certo com menos atrito.',
@@ -75,6 +101,7 @@ class CentralPage extends Component
                     ->with(['catalogItems' => fn ($catalogQuery) => $catalogQuery
                         ->where('is_active', true)
                         ->orderBy('name'),
+                        'userPreferences' => fn ($preferenceQuery) => $preferenceQuery->where('user_id', auth()->id()),
                     ])
                     ->orderBy('name'),
             ])
@@ -113,5 +140,10 @@ class CentralPage extends Component
                     ->contains(fn (?string $value) => $value !== null && str_contains(mb_strtolower($value), $term));
             })
             ->values();
+    }
+
+    private function formPreference(TicketForm $form): ?TicketFormUserPreference
+    {
+        return $form->userPreferences->firstWhere('user_id', auth()->id());
     }
 }

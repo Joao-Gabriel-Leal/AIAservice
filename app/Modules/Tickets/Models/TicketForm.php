@@ -96,6 +96,11 @@ class TicketForm extends Model
         return $this->hasMany(ServiceCatalogItem::class);
     }
 
+    public function userPreferences(): HasMany
+    {
+        return $this->hasMany(TicketFormUserPreference::class);
+    }
+
     public function canBeOpenedBy(User $user): bool
     {
         $board = $this->board;

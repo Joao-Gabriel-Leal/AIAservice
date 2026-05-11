@@ -20,6 +20,7 @@
                 @if ($selectedSector)
                     <span class="portal-chip" data-central-selected-chip>Setor ativo: {{ $selectedSector->name }}</span>
                     <span class="portal-chip">{{ $forms->count() }} formulario(s)</span>
+                    <span class="portal-chip">{{ $favoriteCount }} favorito(s)</span>
                 @endif
             </x-slot:meta>
         </x-portal.page-intro>
@@ -93,13 +94,33 @@
                                     <div class="space-y-2">
                                         <div class="flex items-start justify-between gap-3">
                                             <h4 class="text-base font-semibold text-slate-900">{{ $form->name }}</h4>
-                                            <span class="central-form-chip shrink-0 rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-semibold shadow-sm">
-                                                @if ($form->catalogItems->isNotEmpty())
-                                                    Catalogo
-                                                @else
-                                                    Direto
-                                                @endif
-                                            </span>
+                                            <div class="flex shrink-0 items-center gap-2">
+                                                <span class="central-form-chip rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-semibold shadow-sm">
+                                                    @if ($form->catalogItems->isNotEmpty())
+                                                        Catalogo
+                                                    @else
+                                                        Direto
+                                                    @endif
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    wire:click="toggleFavorite({{ $form->id }})"
+                                                    class="inline-flex size-9 items-center justify-center rounded-full border transition {{ $form->userPreferences->first()?->is_favorite ? 'border-rose-200 bg-rose-50 text-rose-600' : 'border-slate-200 bg-white text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600' }}"
+                                                    title="{{ $form->userPreferences->first()?->is_favorite ? 'Remover dos favoritos' : 'Favoritar formulario' }}"
+                                                    aria-label="{{ $form->userPreferences->first()?->is_favorite ? 'Remover dos favoritos' : 'Favoritar formulario' }}"
+                                                >
+                                                    @if ($form->userPreferences->first()?->is_favorite)
+                                                        <svg viewBox="0 0 24 24" class="size-4.5" fill="currentColor" aria-hidden="true">
+                                                            <path d="M12 21.2 10.7 20C5.4 15.2 2 12.1 2 8.2 2 5.1 4.4 2.8 7.5 2.8c1.7 0 3.4.8 4.5 2.1 1.1-1.3 2.8-2.1 4.5-2.1 3.1 0 5.5 2.3 5.5 5.4 0 3.9-3.4 7-8.7 11.8L12 21.2Z" />
+                                                        </svg>
+                                                    @else
+                                                        <svg viewBox="0 0 24 24" class="size-4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                            <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                                                        </svg>
+                                                    @endif
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <p class="line-clamp-2 text-sm text-slate-500">
