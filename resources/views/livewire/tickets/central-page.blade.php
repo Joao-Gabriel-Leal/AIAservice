@@ -5,9 +5,10 @@
         </div>
     @else
         <x-portal.page-intro
+            variant="compact"
             eyebrow="Central de formularios"
-            title="Escolha o setor e siga pelo formulario certo"
-            description="Selecione uma area para ver os formularios ativos disponiveis naquele setor."
+            title="Central de formularios"
+            description="Escolha um setor e abra o formulario certo."
         >
             <x-slot:actions>
                 <a href="{{ route('tickets.index') }}" class="portal-layout-action">
@@ -23,8 +24,8 @@
             </x-slot:meta>
         </x-portal.page-intro>
 
-        <x-portal.filter-bar title="Setores disponiveis" description="Busque por nome ou empresa.">
-            <div class="space-y-4">
+        <x-portal.filter-bar compact title="Setores" description="Busque por setor ou empresa.">
+            <div class="space-y-3">
                 <label class="block">
                     <span class="sr-only">Buscar setor</span>
                     <input
@@ -37,7 +38,7 @@
                 </label>
 
                 @if ($filteredSectors->isEmpty())
-                    <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-sm text-slate-500">
+                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm text-slate-500">
                         Nenhum setor encontrado para a busca informada.
                     </div>
                 @else
@@ -49,18 +50,18 @@
                                 type="button"
                                 wire:click="selectSector({{ $sector->id }})"
                                 wire:key="central-sector-{{ $sector->id }}"
-                                class="ui-panel ui-panel-interactive flex min-h-[132px] flex-col items-start rounded-3xl border p-5 text-left transition"
+                                class="ui-panel ui-panel-interactive flex min-h-[108px] flex-col items-start rounded-2xl border p-4 text-left transition"
                                 style="{{ $selectedSector?->id === $sector->id
                                     ? 'border-color: '.$sector->displayColor().'; background-color: '.$sector->softColor().'; box-shadow: inset 0 0 0 1px '.$sector->borderColor().'; color: #0f172a;'
                                     : 'border-color: #e2e8f0; background-color: #ffffff; color: #334155;' }}"
                             >
                                 <div class="flex items-center gap-2">
-                                    <span class="size-3 rounded-full" style="background-color: {{ $sector->displayColor() }}"></span>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{{ $sector->company?->name ?? 'Sem empresa' }}</p>
+                                    <span class="size-2.5 rounded-full" style="background-color: {{ $sector->displayColor() }}"></span>
+                                    <p class="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-400">{{ $sector->company?->name ?? 'Sem empresa' }}</p>
                                 </div>
-                                <p class="mt-3 text-lg font-semibold">{{ $sector->name }}</p>
-                                <p class="mt-2 line-clamp-2 text-sm text-slate-500">{{ $sector->description ?: 'Setor ativo para abertura e acompanhamento de solicitacoes.' }}</p>
-                                <div class="mt-auto pt-4 text-xs font-medium text-slate-500">
+                                <p class="mt-2 text-base font-semibold">{{ $sector->name }}</p>
+                                <p class="mt-1 line-clamp-1 text-sm text-slate-500">{{ $sector->description ?: 'Setor ativo para abertura e acompanhamento de solicitacoes.' }}</p>
+                                <div class="mt-auto pt-3 text-xs font-medium text-slate-500">
                                     {{ $formCount }} formulario(s) ativo(s)
                                 </div>
                             </button>
@@ -71,85 +72,63 @@
         </x-portal.filter-bar>
 
         @if ($selectedSector)
-            <section id="central-sector-results" class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_320px]">
-                <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition" data-central-results-frame>
-                    <div class="flex flex-col gap-5 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
+            <section id="central-sector-results" class="space-y-4">
+                <div class="ui-panel rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition" data-central-results-frame>
+                    <div class="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-end lg:justify-between">
                         <div data-central-results-header>
-                            <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em]" style="background-color: {{ $selectedSector->softColor() }}; color: {{ $selectedSector->displayColor() }};">
+                            <div class="inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]" style="background-color: {{ $selectedSector->softColor() }}; color: {{ $selectedSector->displayColor() }};">
                                 <span class="size-2.5 rounded-full" style="background-color: {{ $selectedSector->displayColor() }}"></span>
                                 {{ $selectedSector->company?->name }}
                             </div>
-                            <h3 class="mt-2 text-2xl font-semibold text-slate-900">Formularios de {{ $selectedSector->name }}</h3>
-                            <p class="mt-2 max-w-3xl text-sm text-slate-500">
+                            <h3 class="mt-2 text-xl font-semibold text-slate-900">Formularios de {{ $selectedSector->name }}</h3>
+                            <p class="mt-1 max-w-3xl text-sm text-slate-500">
                                 {{ $selectedSector->description ?: 'Este setor esta pronto para receber solicitacoes pela central.' }}
                             </p>
                         </div>
                     </div>
 
-                    <div class="mt-6 grid gap-4 lg:grid-cols-2">
+                    <div class="mt-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                         @forelse ($forms as $form)
                             @php($formBoard = $form->board)
-                            <article class="ui-panel ui-panel-interactive rounded-3xl border border-slate-200 bg-slate-50 p-5" style="border-color: {{ $selectedSector->borderColor() }}; background: linear-gradient(180deg, {{ $selectedSector->softColor() }} 0%, #ffffff 100%);">
-                                <div class="flex h-full flex-col gap-4">
+                            <article class="ui-panel ui-panel-interactive rounded-2xl border border-slate-200 bg-slate-50 p-4" style="border-color: {{ $selectedSector->borderColor() }}; background: linear-gradient(180deg, {{ $selectedSector->softColor() }} 0%, #ffffff 100%);">
+                                <div class="flex h-full flex-col gap-3">
                                     <div class="space-y-2">
                                         <div class="flex items-start justify-between gap-3">
-                                            <h4 class="text-lg font-semibold text-slate-900">{{ $form->name }}</h4>
-                                            <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold shadow-sm" style="color: {{ $selectedSector->displayColor() }}">
+                                            <h4 class="text-base font-semibold text-slate-900">{{ $form->name }}</h4>
+                                            <span class="shrink-0 rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-semibold shadow-sm" style="color: {{ $selectedSector->displayColor() }}">
                                                 @if ($form->catalogItems->isNotEmpty())
-                                                    Publicado no catalogo
+                                                    Catalogo
                                                 @else
-                                                    Abertura direta
+                                                    Direto
                                                 @endif
                                             </span>
                                         </div>
 
-                                        <p class="text-sm text-slate-500">
+                                        <p class="line-clamp-2 text-sm text-slate-500">
                                             {{ $form->description ?: 'Formulario configurado para este tipo de solicitacao no setor selecionado.' }}
                                         </p>
 
                                         @if ($formBoard)
-                                            <span class="inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+                                            <span class="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 shadow-sm">
                                                 Quadro: {{ $formBoard->name }}
                                             </span>
                                         @endif
                                     </div>
 
-                                    <div class="mt-auto flex flex-col items-stretch gap-3 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                                            Setor {{ $selectedSector->name }}
-                                        </p>
-
-                                        <a href="{{ route('tickets.create', ['sector' => $selectedSector->id, 'board' => $formBoard?->id, 'form' => $form->id]) }}" class="ui-action ui-action-secondary w-full rounded-2xl px-4 py-3 text-sm sm:w-auto" style="border-color: {{ $selectedSector->borderColor() }}; color: {{ $selectedSector->displayColor() }};">
+                                    <div class="mt-auto pt-2">
+                                        <a href="{{ route('tickets.create', ['sector' => $selectedSector->id, 'board' => $formBoard?->id, 'form' => $form->id]) }}" class="ui-action ui-action-secondary w-full rounded-2xl px-4 py-2.5 text-sm" style="border-color: {{ $selectedSector->borderColor() }}; color: {{ $selectedSector->displayColor() }};">
                                             Usar formulario
                                         </a>
                                     </div>
                                 </div>
                             </article>
                         @empty
-                            <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-sm text-slate-500 lg:col-span-2">
+                            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-sm text-slate-500 sm:col-span-2 2xl:col-span-3">
                                 Este setor ainda nao possui formularios ativos para abertura. Ative ao menos um formulario neste setor.
                             </div>
                         @endforelse
                     </div>
                 </div>
-
-                <aside class="space-y-6">
-                    <section class="ui-panel rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                        <h4 class="text-lg font-semibold text-slate-900">Resumo do setor</h4>
-
-                        <div class="mt-5 grid gap-3">
-                            <div class="rounded-2xl border border-slate-200 px-4 py-4" style="border-color: {{ $selectedSector->borderColor() }}; background-color: {{ $selectedSector->softColor() }};">
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Formularios ativos</p>
-                                <p class="mt-3 text-3xl font-semibold text-slate-900">{{ $forms->count() }}</p>
-                            </div>
-
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                                <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Empresa</p>
-                                <p class="mt-3 text-base font-semibold text-slate-900">{{ $selectedSector->company?->name ?? 'Sem empresa vinculada' }}</p>
-                            </div>
-                        </div>
-                    </section>
-                </aside>
             </section>
         @endif
     @endif
