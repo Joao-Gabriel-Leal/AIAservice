@@ -267,7 +267,7 @@
                                         x-on:keydown.escape="autocompleteOpen = false"
                                         rows="4"
                                         class="ui-input ticket-chat-input w-full"
-                                        placeholder="Escreva sua mensagem. Use @ para templates"
+                                        placeholder="Escreva sua mensagem"
                                     ></textarea>
 
                                     <div
