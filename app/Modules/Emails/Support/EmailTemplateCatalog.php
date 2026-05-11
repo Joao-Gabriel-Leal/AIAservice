@@ -8,6 +8,8 @@ class EmailTemplateCatalog
 {
     public const ACCOUNT_CREATED = 'account_created';
 
+    public const USER_DEFAULT_PASSWORD_RESET = 'user_default_password_reset';
+
     public const TICKET_CREATED = 'ticket_created';
 
     public const TICKET_UPDATED = 'ticket_updated';
@@ -43,6 +45,22 @@ class EmailTemplateCatalog
                     'login_email' => 'E-mail de acesso',
                     'login_url' => 'URL de login',
                     'password_note' => 'Mensagem sobre senha temporaria',
+                ],
+            ],
+            self::USER_DEFAULT_PASSWORD_RESET => [
+                'label' => 'Senha padrao redefinida',
+                'description' => 'Aviso enviado quando um administrador redefine a senha de um usuario para a senha padrao.',
+                'subject' => 'Sua senha foi redefinida em {{ app_name }}',
+                'html_body' => $this->defaultHtml(
+                    'Senha redefinida',
+                    'Ola, {{ recipient_name }}.',
+                    'Sua senha foi redefinida por um administrador. Use o login {{ login_email }} e a senha temporaria {{ temporary_password }}. Voce devera trocar a senha no proximo acesso.',
+                    'Acessar sistema',
+                ),
+                'variables' => [
+                    'login_email' => 'E-mail de acesso',
+                    'login_url' => 'URL de login',
+                    'temporary_password' => 'Senha temporaria padrao',
                 ],
             ],
             self::TICKET_CREATED => [
@@ -160,16 +178,17 @@ class EmailTemplateCatalog
             'login_email' => $recipientEmail,
             'login_url' => route('login'),
             'password_note' => 'Use a senha temporaria informada pelo administrador e altere no primeiro acesso.',
+            'temporary_password' => 'Anadem@2026!',
             'time_entry_status' => 'aprovado',
         ];
 
-        if ($type === self::ACCOUNT_CREATED) {
+        if (in_array($type, [self::ACCOUNT_CREATED, self::USER_DEFAULT_PASSWORD_RESET], true)) {
             return [
                 ...$base,
                 'action_url' => route('login'),
                 'action_label' => 'Acessar sistema',
-                'notification_title' => 'Sua conta foi criada',
-                'notification_message' => 'Seu acesso ja esta disponivel.',
+                'notification_title' => $type === self::ACCOUNT_CREATED ? 'Sua conta foi criada' : 'Sua senha foi redefinida',
+                'notification_message' => $type === self::ACCOUNT_CREATED ? 'Seu acesso ja esta disponivel.' : 'Use a senha temporaria e troque-a no proximo acesso.',
             ];
         }
 

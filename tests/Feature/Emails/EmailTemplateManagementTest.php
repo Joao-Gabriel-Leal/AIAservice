@@ -73,7 +73,7 @@ class EmailTemplateManagementTest extends TestCase
 
         $templates = app(EmailTemplateService::class)->templates();
 
-        $this->assertCount(10, $templates);
+        $this->assertCount(11, $templates);
         $this->assertTrue($templates->every(fn (array $template): bool => $template['is_enabled'] === true));
         $this->assertTrue($templates->every(fn (array $template): bool => $template['has_override'] === false));
     }

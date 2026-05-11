@@ -91,6 +91,20 @@
                         <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Salvar alteracoes</button>
                     </div>
                 </form>
+
+                <form
+                    id="reset-default-password-form"
+                    method="POST"
+                    action="{{ route('users.reset-default-password', $profileUser) }}"
+                    data-confirm
+                    data-confirm-title="Redefinir senha?"
+                    data-confirm-message="A senha deste usuario sera alterada para Anadem@2026!, a troca sera obrigatoria no proximo acesso e um e-mail sera enviado."
+                    data-confirm-variant="warning"
+                    data-confirm-label="Redefinir e enviar"
+                    class="hidden"
+                >
+                    @csrf
+                </form>
             </section>
 
             <aside class="space-y-6">

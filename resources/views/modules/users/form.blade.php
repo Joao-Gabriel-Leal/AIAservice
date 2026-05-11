@@ -30,6 +30,20 @@
                 <span class="mb-2 block text-sm font-medium text-slate-700">Confirmar senha</span>
                 <input type="password" name="password_confirmation" class="w-full rounded-2xl border border-slate-300 px-4 py-3">
             </label>
+
+            <div class="md:col-span-2 flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="font-semibold">Redefinir para senha padrao</p>
+                    <p class="mt-1">Define a senha como <span class="font-semibold">Anadem@2026!</span>, obriga troca no proximo acesso e envia e-mail ao usuario.</p>
+                </div>
+                <button
+                    type="submit"
+                    form="reset-default-password-form"
+                    class="ui-action ui-action-secondary shrink-0 rounded-2xl px-4 py-3 text-sm"
+                >
+                    Aplicar senha padrao
+                </button>
+            </div>
         @else
             <div class="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
                 O usuario sera criado com senha temporaria, troca obrigatoria no primeiro acesso e um quadro para copiar os dados de entrada logo apos salvar.

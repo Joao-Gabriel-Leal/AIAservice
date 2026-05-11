@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Modules\Companies\Models\Company;
 use App\Modules\Rooms\Models\Room;
 use App\Modules\Sectors\Models\Sector;
+use App\Modules\Users\Http\Controllers\UserController;
 use App\Modules\Users\Notifications\AccountCreatedNotification;
+use App\Modules\Users\Notifications\DefaultPasswordResetNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -232,6 +234,57 @@ class AdministrationFlowTest extends TestCase
             'name' => 'Esley Atualizado',
             'email' => 'esley.atualizado@aiaservice.local',
         ]);
+    }
+
+    public function test_global_admin_can_reset_user_to_default_password_and_notify(): void
+    {
+        Notification::fake();
+
+        $company = Company::query()->create([
+            'name' => 'Empresa Reset Senha',
+            'is_active' => true,
+        ]);
+        $sector = Sector::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Suporte Reset',
+            'slug' => 'suporte-reset',
+            'is_active' => true,
+        ]);
+
+        $admin = User::factory()->developer()->create();
+        $profileUser = User::factory()->create([
+            'name' => 'Usuario Reset',
+            'email' => 'usuario.reset@aiaservice.local',
+            'password' => Hash::make('SenhaAntiga@123'),
+            'must_change_password' => false,
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('users.show', $profileUser))
+            ->assertOk()
+            ->assertSee(route('users.reset-default-password', $profileUser, absolute: false))
+            ->assertSeeText('Aplicar senha padrao');
+
+        $this->actingAs($admin)
+            ->post(route('users.reset-default-password', $profileUser))
+            ->assertRedirect(route('users.show', $profileUser, absolute: false))
+            ->assertSessionHas('status', 'Senha redefinida para o padrao e e-mail enviado ao usuario.');
+
+        $profileUser->refresh();
+
+        $this->assertTrue(Hash::check(UserController::DEFAULT_PASSWORD, $profileUser->password));
+        $this->assertTrue($profileUser->must_change_password);
+
+        Notification::assertSentTo(
+            $profileUser,
+            DefaultPasswordResetNotification::class,
+            fn (DefaultPasswordResetNotification $notification, array $channels): bool => in_array('database', $channels, true)
+                && in_array('mail', $channels, true)
+                && $notification->temporaryPassword() === UserController::DEFAULT_PASSWORD
+                && data_get($notification->toArray($profileUser), 'must_change_password') === true
+        );
     }
 
     public function test_company_context_redirects_after_sector_and_room_changes(): void

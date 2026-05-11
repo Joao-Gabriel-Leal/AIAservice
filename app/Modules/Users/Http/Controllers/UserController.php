@@ -12,6 +12,7 @@ use App\Modules\Shared\Support\AccessScope;
 use App\Modules\Users\Exports\UsersExport;
 use App\Modules\Users\Http\Requests\UserRequest;
 use App\Modules\Users\Notifications\AccountCreatedNotification;
+use App\Modules\Users\Notifications\DefaultPasswordResetNotification;
 use App\Modules\Users\Support\UserIndexQuery;
 use App\Support\Exports\SpreadsheetExporter;
 use Illuminate\Contracts\View\View;
@@ -27,6 +28,8 @@ use Throwable;
 
 class UserController extends Controller
 {
+    public const DEFAULT_PASSWORD = 'Anadem@2026!';
+
     public function __construct(
         private readonly UserIndexQuery $userIndexQuery,
         private readonly SpreadsheetExporter $spreadsheetExporter,
@@ -152,6 +155,37 @@ class UserController extends Controller
         }
 
         return redirect()->route('users.show', $user)->with('status', 'Usuario atualizado com sucesso.');
+    }
+
+    public function resetDefaultPassword(User $user): RedirectResponse
+    {
+        $this->authorize('update', $user);
+
+        $user->forceFill([
+            'password' => Hash::make(self::DEFAULT_PASSWORD),
+            'must_change_password' => true,
+            'remember_token' => Str::random(60),
+        ])->save();
+
+        $this->invalidateUserAccess($user);
+
+        try {
+            $user->notify(new DefaultPasswordResetNotification(
+                $user->email,
+                self::DEFAULT_PASSWORD,
+                url('/'),
+            ));
+        } catch (Throwable $throwable) {
+            Log::warning('Default password reset notification delivery failed.', [
+                'user_id' => $user->id,
+                'exception' => $throwable::class,
+                'message' => $throwable->getMessage(),
+            ]);
+        }
+
+        return redirect()
+            ->route('users.show', $user)
+            ->with('status', 'Senha redefinida para o padrao e e-mail enviado ao usuario.');
     }
 
     public function destroy(User $user): RedirectResponse
