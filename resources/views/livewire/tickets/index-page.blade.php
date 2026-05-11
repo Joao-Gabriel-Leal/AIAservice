@@ -72,12 +72,14 @@
             <a href="{{ route('tickets.export', $exportParams) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
                 Exportar Excel
             </a>
-            <a href="{{ route('tickets.trash') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                Lixeira
+            <a href="{{ route('tickets.trash') }}" class="ui-action ui-action-secondary min-w-12 justify-center rounded-2xl px-4 py-3 text-sm" aria-label="Lixeira" title="Lixeira">
+                <flux:icon.trash class="size-5" />
+                <span class="sr-only">Lixeira</span>
             </a>
             @if ($configBoard && auth()->user()->can('update', $configBoard))
-                <a href="{{ route('tickets.settings', $configBoard) }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                    Configurar
+                <a href="{{ route('tickets.settings', $configBoard) }}" class="ui-action ui-action-secondary min-w-12 justify-center rounded-2xl px-4 py-3 text-sm" aria-label="Configurar" title="Configurar">
+                    <flux:icon.cog class="size-5" />
+                    <span class="sr-only">Configurar</span>
                 </a>
             @endif
         </x-slot:actions>
