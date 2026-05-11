@@ -26,8 +26,11 @@
         :description="$board?->description ?: 'Acompanhe as demandas deste quadro em lista, etapas ou kanban.'"
     >
         <x-slot:actions>
-            <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                Voltar aos quadros
+            <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary min-w-12 justify-center rounded-2xl px-4 py-3 text-sm" aria-label="Voltar aos quadros" title="Voltar aos quadros">
+                <svg viewBox="0 0 24 24" fill="none" class="size-5" aria-hidden="true">
+                    <path d="M15 6 9 12l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="sr-only">Voltar aos quadros</span>
             </a>
 
             <div class="rounded-2xl border border-slate-300 bg-white p-1 shadow-sm">
