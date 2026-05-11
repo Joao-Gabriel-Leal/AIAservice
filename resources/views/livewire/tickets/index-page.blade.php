@@ -30,29 +30,32 @@
                 Voltar aos quadros
             </a>
 
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <div class="rounded-2xl border border-slate-300 bg-white p-1 shadow-sm">
                 <div class="flex items-center gap-1">
                     <button
                         type="button"
                         x-on:click="$wire.setViewMode('list')"
-                        class="rounded-xl px-4 py-2 text-sm font-medium transition"
-                        :class="viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
+                        class="rounded-xl border px-4 py-2 text-sm font-semibold transition"
+                        :class="viewMode === 'list' ? 'border-sky-700 bg-sky-700 text-white shadow-md shadow-sky-900/20 ring-1 ring-sky-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+                        :aria-pressed="viewMode === 'list'"
                     >
                         Lista
                     </button>
                     <button
                         type="button"
                         x-on:click="$wire.setViewMode('stages')"
-                        class="rounded-xl px-4 py-2 text-sm font-medium transition"
-                        :class="viewMode === 'stages' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
+                        class="rounded-xl border px-4 py-2 text-sm font-semibold transition"
+                        :class="viewMode === 'stages' ? 'border-sky-700 bg-sky-700 text-white shadow-md shadow-sky-900/20 ring-1 ring-sky-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+                        :aria-pressed="viewMode === 'stages'"
                     >
                         Etapas
                     </button>
                     <button
                         type="button"
                         x-on:click="$wire.setViewMode('kanban')"
-                        class="rounded-xl px-4 py-2 text-sm font-medium transition"
-                        :class="viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'"
+                        class="rounded-xl border px-4 py-2 text-sm font-semibold transition"
+                        :class="viewMode === 'kanban' ? 'border-sky-700 bg-sky-700 text-white shadow-md shadow-sky-900/20 ring-1 ring-sky-700' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+                        :aria-pressed="viewMode === 'kanban'"
                     >
                         Kanban
                     </button>
