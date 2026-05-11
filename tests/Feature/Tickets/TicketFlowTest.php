@@ -249,6 +249,148 @@ class TicketFlowTest extends TestCase
             ->assertSee($closedWithoutMessage->title);
     }
 
+    public function test_create_page_suggestions_for_super_admin_are_limited_to_selected_company(): void
+    {
+        ['company' => $anademCompany, 'sector' => $anademSector, 'board' => $anademBoard, 'group' => $anademGroup, 'status' => $anademStatus, 'closedGroup' => $anademClosedGroup, 'closedStatus' => $anademClosedStatus] = $this->ticketContext();
+        $anademCompany->update(['name' => 'Anadem']);
+
+        $dubboxCompany = Company::query()->create([
+            'name' => 'Dubbox',
+            'is_active' => true,
+        ]);
+        $dubboxSector = Sector::query()->create([
+            'company_id' => $dubboxCompany->id,
+            'name' => 'Suporte Dubbox',
+            'slug' => 'suporte-dubbox',
+            'is_active' => true,
+        ]);
+        $dubboxOtherSector = Sector::query()->create([
+            'company_id' => $dubboxCompany->id,
+            'name' => 'Financeiro Dubbox',
+            'slug' => 'financeiro-dubbox',
+            'is_active' => true,
+        ]);
+        $dubboxBoard = app(SectorProvisioningService::class)->provision($dubboxSector);
+        $dubboxOtherBoard = app(SectorProvisioningService::class)->provision($dubboxOtherSector);
+
+        $superAdmin = User::factory()->create([
+            'role' => UserRole::SUPER_ADMIN,
+            'current_company_id' => $dubboxCompany->id,
+        ]);
+        $technician = User::factory()->create([
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $dubboxSector->id,
+        ]);
+
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $dubboxSector->id,
+            'created_by' => $technician->id,
+            'title' => 'VPN Dubbox reset',
+            'summary' => 'Procedimento da Dubbox para VPN',
+            'content' => 'Resetar a senha da VPN Dubbox no portal.',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'is_active' => true,
+        ]);
+        KnowledgeBaseArticle::query()->create([
+            'sector_id' => $anademSector->id,
+            'created_by' => User::factory()->create([
+                'role' => UserRole::TECHNICIAN,
+                'sector_id' => $anademSector->id,
+            ])->id,
+            'title' => 'VPN Anadem reset',
+            'summary' => 'Procedimento da Anadem para VPN',
+            'content' => 'Resetar a senha da VPN Anadem no portal.',
+            'visibility' => KnowledgeBaseVisibility::PUBLIC,
+            'is_active' => true,
+        ]);
+
+        $dubboxTicket = Ticket::query()->create([
+            'sector_id' => $dubboxSector->id,
+            'ticket_board_id' => $dubboxBoard->id,
+            'ticket_group_id' => $dubboxBoard->groups()->where('is_closed', false)->firstOrFail()->id,
+            'ticket_status_id' => $dubboxBoard->statuses()->where('is_closed', false)->firstOrFail()->id,
+            'title' => 'VPN Dubbox sem acesso',
+            'description' => 'Senha VPN Dubbox expirada.',
+            'requester_id' => User::factory()->create(['role' => UserRole::REQUESTER, 'sector_id' => $dubboxSector->id])->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now()->subMinutes(5),
+        ]);
+        $dubboxOtherSectorTicket = Ticket::query()->create([
+            'sector_id' => $dubboxOtherSector->id,
+            'ticket_board_id' => $dubboxOtherBoard->id,
+            'ticket_group_id' => $dubboxOtherBoard->groups()->where('is_closed', false)->firstOrFail()->id,
+            'ticket_status_id' => $dubboxOtherBoard->statuses()->where('is_closed', false)->firstOrFail()->id,
+            'title' => 'VPN Dubbox financeiro senha',
+            'description' => 'Financeiro Dubbox com falha de senha na VPN.',
+            'requester_id' => User::factory()->create(['role' => UserRole::REQUESTER, 'sector_id' => $dubboxOtherSector->id])->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now()->subMinutes(6),
+        ]);
+        $dubboxSolvedTicket = Ticket::query()->create([
+            'sector_id' => $dubboxSector->id,
+            'ticket_board_id' => $dubboxBoard->id,
+            'ticket_group_id' => $dubboxBoard->groups()->where('is_closed', true)->firstOrFail()->id,
+            'ticket_status_id' => $dubboxBoard->statuses()->where('is_closed', true)->firstOrFail()->id,
+            'title' => 'VPN Dubbox senha vencida',
+            'description' => 'VPN Dubbox voltou apos trocar senha.',
+            'requester_id' => User::factory()->create(['role' => UserRole::REQUESTER, 'sector_id' => $dubboxSector->id])->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => now()->subHour(),
+            'last_activity_at' => now()->subHour(),
+        ]);
+        TicketMessage::query()->create([
+            'ticket_id' => $dubboxSolvedTicket->id,
+            'user_id' => $technician->id,
+            'message' => 'Solucao Dubbox: senha VPN renovada e acesso validado.',
+            'is_system' => false,
+        ]);
+
+        $anademTicket = Ticket::query()->create([
+            'sector_id' => $anademSector->id,
+            'ticket_board_id' => $anademBoard->id,
+            'ticket_group_id' => $anademGroup->id,
+            'ticket_status_id' => $anademStatus->id,
+            'title' => 'VPN Anadem sem acesso',
+            'description' => 'Senha VPN Anadem expirada.',
+            'requester_id' => User::factory()->create(['role' => UserRole::REQUESTER, 'sector_id' => $anademSector->id])->id,
+            'priority' => TicketPriority::MEDIUM,
+            'last_activity_at' => now()->subMinutes(2),
+        ]);
+        $anademSolvedTicket = Ticket::query()->create([
+            'sector_id' => $anademSector->id,
+            'ticket_board_id' => $anademBoard->id,
+            'ticket_group_id' => $anademClosedGroup->id,
+            'ticket_status_id' => $anademClosedStatus->id,
+            'title' => 'VPN Anadem senha vencida',
+            'description' => 'VPN Anadem voltou apos trocar senha.',
+            'requester_id' => User::factory()->create(['role' => UserRole::REQUESTER, 'sector_id' => $anademSector->id])->id,
+            'priority' => TicketPriority::MEDIUM,
+            'resolved_at' => now()->subMinutes(30),
+            'last_activity_at' => now()->subMinutes(30),
+        ]);
+        TicketMessage::query()->create([
+            'ticket_id' => $anademSolvedTicket->id,
+            'user_id' => $technician->id,
+            'message' => 'Solucao Anadem: senha VPN renovada.',
+            'is_system' => false,
+        ]);
+
+        Livewire::actingAs($superAdmin)
+            ->test(CreatePage::class)
+            ->set('selectedSectorId', $dubboxSector->id)
+            ->set('selectedCatalogId', $dubboxBoard->catalogItems()->firstOrFail()->id)
+            ->set('title', 'VPN senha')
+            ->assertSee('VPN Dubbox reset')
+            ->assertDontSee('VPN Anadem reset')
+            ->assertSee($dubboxTicket->title)
+            ->assertSee($dubboxOtherSectorTicket->title)
+            ->assertDontSee($anademTicket->title)
+            ->assertSee($dubboxSolvedTicket->title)
+            ->assertSee('Solucao Dubbox: senha VPN renovada')
+            ->assertDontSee($anademSolvedTicket->title)
+            ->assertDontSee('Solucao Anadem: senha VPN renovada.');
+    }
+
     public function test_create_page_clears_suggestions_when_input_becomes_too_short(): void
     {
         ['sector' => $sector, 'catalog' => $catalog] = $this->ticketContext();

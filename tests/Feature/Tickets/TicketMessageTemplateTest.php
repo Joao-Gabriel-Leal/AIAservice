@@ -80,6 +80,12 @@ class TicketMessageTemplateTest extends TestCase
         ['sector' => $sector, 'board' => $board, 'group' => $group, 'status' => $status] = $this->ticketContext();
 
         $operator = User::factory()->create([
+            'name' => 'Operador Atual',
+            'role' => UserRole::TECHNICIAN,
+            'sector_id' => $sector->id,
+        ]);
+        User::factory()->create([
+            'name' => 'Tecnico Marcavel',
             'role' => UserRole::TECHNICIAN,
             'sector_id' => $sector->id,
         ]);
@@ -106,6 +112,15 @@ class TicketMessageTemplateTest extends TestCase
         ]);
         TicketMessageTemplate::query()->create([
             'ticket_board_id' => $board->id,
+            'user_id' => $operator->id,
+            'channel' => TicketMessageTemplate::CHANNEL_PUBLIC,
+            'name' => 'Meu publico',
+            'body' => 'Resposta pessoal para o solicitante.',
+            'is_active' => true,
+            'sort_order' => 2,
+        ]);
+        TicketMessageTemplate::query()->create([
+            'ticket_board_id' => $board->id,
             'user_id' => null,
             'channel' => TicketMessageTemplate::CHANNEL_INTERNAL,
             'name' => 'Nota interna',
@@ -113,14 +128,64 @@ class TicketMessageTemplateTest extends TestCase
             'is_active' => true,
             'sort_order' => 2,
         ]);
+        TicketMessageTemplate::query()->create([
+            'ticket_board_id' => $board->id,
+            'user_id' => $operator->id,
+            'channel' => TicketMessageTemplate::CHANNEL_INTERNAL,
+            'name' => 'Minha nota interna',
+            'body' => 'Checklist interno pessoal.',
+            'is_active' => true,
+            'sort_order' => 3,
+        ]);
+        TicketMessageTemplate::query()->create([
+            'ticket_board_id' => $board->id,
+            'user_id' => null,
+            'channel' => TicketMessageTemplate::CHANNEL_PUBLIC,
+            'name' => 'Resposta inativa',
+            'body' => 'Nao deve aparecer.',
+            'is_active' => false,
+            'sort_order' => 4,
+        ]);
+        TicketMessageTemplate::query()->create([
+            'ticket_board_id' => $board->id,
+            'user_id' => User::factory()->create([
+                'role' => UserRole::TECHNICIAN,
+                'sector_id' => $sector->id,
+            ])->id,
+            'channel' => TicketMessageTemplate::CHANNEL_PUBLIC,
+            'name' => 'Outro pessoal',
+            'body' => 'Nao deve aparecer para outro operador.',
+            'is_active' => true,
+            'sort_order' => 5,
+        ]);
 
-        Livewire::actingAs($operator)
+        $component = Livewire::actingAs($operator)
             ->test(ShowPage::class, ['ticket' => $ticket])
             ->assertSee('ticketComposerAutocomplete', false)
             ->assertSee('Resposta rapida')
+            ->assertSee('Meu publico')
             ->assertSee('Nota interna')
+            ->assertSee('Minha nota interna')
+            ->assertDontSee('Resposta inativa')
+            ->assertDontSee('Outro pessoal')
             ->assertDontSee('ticket-template-strip', false)
             ->assertDontSee('ticket-template-pill', false);
+
+        $html = $component->html();
+        $publicComposer = $this->htmlFragment($html, 'wire:submit="sendMessage"', '</form>');
+        $internalComposer = $this->htmlFragment($html, 'wire:submit="sendInternalUpdate"', '</form>');
+
+        $this->assertStringContainsString('Resposta rapida', $publicComposer);
+        $this->assertStringContainsString('Meu publico', $publicComposer);
+        $this->assertStringNotContainsString('users:', $publicComposer);
+        $this->assertStringNotContainsString('Tecnico Marcavel', $publicComposer);
+        $this->assertStringNotContainsString('Nota interna', $publicComposer);
+
+        $this->assertStringContainsString('users:', $internalComposer);
+        $this->assertStringContainsString('Tecnico Marcavel', $internalComposer);
+        $this->assertStringContainsString('Nota interna', $internalComposer);
+        $this->assertStringContainsString('Minha nota interna', $internalComposer);
+        $this->assertStringNotContainsString('Resposta rapida', $internalComposer);
     }
 
     public function test_operator_can_create_edit_and_delete_personal_template(): void
@@ -311,5 +376,18 @@ class TicketMessageTemplateTest extends TestCase
             'resolved_at' => $attributes['resolved_at'] ?? null,
             'last_activity_at' => $attributes['last_activity_at'] ?? now(),
         ]);
+    }
+
+    private function htmlFragment(string $html, string $startNeedle, string $endNeedle): string
+    {
+        $start = strpos($html, $startNeedle);
+
+        $this->assertNotFalse($start, "Unable to find [{$startNeedle}] in rendered HTML.");
+
+        $end = strpos($html, $endNeedle, $start);
+
+        $this->assertNotFalse($end, "Unable to find [{$endNeedle}] after [{$startNeedle}] in rendered HTML.");
+
+        return substr($html, $start, $end - $start);
     }
 }

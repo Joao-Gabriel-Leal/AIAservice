@@ -3045,6 +3045,11 @@
     }
 
     .ticket-channel-card {
+        overflow: visible;
+        z-index: 2;
+    }
+
+    .ticket-channel-card {
         padding: 0.55rem;
     }
 
@@ -3266,11 +3271,12 @@
 
     .ticket-mention-composer {
         position: relative;
+        z-index: 60;
     }
 
     .ticket-mention-menu {
         position: absolute;
-        z-index: 30;
+        z-index: 90;
         top: calc(100% + 0.35rem);
         left: 0.5rem;
         right: 0.5rem;

@@ -83,6 +83,240 @@ if (! window.ticketInlineTitle) {
     };
 }
 
+if (! window.ticketComposerAutocomplete) {
+    window.ticketComposerAutocomplete = function (config) {
+        return {
+            users: Array.isArray(config.users) ? config.users : [],
+            templates: Array.isArray(config.templates) ? config.templates : [],
+            message: config.message,
+            mentionedIds: config.mentionedIds ?? [],
+            tracksMentions: Object.prototype.hasOwnProperty.call(config, 'mentionedIds'),
+            autocompleteOpen: false,
+            autocompleteQuery: '',
+            activeAutocompleteIndex: 0,
+            triggerStart: null,
+            suppressNextRefresh: false,
+
+            init() {
+                this.syncMentionIds();
+
+                this.$watch('message', () => {
+                    this.syncMentionIds();
+
+                    if (this.suppressNextRefresh) {
+                        this.suppressNextRefresh = false;
+                        return;
+                    }
+
+                    this.refreshAutocompleteMenu();
+                });
+            },
+
+            get filteredItems() {
+                const query = this.normalizeText(this.autocompleteQuery);
+                const selectedIds = new Set((this.mentionedIds ?? []).map((id) => Number(id)));
+                const users = this.users
+                    .filter((user) => !selectedIds.has(Number(user.id)))
+                    .filter((user) => query === '' || this.normalizeText(user.name).includes(query))
+                    .map((user) => ({
+                        id: Number(user.id),
+                        key: `user-${user.id}`,
+                        type: 'user',
+                        name: user.name,
+                        preview: '',
+                    }));
+                const templates = this.templates
+                    .filter((template) => {
+                        if (query === '') {
+                            return true;
+                        }
+
+                        return this.normalizeText(`${template.name} ${template.body}`).includes(query);
+                    })
+                    .map((template) => ({
+                        id: Number(template.id),
+                        key: `template-${template.id}`,
+                        type: 'template',
+                        name: template.name,
+                        body: template.body,
+                        isPersonal: Boolean(template.isPersonal),
+                        preview: this.previewText(template.body),
+                    }));
+
+                return [...users, ...templates].slice(0, 8);
+            },
+
+            handleAutocompleteInput() {
+                this.syncMentionIds();
+                this.refreshAutocompleteMenu();
+            },
+
+            refreshAutocompleteMenu() {
+                const textarea = this.$refs.composerTextarea;
+
+                if (!textarea) {
+                    return;
+                }
+
+                const caret = textarea.selectionStart ?? String(this.message ?? '').length;
+                const beforeCaret = String(this.message ?? '').slice(0, caret);
+                const atIndex = beforeCaret.lastIndexOf('@');
+
+                if (atIndex < 0) {
+                    this.closeAutocompleteMenu();
+                    return;
+                }
+
+                const fragment = beforeCaret.slice(atIndex + 1);
+
+                if (fragment.includes('\n') || fragment.length > 64) {
+                    this.closeAutocompleteMenu();
+                    return;
+                }
+
+                this.triggerStart = atIndex;
+                this.autocompleteQuery = fragment;
+                this.autocompleteOpen = this.filteredItems.length > 0;
+                this.activeAutocompleteIndex = Math.min(
+                    this.activeAutocompleteIndex,
+                    Math.max(this.filteredItems.length - 1, 0),
+                );
+            },
+
+            moveAutocomplete(direction) {
+                if (!this.autocompleteOpen || this.filteredItems.length === 0) {
+                    return;
+                }
+
+                const total = this.filteredItems.length;
+                this.activeAutocompleteIndex = (this.activeAutocompleteIndex + direction + total) % total;
+            },
+
+            selectActiveAutocompleteItem() {
+                if (!this.autocompleteOpen || this.filteredItems.length === 0) {
+                    return;
+                }
+
+                this.selectAutocompleteItem(this.filteredItems[this.activeAutocompleteIndex]);
+            },
+
+            selectAutocompleteItem(item) {
+                if (item.type === 'template') {
+                    this.selectTemplate(item);
+                    return;
+                }
+
+                this.selectUser(item);
+            },
+
+            selectUser(user) {
+                const textarea = this.$refs.composerTextarea;
+
+                if (!textarea || this.triggerStart === null) {
+                    return;
+                }
+
+                const caret = textarea.selectionStart ?? String(this.message ?? '').length;
+                const before = String(this.message ?? '').slice(0, this.triggerStart);
+                const after = String(this.message ?? '').slice(caret);
+                const mention = `@${user.name}`;
+                const spacer = after.startsWith(' ') || after.startsWith('\n') ? '' : ' ';
+                const nextMessage = `${before}${mention}${spacer}${after}`;
+                const nextCaret = before.length + mention.length + spacer.length;
+
+                this.suppressNextRefresh = true;
+                this.message = nextMessage;
+                this.mentionedIds = Array.from(new Set([
+                    ...(this.mentionedIds ?? []).map((id) => Number(id)),
+                    Number(user.id),
+                ]));
+                this.closeAutocompleteMenu();
+
+                this.$nextTick(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(nextCaret, nextCaret);
+                });
+            },
+
+            selectTemplate(template) {
+                const textarea = this.$refs.composerTextarea;
+
+                if (!textarea || this.triggerStart === null) {
+                    return;
+                }
+
+                const caret = textarea.selectionStart ?? String(this.message ?? '').length;
+                const before = String(this.message ?? '').slice(0, this.triggerStart);
+                const after = String(this.message ?? '').slice(caret);
+                const replacement = String(template.body ?? '').trim();
+                const spacer = after === '' || after.startsWith(' ') || after.startsWith('\n') ? '' : ' ';
+                const nextMessage = `${before}${replacement}${spacer}${after}`;
+                const nextCaret = before.length + replacement.length + spacer.length;
+
+                this.suppressNextRefresh = true;
+                this.message = nextMessage;
+                this.closeAutocompleteMenu();
+
+                this.$nextTick(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(nextCaret, nextCaret);
+                });
+            },
+
+            syncMentionIds() {
+                if (!this.tracksMentions) {
+                    return;
+                }
+
+                const currentIds = (this.mentionedIds ?? []).map((id) => Number(id));
+                const nextIds = currentIds.filter((id) => {
+                    const user = this.users.find((candidate) => Number(candidate.id) === id);
+
+                    return user && this.messageIncludesUser(user);
+                });
+
+                if (nextIds.length !== currentIds.length || nextIds.some((id, index) => id !== currentIds[index])) {
+                    this.mentionedIds = nextIds;
+                }
+            },
+
+            messageIncludesUser(user) {
+                return String(this.message ?? '').includes(`@${user.name}`);
+            },
+
+            closeAutocompleteMenu() {
+                this.autocompleteOpen = false;
+                this.autocompleteQuery = '';
+                this.activeAutocompleteIndex = 0;
+                this.triggerStart = null;
+            },
+
+            normalizeText(value) {
+                return String(value ?? '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .trim();
+            },
+
+            previewText(value) {
+                const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+
+                return text.length > 90 ? `${text.slice(0, 87)}...` : text;
+            },
+
+            initials(name) {
+                return String(name ?? '')
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part.charAt(0).toUpperCase())
+                    .join('');
+            },
+        };
+    };
+}
+
 function onlyDigits(value) {
     return value.replace(/\D/g, '');
 }

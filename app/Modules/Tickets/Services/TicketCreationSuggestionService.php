@@ -4,6 +4,7 @@ namespace App\Modules\Tickets\Services;
 
 use App\Models\User;
 use App\Modules\KnowledgeBase\Services\KnowledgeBaseArticleSearchService;
+use App\Modules\Sectors\Models\Sector;
 use App\Modules\Tickets\Models\Ticket;
 use App\Modules\Tickets\Models\TicketMessage;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,12 +29,18 @@ class TicketCreationSuggestionService
             return $this->emptyPayload();
         }
 
+        $companyId = $this->companyIdForSector($sectorId);
+
+        if (! $companyId) {
+            return $this->emptyPayload();
+        }
+
         $terms = $this->terms($searchText);
 
         return [
-            'articles' => $this->articleSuggestions($user, $sectorId, $searchText, $terms),
-            'similar_tickets' => $this->similarTicketSuggestions($user, $sectorId, $searchText, $terms),
-            'previous_solutions' => $this->previousSolutionSuggestions($user, $sectorId, $searchText, $terms),
+            'articles' => $this->articleSuggestions($user, $sectorId, $companyId, $searchText, $terms),
+            'similar_tickets' => $this->similarTicketSuggestions($user, $sectorId, $companyId, $searchText, $terms),
+            'previous_solutions' => $this->previousSolutionSuggestions($user, $sectorId, $companyId, $searchText, $terms),
         ];
     }
 
@@ -46,10 +53,11 @@ class TicketCreationSuggestionService
         ];
     }
 
-    private function articleSuggestions(User $user, int $sectorId, string $searchText, Collection $terms): array
+    private function articleSuggestions(User $user, int $sectorId, int $companyId, string $searchText, Collection $terms): array
     {
         return $this->knowledgeBaseArticleSearchService
             ->visibleQuery($user)
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $companyId))
             ->where(function (Builder $query) use ($searchText, $terms) {
                 $this->applyTextSearch($query, ['title', 'summary', 'content'], $searchText, $terms);
             })
@@ -70,9 +78,9 @@ class TicketCreationSuggestionService
             ->all();
     }
 
-    private function similarTicketSuggestions(User $user, int $sectorId, string $searchText, Collection $terms): array
+    private function similarTicketSuggestions(User $user, int $sectorId, int $companyId, string $searchText, Collection $terms): array
     {
-        return $this->ticketSuggestionBaseQuery($user, $sectorId, $searchText, $terms)
+        return $this->ticketSuggestionBaseQuery($user, $sectorId, $companyId, $searchText, $terms)
             ->limit(self::RESULT_LIMIT)
             ->get()
             ->map(fn (Ticket $ticket) => [
@@ -90,9 +98,9 @@ class TicketCreationSuggestionService
             ->all();
     }
 
-    private function previousSolutionSuggestions(User $user, int $sectorId, string $searchText, Collection $terms): array
+    private function previousSolutionSuggestions(User $user, int $sectorId, int $companyId, string $searchText, Collection $terms): array
     {
-        return $this->ticketSuggestionBaseQuery($user, $sectorId, $searchText, $terms)
+        return $this->ticketSuggestionBaseQuery($user, $sectorId, $companyId, $searchText, $terms)
             ->whereNotNull('resolved_at')
             ->with([
                 'messages' => fn ($query) => $query
@@ -127,16 +135,26 @@ class TicketCreationSuggestionService
             ->all();
     }
 
-    private function ticketSuggestionBaseQuery(User $user, int $sectorId, string $searchText, Collection $terms): Builder
+    private function ticketSuggestionBaseQuery(User $user, int $sectorId, int $companyId, string $searchText, Collection $terms): Builder
     {
         return Ticket::query()
             ->visibleTo($user)
             ->with(['sector.company'])
+            ->whereHas('sector', fn (Builder $query) => $query->where('company_id', $companyId))
             ->where(function (Builder $query) use ($searchText, $terms) {
                 $this->applyTextSearch($query, ['title', 'description'], $searchText, $terms);
             })
             ->orderByRaw('case when sector_id = ? then 0 else 1 end', [$sectorId])
             ->orderByDesc('last_activity_at');
+    }
+
+    private function companyIdForSector(int $sectorId): ?int
+    {
+        $companyId = Sector::query()
+            ->whereKey($sectorId)
+            ->value('company_id');
+
+        return $companyId ? (int) $companyId : null;
     }
 
     private function applyTextSearch(Builder $query, array $columns, string $searchText, Collection $terms): void
