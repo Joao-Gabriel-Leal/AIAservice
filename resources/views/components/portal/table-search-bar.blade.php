@@ -11,7 +11,7 @@
 
 @php($inputId = $inputId ?: $formId.'-search')
 
-<div class="sticky top-0 z-20 -mx-1 bg-slate-50/95 px-1 py-2 backdrop-blur dark:bg-[#07101f]/92">
+<div class="relative z-10">
     <form
         id="{{ $formId }}"
         method="GET"
