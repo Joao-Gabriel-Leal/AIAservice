@@ -33,7 +33,7 @@
                         <th class="px-6 py-3 font-medium">Licenca</th>
                         <th class="px-6 py-3 font-medium">Tipo</th>
                         <th class="px-6 py-3 font-medium">
-                            <x-portal.table-column-filter label="Setor" form-id="licenses-filter-form" name="sector_id" all-label="Todos os setores" min-width="min-w-52">
+                            <x-portal.table-column-filter label="Setor" form-id="licenses-filter-form" name="sector_id" all-label="Setor" min-width="min-w-0" variant="inline">
                                 @foreach ($sectors as $sectorOption)
                                     <option value="{{ $sectorOption->id }}" @selected((string) $filters['sector_id'] === (string) $sectorOption->id)>{{ $sectorOption->name }}</option>
                                 @endforeach
