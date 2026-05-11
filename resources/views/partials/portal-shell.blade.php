@@ -250,21 +250,15 @@
 
             <div class="portal-main {{ $isFocusedForm ? 'portal-main-focused' : '' }} min-w-0">
                 @if ($isFocusedForm)
-                    <header class="px-4 pt-5 sm:px-6 lg:px-8">
-                        <div class="mx-auto flex max-w-[860px] items-center justify-between gap-4 text-white">
-                            <a href="{{ route('tickets.central') }}" class="{{ $focusedHeaderActionClass }}">
+                    <header class="px-4 pb-3 pt-5 sm:px-6 lg:px-8">
+                        <div class="mx-auto flex max-w-[1120px] items-center">
+                            <a href="{{ route('tickets.central') }}" class="{{ $focusedHeaderActionClass }}" aria-label="Voltar para central de formularios">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M15 18l-6-6 6-6" />
+                                    <path d="M9 12h10" />
+                                </svg>
                                 Voltar
                             </a>
-
-                            @if (auth()->user()?->hasOperationalAccess())
-                                <a href="{{ route('tickets.index') }}" class="{{ $focusedHeaderActionClass }}">
-                                    Quadros
-                                </a>
-                            @else
-                                <a href="{{ route('tickets.central') }}" class="{{ $focusedHeaderActionClass }}">
-                                    Central
-                                </a>
-                            @endif
                         </div>
                     </header>
                 @else

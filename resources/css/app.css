@@ -1907,15 +1907,14 @@
     }
 
     .portal-focused-header-action {
-        @apply inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold;
-        min-width: 8rem;
+        @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold;
         border: 1px solid rgba(98, 119, 172, 0.3);
         background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 248, 255, 0.94) 100%);
+            linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(244, 248, 255, 0.82) 100%);
         color: #17315c;
         box-shadow:
-            0 18px 40px -28px rgba(17, 31, 68, 0.42),
-            inset 0 1px 0 rgba(255, 255, 255, 0.84);
+            0 16px 34px -30px rgba(17, 31, 68, 0.48),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
     }
