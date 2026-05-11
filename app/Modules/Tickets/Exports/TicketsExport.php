@@ -29,7 +29,6 @@ class TicketsExport
                 'Atendimentos',
                 [
                     'Codigo',
-                    'ID interno',
                     'Tipo',
                     'Demanda pai',
                     'Titulo',
@@ -45,7 +44,6 @@ class TicketsExport
                 $this->tickets->map(function ($ticket) {
                     return [
                         $ticket->publicReference(),
-                        $ticket->technicalReference(),
                         $ticket->isSubelement() ? 'Subelemento' : 'Demanda',
                         $ticket->parentTicket?->publicReference() ?? '',
                         $ticket->title,

@@ -185,11 +185,7 @@ class Ticket extends Model
 
     public function fullReference(): string
     {
-        if (! $this->id || $this->publicReference() === $this->technicalReference()) {
-            return $this->publicReference();
-        }
-
-        return $this->publicReference().' ('.$this->technicalReference().')';
+        return $this->publicReference();
     }
 
     public function technicalReference(): string

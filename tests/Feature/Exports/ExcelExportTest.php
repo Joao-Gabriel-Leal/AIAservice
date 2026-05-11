@@ -209,9 +209,8 @@ class ExcelExportTest extends TestCase
         $content = implode("\n", $rows);
 
         $this->assertStringContainsString('Codigo', $content);
-        $this->assertStringContainsString('ID interno', $content);
         $this->assertStringContainsString($visibleTicket->reference_code, $content);
-        $this->assertStringContainsString($visibleTicket->technicalReference(), $content);
+        $this->assertStringNotContainsString($visibleTicket->technicalReference(), $content);
         $this->assertStringContainsString('Chamado TI', $content);
         $this->assertStringNotContainsString('Chamado Financeiro', $content);
     }
