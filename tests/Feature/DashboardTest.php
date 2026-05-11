@@ -277,10 +277,17 @@ class DashboardTest extends TestCase
             'room_id' => $room->id,
         ]);
 
-        $this->actingAs($superAdmin)
-            ->get(route('dashboard'))
+        $superAdminResponse = $this->actingAs($superAdmin)->get(route('dashboard'));
+        $generalNav = $this->htmlFragment($superAdminResponse->getContent(), '<p class="portal-nav-heading">Geral</p>', '</section>');
+        $adminNav = $this->htmlFragment($superAdminResponse->getContent(), '<p class="portal-nav-heading">Administra', '</section>');
+
+        $superAdminResponse
             ->assertOk()
             ->assertSee(route('search', absolute: false), false);
+
+        $this->assertStringNotContainsString('Busca global', $generalNav);
+        $this->assertStringContainsString('Busca global', $adminNav);
+        $this->assertStringContainsString(route('search', absolute: false), $adminNav);
 
         $this->actingAs($sectorAdmin)
             ->get(route('dashboard'))
@@ -742,5 +749,18 @@ class DashboardTest extends TestCase
             'status' => $board->statuses()->where('is_closed', false)->firstOrFail(),
             'closedStatus' => $board->statuses()->where('is_closed', true)->firstOrFail(),
         ];
+    }
+
+    private function htmlFragment(string $html, string $startNeedle, string $endNeedle): string
+    {
+        $start = strpos($html, $startNeedle);
+
+        $this->assertNotFalse($start, "Unable to find [{$startNeedle}] in rendered HTML.");
+
+        $end = strpos($html, $endNeedle, $start);
+
+        $this->assertNotFalse($end, "Unable to find [{$endNeedle}] after [{$startNeedle}] in rendered HTML.");
+
+        return substr($html, $start, $end - $start);
     }
 }

@@ -41,10 +41,6 @@
         ['label' => 'Dashboard', 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard'), 'icon' => 'dashboard'],
     ];
 
-    if ($user->isGlobalAdmin()) {
-        $generalNavItems[] = ['label' => 'Busca global', 'href' => route('search'), 'active' => request()->routeIs('search'), 'icon' => 'search'];
-    }
-
     $generalNavItems[] = ['label' => 'Central de formularios', 'href' => route('tickets.central'), 'active' => request()->routeIs('tickets.central', 'tickets.create'), 'icon' => 'forms'];
     $generalNavItems[] = ['label' => 'Meus chamados', 'href' => route('tickets.mine'), 'active' => request()->routeIs('tickets.mine'), 'icon' => 'tickets'];
     $generalNavItems[] = ['label' => 'Base de conhecimento', 'href' => route('knowledge-base.index'), 'active' => request()->routeIs('knowledge-base.*'), 'icon' => 'knowledge'];
@@ -61,6 +57,7 @@
 
     if ($user->isGlobalAdmin()) {
         $adminNavItems = [
+            ['label' => 'Busca global', 'href' => route('search'), 'active' => request()->routeIs('search'), 'icon' => 'search'],
             ['label' => 'Empresas', 'href' => route('companies.index'), 'active' => request()->routeIs('companies.*', 'sectors.*', 'rooms.*'), 'icon' => 'companies'],
             ['label' => 'Templates de setor', 'href' => route('sector-templates.index'), 'active' => request()->routeIs('sector-templates.*'), 'icon' => 'templates'],
             ['label' => 'Usuários', 'href' => route('users.index'), 'active' => request()->routeIs('users.*'), 'icon' => 'users'],
@@ -380,14 +377,12 @@
                                         </form>
                                     @endif
                                     <a href="{{ route('dashboard') }}">Dashboard</a>
-                                    @if ($user?->isGlobalAdmin())
-                                        <a href="{{ route('search') }}">Busca global</a>
-                                    @endif
                                     @if ($user?->hasOperationalAccess())
                                         <a href="{{ route('tickets.index') }}">Quadros</a>
                                     @endif
                                     <a href="{{ route('knowledge-base.index') }}">Base de conhecimento</a>
                                     @if ($user?->isGlobalAdmin())
+                                        <a href="{{ route('search') }}">Busca global</a>
                                         <a href="{{ route('companies.index') }}">Empresas</a>
                                         <a href="{{ route('users.index') }}">Usuarios</a>
                                         <a href="{{ route('assets.index') }}">Patrimonios</a>
