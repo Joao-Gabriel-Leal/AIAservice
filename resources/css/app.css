@@ -6719,28 +6719,6 @@ select:focus[data-flux-control] {
         text-align: center;
     }
 
-    .auth-open-ticket-link {
-        display: inline-flex;
-        width: 100%;
-        min-height: 3.5rem;
-        align-items: center;
-        justify-content: center;
-        margin-top: 0.85rem;
-        border: 1px solid #cbd8ea;
-        border-radius: 1.05rem;
-        background: #fff;
-        color: #17315c;
-        font-size: 0.95rem;
-        font-weight: 800;
-        box-shadow: 0 16px 28px -28px rgba(15, 23, 42, 0.35);
-    }
-
-    .auth-open-ticket-link:hover {
-        border-color: #9fb4d2;
-        background: #f6f9fd;
-        color: #102038;
-    }
-
     @media (max-width: 1023px) {
         .portal-shell:not(.portal-shell-focused) .portal-content {
             padding: 1rem 1rem calc(6.25rem + env(safe-area-inset-bottom));
@@ -6922,8 +6900,7 @@ select:focus[data-flux-control] {
     html.dark .ticket-mobile-card,
     html.dark .ticket-mobile-meta-grid > div,
     html.dark .ticket-mobile-detail-grid > div,
-    html.dark .ticket-mobile-checkbox,
-    html.dark .auth-open-ticket-link {
+    html.dark .ticket-mobile-checkbox {
         border-color: rgba(74, 96, 151, 0.34);
         background: rgba(11, 23, 48, 0.9);
         color: #dbe6ff;
