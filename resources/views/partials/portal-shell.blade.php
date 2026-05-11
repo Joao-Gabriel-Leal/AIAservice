@@ -346,19 +346,6 @@
                             <span>Chamados</span>
                         </a>
 
-                        <a href="{{ route('notifications.index') }}" class="portal-mobile-nav-item {{ request()->routeIs('notifications.*') ? 'portal-mobile-nav-item-active' : '' }}">
-                            <span class="portal-mobile-nav-icon-wrap">
-                                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-                                    <path d="M10 20a2 2 0 0 0 4 0" />
-                                </svg>
-                                @if ($unreadNotificationsCount > 0)
-                                    <span class="portal-mobile-nav-badge">{{ $unreadNotificationsCount > 9 ? '9+' : $unreadNotificationsCount }}</span>
-                                @endif
-                            </span>
-                            <span>Alertas</span>
-                        </a>
-
                         <details class="portal-mobile-menu">
                             <summary class="portal-mobile-nav-item">
                                 <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
