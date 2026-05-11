@@ -69,14 +69,16 @@ class UserController extends Controller
         $this->authorize('view', $user);
 
         $workStatusOptions = $this->workStatusOptions();
+        $profileUser = $user->load([
+            'sectorAccesses.sector.company',
+            'currentAssets.currentSector',
+            'currentAssets.currentRoom',
+            'licenseAssignments.license',
+        ]);
 
         return view('modules.users.show', [
-            'profileUser' => $user->load([
-                'sectorAccesses.sector.company',
-                'currentAssets.currentSector',
-                'currentAssets.currentRoom',
-                'licenseAssignments.license',
-            ]),
+            ...$this->formData($profileUser),
+            'profileUser' => $profileUser,
             'workStatus' => $workStatusOptions[(string) $user->work_status] ?? $workStatusOptions['office'],
         ]);
     }
@@ -124,11 +126,11 @@ class UserController extends Controller
             ]);
     }
 
-    public function edit(User $user): View
+    public function edit(User $user): RedirectResponse
     {
         $this->authorize('update', $user);
 
-        return view('modules.users.edit', $this->formData($user->load('sectorAccesses.sector')));
+        return redirect(route('users.show', $user).'#editar-usuario');
     }
 
     public function update(UserRequest $request, User $user): RedirectResponse
@@ -149,7 +151,7 @@ class UserController extends Controller
             $this->invalidateUserAccess($user);
         }
 
-        return redirect()->route('users.index')->with('status', 'Usuario atualizado com sucesso.');
+        return redirect()->route('users.show', $user)->with('status', 'Usuario atualizado com sucesso.');
     }
 
     public function destroy(User $user): RedirectResponse

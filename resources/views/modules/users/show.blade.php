@@ -58,36 +58,35 @@
                 <div class="flex flex-wrap gap-2">
                     <a href="{{ route('users.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar</a>
                     @can('update', $profileUser)
-                        <a href="{{ route('users.edit', $profileUser) }}" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Editar usuario</a>
+                        <a href="#editar-usuario" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Editar usuario</a>
                     @endcan
                 </div>
             </div>
         </section>
 
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div class="border-b border-slate-200 pb-4">
-                    <h2 class="text-lg font-semibold text-slate-900">Acessos por setor</h2>
-                    <p class="mt-1 text-sm text-slate-500">Permissoes e areas vinculadas a esta conta.</p>
+            <section id="editar-usuario" class="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                @if (session('status'))
+                    <div class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        {{ session('status') }}
+                    </div>
+                @endif
+
+                <div class="mb-6 border-b border-slate-200 pb-4">
+                    <h2 class="text-lg font-semibold text-slate-900">Editar usuario</h2>
+                    <p class="mt-1 text-sm text-slate-500">Dados de acesso, perfil global, setores e status desta conta.</p>
                 </div>
 
-                <div class="space-y-3 pt-5">
-                    @forelse ($profileUser->sectorAccesses as $sectorAccess)
-                        <article class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <x-sector-badge :sector="$sectorAccess->sector" mode="dot" />
-                                <p class="mt-1 text-xs text-slate-500">{{ $sectorAccess->sector?->company?->name ?? 'Empresa nao informada' }}</p>
-                            </div>
-                            <span class="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
-                                {{ $sectorAccess->access_level->label() }}
-                            </span>
-                        </article>
-                    @empty
-                        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                            {{ $profileUser->isGlobalAdmin() ? 'Acesso global sem vinculos setoriais especificos.' : 'Sem vinculos setoriais cadastrados.' }}
-                        </div>
-                    @endforelse
-                </div>
+                <form method="POST" action="{{ route('users.update', $profileUser) }}" class="space-y-6">
+                    @csrf
+                    @method('PUT')
+                    @include('modules.users.form')
+
+                    <div class="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-5">
+                        <a href="{{ route('users.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar</a>
+                        <button type="submit" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Salvar alteracoes</button>
+                    </div>
+                </form>
             </section>
 
             <aside class="space-y-6">

@@ -165,7 +165,7 @@
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex justify-end gap-2">
-                                    <a href="{{ route('users.edit', $listedUser) }}" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
+                                    <a href="{{ route('users.show', $listedUser) }}#editar-usuario" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">Editar</a>
                                     @can('delete', $listedUser)
                                         <form method="POST" action="{{ route('users.destroy', $listedUser) }}" data-confirm data-confirm-variant="danger" data-confirm-title="Remover usuário?" data-confirm-message="Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita." data-confirm-label="Sim, remover">
                                             @csrf

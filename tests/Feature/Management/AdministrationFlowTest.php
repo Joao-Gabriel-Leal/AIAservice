@@ -208,7 +208,30 @@ class AdministrationFlowTest extends TestCase
             ->assertSeeText('Guara -DF')
             ->assertSeeText('09/06/2002')
             ->assertSeeText('Licenca medica')
-            ->assertSee(route('users.edit', $profileUser, absolute: false));
+            ->assertSeeText('Editar usuario')
+            ->assertSeeText('Nome')
+            ->assertSeeText('Perfil global')
+            ->assertSeeText('Acessos por setor')
+            ->assertSee(route('users.update', $profileUser, absolute: false));
+
+        $this->get(route('users.edit', $profileUser))
+            ->assertRedirect(route('users.show', $profileUser, absolute: false).'#editar-usuario');
+
+        $this->put(route('users.update', $profileUser), [
+            'name' => 'Esley Atualizado',
+            'email' => 'esley.atualizado@aiaservice.local',
+            'global_role' => GlobalUserRole::COLLABORATOR->value,
+            'sector_accesses' => [
+                $sector->id => 'technician',
+            ],
+            'is_active' => '1',
+        ])->assertRedirect(route('users.show', $profileUser, absolute: false));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $profileUser->id,
+            'name' => 'Esley Atualizado',
+            'email' => 'esley.atualizado@aiaservice.local',
+        ]);
     }
 
     public function test_company_context_redirects_after_sector_and_room_changes(): void
