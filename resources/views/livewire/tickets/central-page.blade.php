@@ -154,11 +154,6 @@
                             </div>
                         </div>
                     </section>
-
-                    <section class="ui-panel rounded-3xl border border-slate-200 bg-[#15233e] p-6 text-white shadow-sm">
-                        <h4 class="text-lg font-semibold">Nao encontrou o formulario certo?</h4>
-                        <p class="mt-2 text-sm text-slate-300">Revise se ele esta ativo neste setor.</p>
-                    </section>
                 </aside>
             </section>
         @endif
