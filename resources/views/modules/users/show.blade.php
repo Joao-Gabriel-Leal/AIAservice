@@ -12,7 +12,18 @@
 
 <x-layouts.portal :title="$profileUser->name" header-variant="none">
     <div class="space-y-6">
-        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section class="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <a
+                href="{{ route('users.index') }}"
+                class="absolute left-4 top-4 z-10 inline-flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur transition hover:border-white/25 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60"
+                aria-label="Voltar para usuarios"
+                title="Voltar para usuarios"
+            >
+                <svg aria-hidden="true" viewBox="0 0 20 20" class="size-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 15 7 10l5-5" />
+                </svg>
+            </a>
+
             <div class="bg-slate-950 px-6 py-7 text-white">
                 <div class="grid gap-7 lg:grid-cols-[156px_minmax(0,1fr)_360px]">
                     <div class="flex justify-center lg:block">
@@ -53,13 +64,6 @@
                 <div>
                     <p class="text-sm font-medium text-slate-900">Perfil administrativo</p>
                     <p class="mt-1 text-sm text-slate-500">Dados publicos do usuario e vinculos operacionais.</p>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                    <a href="{{ route('users.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Voltar</a>
-                    @can('update', $profileUser)
-                        <a href="#editar-usuario" class="ui-action ui-action-primary rounded-2xl px-4 py-3 text-sm">Editar usuario</a>
-                    @endcan
                 </div>
             </div>
         </section>
