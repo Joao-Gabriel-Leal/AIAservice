@@ -32,7 +32,7 @@ class ImportSapLicensesCommand extends Command
         );
 
         $this->table(
-            ['Tipo de licenca', 'Assentos totais', 'Vinculos ativos'],
+            ['Tipo de licenca', 'Licencas totais', 'Vinculos ativos'],
             collect($summary['licenses'])
                 ->map(fn (array $licenseSummary, string $licenseType) => [
                     $licenseType,

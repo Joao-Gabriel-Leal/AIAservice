@@ -65,7 +65,7 @@ class DashboardExport
                 ['Licencas ativas', $this->data['licenseSummary']['can_view'] ? $this->data['licenseSummary']['active'] : 'N/A'],
                 ['Licencas vencidas', $this->data['licenseSummary']['can_view'] ? $this->data['licenseSummary']['expired'] : 'N/A'],
                 ['Licencas vencendo em 30 dias', $this->data['licenseSummary']['can_view'] ? $this->data['licenseSummary']['expiring_soon'] : 'N/A'],
-                ['Assentos em uso', $this->data['licenseSummary']['can_view'] ? $this->data['licenseSummary']['seats_used'] : 'N/A'],
+                ['Licencas em uso', $this->data['licenseSummary']['can_view'] ? $this->data['licenseSummary']['seats_used'] : 'N/A'],
                 ['Ativos no escopo', $this->data['assetSummary']['total']],
                 ['Ativos em manutencao', $this->data['assetSummary']['in_maintenance']],
                 ['Ativos extraviados', $this->data['assetSummary']['lost']],
@@ -157,7 +157,7 @@ class DashboardExport
     {
         return new ExcelSheetData(
             'Licencas',
-            ['Produto', 'Setor', 'Assentos', 'Em uso', 'Disponiveis', 'Vencimento/Renovacao'],
+            ['Produto', 'Setor', 'Licencas', 'Em uso', 'Disponiveis', 'Vencimento/Renovacao'],
             $this->data['licenseSummary']['can_view']
                 ? $this->data['licenseSummary']['upcoming']->map(fn ($license) => [
                     $license->displayName(),

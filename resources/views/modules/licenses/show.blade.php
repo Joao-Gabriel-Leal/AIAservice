@@ -25,7 +25,7 @@
     ])->filter(fn ($fact) => filled($fact['value']))->values();
 @endphp
 
-<x-layouts.portal :title="$license->displayName()" subtitle="Gestao de assentos da licenca." header-variant="none">
+<x-layouts.portal :title="$license->displayName()" subtitle="Gestao das licencas desta linha." header-variant="none">
     <div
         x-data="{
             panel: @js($initialPanel),
@@ -80,7 +80,7 @@
                         </button>
                     @else
                         <button type="button" class="ui-action rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" disabled>
-                            Sem assentos livres
+                            Sem licencas livres
                         </button>
                     @endif
                 </div>
@@ -108,7 +108,7 @@
                         <div class="h-full rounded-full {{ $seatsAvailable > 0 ? 'bg-emerald-500' : 'bg-rose-500' }}" style="width: {{ $usagePercent }}%"></div>
                     </div>
                     @if ($seatsAvailable <= 0)
-                        <p class="mt-3 text-sm text-amber-700">Todas as licencas desta linha estao em uso. Transfira ou libere um assento antes de atribuir outro.</p>
+                        <p class="mt-3 text-sm text-amber-700">Todas as licencas desta linha estao em uso. Transfira ou libere uma licenca antes de atribuir outra.</p>
                     @endif
                 </div>
             </div>
@@ -118,7 +118,7 @@
             <section class="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                        <h2 class="text-lg font-semibold text-slate-950">Assentos em uso</h2>
+                        <h2 class="text-lg font-semibold text-slate-950">Licencas em uso</h2>
                         <p class="mt-1 text-sm text-slate-500">Quem esta usando esta licenca agora.</p>
                     </div>
 
@@ -163,7 +163,7 @@
                                                         Transferir
                                                     </button>
                                                     <button type="button" x-on:click="open('release-{{ $assignment->id }}')" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 transition hover:border-rose-300 hover:bg-rose-50">
-                                                        Liberar assento
+                                                        Liberar licenca
                                                     </button>
                                                 </div>
                                             </td>
@@ -199,7 +199,7 @@
                                         Transferir
                                     </button>
                                     <button type="button" x-on:click="open('release-{{ $assignment->id }}')" class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700">
-                                        Liberar assento
+                                        Liberar licenca
                                     </button>
                                 </div>
                             </article>
@@ -208,7 +208,7 @@
                 @else
                     <div class="pt-4">
                         <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-                            <p class="text-sm font-medium text-slate-700">Nenhum assento em uso agora.</p>
+                            <p class="text-sm font-medium text-slate-700">Nenhuma licenca em uso agora.</p>
                             <p class="mt-1 text-sm text-slate-500">Atribua a primeira pessoa quando esta licenca entrar em operacao.</p>
 
                             @if ($seatsAvailable > 0)
@@ -362,7 +362,7 @@
                     <div x-show="isOpen('assign')" class="space-y-5">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Novo assento</p>
+                                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Nova licenca</p>
                                 <h2 class="mt-2 text-xl font-semibold text-slate-950">Atribuir licenca</h2>
                                 <p class="mt-1 text-sm text-slate-500">Escolha um usuario ativo e, se precisar, informe uma referencia externa.</p>
                             </div>
@@ -407,7 +407,7 @@
                             <div class="flex items-start justify-between gap-4">
                                 <div>
                                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Transferencia</p>
-                                    <h2 class="mt-2 text-xl font-semibold text-slate-950">Transferir assento</h2>
+                                    <h2 class="mt-2 text-xl font-semibold text-slate-950">Transferir licenca</h2>
                                     <p class="mt-1 text-sm text-slate-500">Atual: {{ $assignment->resolvedDisplayName() }}</p>
                                 </div>
                                 <button type="button" x-on:click="close()" class="rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-500">Fechar</button>
@@ -450,22 +450,22 @@
                         <div x-show="isOpen('release-{{ $assignment->id }}')" class="space-y-5">
                             <div class="flex items-start justify-between gap-4">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-500">Liberar assento</p>
-                                    <h2 class="mt-2 text-xl font-semibold text-slate-950">Liberar este assento?</h2>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-500">Liberar licenca</p>
+                                    <h2 class="mt-2 text-xl font-semibold text-slate-950">Liberar esta licenca?</h2>
                                     <p class="mt-1 text-sm text-slate-500">{{ $assignment->resolvedDisplayName() }} deixara de ocupar esta licenca.</p>
                                 </div>
                                 <button type="button" x-on:click="close()" class="rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-500">Fechar</button>
                             </div>
 
                             <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                                Essa acao libera uma vaga para outra pessoa. O historico continua registrado.
+                                Essa acao libera uma licenca para outra pessoa. O historico continua registrado.
                             </div>
 
                             <form method="POST" action="{{ route('licenses.assignments.release', [$license, $assignment]) }}" class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4">
                                 @csrf
                                 <input type="hidden" name="license_panel" value="release-{{ $assignment->id }}">
                                 <button type="button" x-on:click="close()" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">Cancelar</button>
-                                <button type="submit" class="ui-action ui-action-danger rounded-2xl px-4 py-3 text-sm">Liberar assento</button>
+                                <button type="submit" class="ui-action ui-action-danger rounded-2xl px-4 py-3 text-sm">Liberar licenca</button>
                             </form>
                         </div>
                     @endforeach

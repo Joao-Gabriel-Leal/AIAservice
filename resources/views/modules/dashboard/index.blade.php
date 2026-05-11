@@ -207,7 +207,7 @@
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <h3 class="text-lg font-semibold text-slate-900">Licencas</h3>
-                            <p class="mt-1 text-sm text-slate-500">Renovacoes, lotacao e assentos.</p>
+                            <p class="mt-1 text-sm text-slate-500">Renovacoes, lotacao e uso das licencas.</p>
                         </div>
                         <a href="{{ route('licenses.index') }}" class="ui-action ui-action-secondary rounded-2xl px-3 py-2 text-xs">Abrir</a>
                     </div>
@@ -277,7 +277,7 @@
                                         {{ $dueDate?->format('d/m/Y') ?? 'Sem data' }}
                                     </span>
                                 </div>
-                                <p class="mt-3 text-xs text-slate-500">{{ $license->seatsInUse() }}/{{ $license->seats_total }} assentos em uso</p>
+                                <p class="mt-3 text-xs text-slate-500">{{ $license->seatsInUse() }}/{{ $license->seats_total }} licencas em uso</p>
                             </a>
                         @empty
                             <p class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60">
