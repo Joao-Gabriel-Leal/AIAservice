@@ -3,13 +3,7 @@
         eyebrow="Busca global"
         title="Encontre o contexto certo em segundos"
         description="Digite texto, serial, usuario, setor, SLA, artigo, licenca ou trecho operacional para procurar em todo o sistema."
-    >
-        <x-slot:actions>
-            <a href="{{ route('tickets.index') }}" class="ui-action ui-action-secondary rounded-2xl px-4 py-3 text-sm">
-                Voltar para chamados
-            </a>
-        </x-slot:actions>
-    </x-portal.page-intro>
+    />
 
     <x-portal.filter-bar title="Busca em tudo" description="Combine texto livre, tipos, setor e periodo para enxugar o resultado sem pesar o topo da tela.">
         <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
